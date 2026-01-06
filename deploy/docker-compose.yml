@@ -1,0 +1,134 @@
+# RASPUTIN Deployment Stack
+# For deployment on Rasputin server with RTX 6000 Pro Blackwell
+#
+# Services:
+# - rasputin: Main RASPUTIN application
+# - ollama: Local LLM inference server
+# - vllm: High-performance inference server (optional)
+# - caddy: Reverse proxy with automatic SSL
+# - redis: Caching and session storage (optional)
+
+version: "3.8"
+
+services:
+  # ==========================================================================
+  # RASPUTIN Application
+  # ==========================================================================
+  rasputin:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: rasputin-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - XAI_API_KEY=${XAI_API_KEY}
+      - SONAR_API_KEY=${SONAR_API_KEY}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
+      # Local LLM configuration
+      - LOCAL_LLM_ENABLED=true
+      - OLLAMA_URL=http://ollama:11434
+      - VLLM_URL=http://vllm:8000
+      - LOCAL_LLM_PRIORITY=local # local, cloud, or hybrid
+    depends_on:
+      - ollama
+    networks:
+      - rasputin-network
+    volumes:
+      - rasputin-data:/app/data
+
+  # ==========================================================================
+  # Ollama - Local LLM Server
+  # ==========================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rasputin-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_ORIGINS=*
+      # GPU configuration
+      - NVIDIA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      - rasputin-network
+
+  # ==========================================================================
+  # vLLM - High-Performance Inference (Optional)
+  # ==========================================================================
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: rasputin-vllm
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: >
+      --model meta-llama/Llama-3.3-70B-Instruct
+      --tensor-parallel-size 1
+      --gpu-memory-utilization 0.9
+      --max-model-len 32768
+      --port 8000
+      --host 0.0.0.0
+    volumes:
+      - vllm-models:/root/.cache/huggingface
+    networks:
+      - rasputin-network
+    profiles:
+      - vllm # Only start with: docker compose --profile vllm up
+
+  # ==========================================================================
+  # Caddy - Reverse Proxy with Auto SSL
+  # ==========================================================================
+  caddy:
+    image: caddy:2-alpine
+    container_name: rasputin-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - rasputin-network
+    depends_on:
+      - rasputin
+
+networks:
+  rasputin-network:
+    driver: bridge
+
+volumes:
+  rasputin-data:
+  ollama-models:
+  vllm-models:
+  caddy-data:
+  caddy-config:

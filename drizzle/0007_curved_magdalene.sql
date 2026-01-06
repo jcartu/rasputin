@@ -1,0 +1,1 @@
+ALTER TABLE `agents` MODIFY COLUMN `agentType` enum('orchestrator','coordinator','specialist','worker','code','research','sysadmin','data','custom') DEFAULT 'orchestrator';

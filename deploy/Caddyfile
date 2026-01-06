@@ -1,0 +1,46 @@
+# RASPUTIN Caddy Configuration
+# Automatic HTTPS with Let's Encrypt
+
+# Replace with your actual domain
+{$DOMAIN:rasputin.local} {
+    # Reverse proxy to RASPUTIN app
+    reverse_proxy rasputin:3000
+
+    # Enable compression
+    encode gzip zstd
+
+    # Security headers
+    header {
+        # Enable HSTS
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        # Prevent clickjacking
+        X-Frame-Options "SAMEORIGIN"
+        # Prevent MIME type sniffing
+        X-Content-Type-Options "nosniff"
+        # XSS protection
+        X-XSS-Protection "1; mode=block"
+        # Referrer policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/access.log
+        format json
+    }
+}
+
+# Ollama API (internal only, or expose with auth)
+ollama.{$DOMAIN:rasputin.local} {
+    reverse_proxy ollama:11434
+
+    # Basic auth for external access (optional)
+    # basicauth {
+    #     admin $2a$14$... # Use caddy hash-password to generate
+    # }
+}
+
+# vLLM API (internal only, or expose with auth)
+vllm.{$DOMAIN:rasputin.local} {
+    reverse_proxy vllm:8000
+}

@@ -1,0 +1,128 @@
+{
+  "models": {
+    "primary": {
+      "name": "llama3.3:70b-instruct-q4_K_M",
+      "description": "Primary reasoning model - Llama 3.3 70B quantized",
+      "provider": "ollama",
+      "vram_required_gb": 42,
+      "capabilities": ["reasoning", "coding", "analysis", "creative"],
+      "recommended_for": [
+        "complex_tasks",
+        "multi_step_reasoning",
+        "code_review"
+      ],
+      "fallback": "llama3.2:latest"
+    },
+    "code": {
+      "name": "deepseek-coder-v2:16b",
+      "description": "Code specialist - DeepSeek Coder V2",
+      "provider": "ollama",
+      "vram_required_gb": 12,
+      "capabilities": ["code_generation", "code_review", "debugging"],
+      "recommended_for": ["coding_tasks", "code_analysis", "refactoring"],
+      "fallback": "codellama:13b"
+    },
+    "fast": {
+      "name": "mistral:7b",
+      "description": "Fast model for quick tasks",
+      "provider": "ollama",
+      "vram_required_gb": 6,
+      "capabilities": ["quick_responses", "simple_tasks", "classification"],
+      "recommended_for": ["simple_queries", "quick_lookups", "routing"]
+    },
+    "embedding": {
+      "name": "nomic-embed-text:latest",
+      "description": "Embedding model for semantic search",
+      "provider": "ollama",
+      "vram_required_gb": 1,
+      "capabilities": ["embeddings"],
+      "recommended_for": ["memory_search", "similarity", "clustering"]
+    },
+    "vision": {
+      "name": "llava:13b",
+      "description": "Vision-language model",
+      "provider": "ollama",
+      "vram_required_gb": 10,
+      "capabilities": ["image_understanding", "visual_qa"],
+      "recommended_for": ["image_analysis", "screenshot_understanding"]
+    }
+  },
+  "routing_rules": [
+    {
+      "pattern": "code|program|function|debug|fix|implement",
+      "model": "code",
+      "priority": 1
+    },
+    {
+      "pattern": "image|screenshot|picture|photo|visual",
+      "model": "vision",
+      "priority": 1
+    },
+    {
+      "pattern": "quick|simple|what is|define|list",
+      "model": "fast",
+      "priority": 2
+    },
+    {
+      "pattern": ".*",
+      "model": "primary",
+      "priority": 99
+    }
+  ],
+  "gpu_allocation": {
+    "rtx_6000_pro_96gb": {
+      "primary": {
+        "gpu_id": 0,
+        "vram_limit_gb": 50
+      },
+      "code": {
+        "gpu_id": 0,
+        "vram_limit_gb": 15
+      },
+      "fast": {
+        "gpu_id": 0,
+        "vram_limit_gb": 8
+      },
+      "embedding": {
+        "gpu_id": 0,
+        "vram_limit_gb": 2
+      },
+      "vision": {
+        "gpu_id": 0,
+        "vram_limit_gb": 12
+      }
+    },
+    "rtx_6000_pro_plus_5090s": {
+      "primary": {
+        "gpu_id": 0,
+        "vram_limit_gb": 80
+      },
+      "code": {
+        "gpu_id": 1,
+        "vram_limit_gb": 28
+      },
+      "fast": {
+        "gpu_id": 2,
+        "vram_limit_gb": 10
+      },
+      "embedding": {
+        "gpu_id": 2,
+        "vram_limit_gb": 2
+      },
+      "vision": {
+        "gpu_id": 1,
+        "vram_limit_gb": 4
+      }
+    }
+  },
+  "vllm_models": {
+    "primary_vllm": {
+      "name": "meta-llama/Llama-3.3-70B-Instruct",
+      "description": "Primary model via vLLM for high-throughput inference",
+      "tensor_parallel_size": 1,
+      "gpu_memory_utilization": 0.9,
+      "max_model_len": 32768,
+      "quantization": null
+    }
+  }
+}

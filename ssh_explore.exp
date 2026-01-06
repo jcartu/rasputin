@@ -1,0 +1,18 @@
+spawn ssh -p 10000 -o StrictHostKeyChecking=no josh@193.186.162.74
+expect "password:"
+send "Thermite1950!\r"
+expect "$ "
+send "uname -a\r"
+expect "$ "
+send "cat /etc/os-release | head -3\r"
+expect "$ "
+send "df -h /\r"
+expect "$ "
+send "free -h\r"
+expect "$ "
+send "which python python3 node npm git docker\r"
+expect "$ "
+send "ls -la\r"
+expect "$ "
+send "exit\r"
+expect eof

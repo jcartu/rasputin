@@ -1,0 +1,366 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  /* RASPUTIN uses dark theme by default - these are fallbacks */
+  --primary: oklch(0.75 0.18 195);
+  --primary-foreground: oklch(0.13 0.02 260);
+  --sidebar-primary: oklch(0.75 0.18 195);
+  --sidebar-primary-foreground: oklch(0.13 0.02 260);
+  --chart-1: oklch(0.75 0.18 195);
+  --chart-2: oklch(0.65 0.15 160);
+  --chart-3: oklch(0.6 0.12 280);
+  --chart-4: oklch(0.7 0.14 140);
+  --chart-5: oklch(0.55 0.18 320);
+  --radius: 0.625rem;
+  --background: oklch(0.13 0.02 260);
+  --foreground: oklch(0.95 0.01 260);
+  --card: oklch(0.16 0.02 260);
+  --card-foreground: oklch(0.95 0.01 260);
+  --popover: oklch(0.18 0.02 260);
+  --popover-foreground: oklch(0.95 0.01 260);
+  --secondary: oklch(0.22 0.02 260);
+  --secondary-foreground: oklch(0.9 0.01 260);
+  --muted: oklch(0.2 0.02 260);
+  --muted-foreground: oklch(0.65 0.02 260);
+  --accent: oklch(0.7 0.16 195);
+  --accent-foreground: oklch(0.13 0.02 260);
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.95 0.01 260);
+  --border: oklch(0.28 0.02 260);
+  --input: oklch(0.2 0.02 260);
+  --ring: oklch(0.75 0.18 195);
+  --sidebar: oklch(0.11 0.02 260);
+  --sidebar-foreground: oklch(0.9 0.01 260);
+  --sidebar-accent: oklch(0.22 0.02 260);
+  --sidebar-accent-foreground: oklch(0.9 0.01 260);
+  --sidebar-border: oklch(0.25 0.02 260);
+  --sidebar-ring: oklch(0.75 0.18 195);
+
+  /* RASPUTIN custom colors */
+  --rasputin-cyan: oklch(0.75 0.18 195);
+  --rasputin-cyan-glow: oklch(0.8 0.2 195);
+  --rasputin-dark: oklch(0.1 0.02 260);
+  --rasputin-darker: oklch(0.08 0.02 260);
+  --rasputin-panel: oklch(0.14 0.02 260);
+}
+
+.dark {
+  /* Dark theme is the same as root for RASPUTIN */
+  --primary: oklch(0.75 0.18 195);
+  --primary-foreground: oklch(0.13 0.02 260);
+  --sidebar-primary: oklch(0.75 0.18 195);
+  --sidebar-primary-foreground: oklch(0.13 0.02 260);
+  --background: oklch(0.13 0.02 260);
+  --foreground: oklch(0.95 0.01 260);
+  --card: oklch(0.16 0.02 260);
+  --card-foreground: oklch(0.95 0.01 260);
+  --popover: oklch(0.18 0.02 260);
+  --popover-foreground: oklch(0.95 0.01 260);
+  --secondary: oklch(0.22 0.02 260);
+  --secondary-foreground: oklch(0.9 0.01 260);
+  --muted: oklch(0.2 0.02 260);
+  --muted-foreground: oklch(0.65 0.02 260);
+  --accent: oklch(0.7 0.16 195);
+  --accent-foreground: oklch(0.13 0.02 260);
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.95 0.01 260);
+  --border: oklch(0.28 0.02 260);
+  --input: oklch(0.2 0.02 260);
+  --ring: oklch(0.75 0.18 195);
+  --chart-1: oklch(0.75 0.18 195);
+  --chart-2: oklch(0.65 0.15 160);
+  --chart-3: oklch(0.6 0.12 280);
+  --chart-4: oklch(0.7 0.14 140);
+  --chart-5: oklch(0.55 0.18 320);
+  --sidebar: oklch(0.11 0.02 260);
+  --sidebar-foreground: oklch(0.9 0.01 260);
+  --sidebar-accent: oklch(0.22 0.02 260);
+  --sidebar-accent-foreground: oklch(0.9 0.01 260);
+  --sidebar-border: oklch(0.25 0.02 260);
+  --sidebar-ring: oklch(0.75 0.18 195);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+  }
+  body {
+    @apply bg-background text-foreground;
+    min-height: 100vh;
+  }
+
+  /* Custom scrollbar for dark theme */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: oklch(0.12 0.02 260);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.3 0.02 260);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.4 0.02 260);
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [type="button"]:not(:disabled),
+  [type="submit"]:not(:disabled),
+  [type="reset"]:not(:disabled),
+  a[href],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    @apply cursor-pointer;
+  }
+}
+
+@layer components {
+  /**
+   * Custom container utility that centers content and adds responsive padding.
+   *
+   * This overrides Tailwind's default container behavior to:
+   * - Auto-center content (mx-auto)
+   * - Add responsive horizontal padding
+   * - Set max-width for large screens
+   *
+   * Usage: <div className="container">...</div>
+   *
+   * For custom widths, use max-w-* utilities directly:
+   * <div className="max-w-6xl mx-auto px-4">...</div>
+   */
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem; /* 16px - mobile padding */
+    padding-right: 1rem;
+  }
+
+  .flex {
+    min-height: 0;
+    min-width: 0;
+  }
+
+  @media (min-width: 640px) {
+    .container {
+      padding-left: 1.5rem; /* 24px - tablet padding */
+      padding-right: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container {
+      padding-left: 2rem; /* 32px - desktop padding */
+      padding-right: 2rem;
+      max-width: 1280px; /* Standard content width */
+    }
+  }
+
+  /* RASPUTIN specific components */
+  .rasputin-glow {
+    box-shadow:
+      0 0 20px oklch(0.75 0.18 195 / 0.3),
+      0 0 40px oklch(0.75 0.18 195 / 0.2),
+      0 0 60px oklch(0.75 0.18 195 / 0.1);
+  }
+
+  .rasputin-glow-text {
+    text-shadow:
+      0 0 10px oklch(0.75 0.18 195 / 0.8),
+      0 0 20px oklch(0.75 0.18 195 / 0.5),
+      0 0 30px oklch(0.75 0.18 195 / 0.3);
+  }
+
+  .rasputin-panel {
+    background: oklch(0.14 0.02 260);
+    border: 1px solid oklch(0.25 0.02 260);
+    border-radius: var(--radius);
+  }
+}
+
+@layer utilities {
+  /* Cyan glow animation for logo eyes */
+  @keyframes eyeGlow {
+    0%,
+    100% {
+      filter: drop-shadow(0 0 4px oklch(0.75 0.18 195))
+        drop-shadow(0 0 8px oklch(0.75 0.18 195 / 0.7));
+    }
+    50% {
+      filter: drop-shadow(0 0 8px oklch(0.8 0.2 195))
+        drop-shadow(0 0 16px oklch(0.8 0.2 195 / 0.8))
+        drop-shadow(0 0 24px oklch(0.75 0.18 195 / 0.5));
+    }
+  }
+
+  .animate-eye-glow {
+    animation: eyeGlow 2s ease-in-out infinite;
+  }
+
+  /* Processing pulse animation */
+  @keyframes processingPulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.7;
+      transform: scale(1.05);
+    }
+  }
+
+  .animate-processing-pulse {
+    animation: processingPulse 1.5s ease-in-out infinite;
+  }
+
+  /* Radial glow for splash screen */
+  @keyframes radialGlow {
+    0%,
+    100% {
+      opacity: 0.3;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.6;
+      transform: scale(1.1);
+    }
+  }
+
+  .animate-radial-glow {
+    animation: radialGlow 3s ease-in-out infinite;
+  }
+
+  /* Floating particles */
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0) translateX(0);
+    }
+    25% {
+      transform: translateY(-10px) translateX(5px);
+    }
+    50% {
+      transform: translateY(-5px) translateX(-5px);
+    }
+    75% {
+      transform: translateY(-15px) translateX(3px);
+    }
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  /* Fade in animation */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+
+  /* Slide in from left */
+  @keyframes slideInLeft {
+    from {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .animate-slide-in-left {
+    animation: slideInLeft 0.3s ease-out forwards;
+  }
+
+  /* Typing cursor */
+  @keyframes blink {
+    0%,
+    50% {
+      opacity: 1;
+    }
+    51%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  .animate-cursor-blink {
+    animation: blink 1s step-end infinite;
+  }
+
+  /* Slow pulse for pipeline stages */
+  @keyframes pulseSlow {
+    0%,
+    100% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  .animate-pulse-slow {
+    animation: pulseSlow 2s ease-in-out infinite;
+  }
+}
