@@ -1475,6 +1475,13 @@ function getCurrentDateString(): string {
 const TOOL_SELECTION_GUIDE = `
 TOOL SELECTION GUIDE (use the RIGHT tool for each task):
 
+For CREATING NEW PROJECTS:
+  1. scaffold_project - Creates complete project structure with config files
+     - Supports: react, nextjs, vue, svelte, express, fastapi, rails
+     - Example: scaffold_project("my-app", "react", "/tmp/projects")
+  2. Then: install_dependencies to install packages
+  3. Then: start_dev_server to run it
+
 For CURRENT DATA (prices, weather, news):
   1. http_request to a known API (preferred - more reliable)
      - Crypto: https://api.coinbase.com/v2/prices/BTC-USD/spot
@@ -1483,32 +1490,32 @@ For CURRENT DATA (prices, weather, news):
   3. browse_url to a specific data page (last resort)
 
 For SECURITY ANALYSIS (ALWAYS use specialized tools first!):
-  1. npm_audit tool - REQUIRED for vulnerability scanning (DO NOT use execute_shell for this)
+  1. npm_audit tool - REQUIRED for vulnerability scanning
   2. security_analysis tool - for comprehensive security report
-  3. read_file package.json + package-lock.json for manual review
-  NOTE: execute_shell 'pnpm audit' is a fallback ONLY if npm_audit tool fails
+  3. read_file package.json for manual review
 
 For FILE CREATION:
   1. write_file to create the file
   2. read_file to VERIFY it was created correctly
   3. For code: execute the file to test it works
 
-For API/SERVER CREATION:
-  1. write_file to create the server code
-  2. tmux_start to run the server in background
-  3. check_dev_server or http_request to VERIFY it responds
-  4. Take screenshot if it has a UI
+For RUNNING SHELL COMMANDS:
+  1. run_shell - Execute any shell command
+  2. For background processes: use tmux_start instead
 
-For CODE DEBUGGING:
-  1. read_file to see the code
-  2. run_type_check or run_lint for static analysis
-  3. run_tests to see what fails
-  4. Make fixes, then RE-RUN tests to verify
+For DEV SERVER MANAGEMENT:
+  1. start_dev_server - Start server in background
+  2. get_dev_server_output - Check server logs
+  3. stop_dev_server - Stop when done
 
 For GIT OPERATIONS:
-  1. git_status to see current state
-  2. git_diff to review changes
-  3. git_commit only after verification
+  1. git_init - Initialize new repo
+  2. git_clone - Clone existing repo
+  3. git_status - See current state
+  4. git_diff - Review changes
+  5. git_commit - Commit changes
+  6. git_push/git_pull - Sync with remote
+  7. git_create_pr - Create GitHub pull request
 `;
 
 const FAILURE_RECOVERY_PROTOCOL = `

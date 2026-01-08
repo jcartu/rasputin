@@ -14,6 +14,7 @@ import { sshHosts } from "../../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { getCachedResult, setCachedResult } from "../knowledgeCache";
 import * as crypto from "crypto";
+import { scaffoldProject, type ScaffoldConfig } from "../webApp/scaffolder";
 
 const execAsync = promisify(exec);
 
@@ -2446,6 +2447,75 @@ export async function gitStash(
   }
 }
 
+export async function gitClone(
+  repoUrl: string,
+  outputPath: string,
+  options?: { branch?: string; depth?: number }
+): Promise<string> {
+  try {
+    let cmd = `git clone "${repoUrl}" "${outputPath}"`;
+    if (options?.branch) {
+      cmd = `git clone -b "${options.branch}" "${repoUrl}" "${outputPath}"`;
+    }
+    if (options?.depth) {
+      cmd += ` --depth ${options.depth}`;
+    }
+
+    const { stdout, stderr } = await execAsync(cmd, { timeout: 300000 });
+    return `Repository cloned successfully to: ${outputPath}\n${stdout}\n${stderr}`;
+  } catch (error) {
+    return `Git clone error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function gitInit(
+  projectPath: string,
+  options?: { initialBranch?: string }
+): Promise<string> {
+  try {
+    let cmd = "git init";
+    if (options?.initialBranch) {
+      cmd += ` -b "${options.initialBranch}"`;
+    }
+
+    const { stdout } = await execAsync(cmd, {
+      cwd: projectPath,
+      timeout: 30000,
+    });
+
+    return `Git repository initialized:\n${stdout}`;
+  } catch (error) {
+    return `Git init error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function gitCreatePR(
+  projectPath: string,
+  title: string,
+  body: string,
+  options?: { base?: string; head?: string; draft?: boolean }
+): Promise<string> {
+  try {
+    let cmd = `gh pr create --title "${title.replace(/"/g, '\\"')}" --body "${body.replace(/"/g, '\\"')}"`;
+    if (options?.base) cmd += ` --base "${options.base}"`;
+    if (options?.head) cmd += ` --head "${options.head}"`;
+    if (options?.draft) cmd += " --draft";
+
+    const { stdout, stderr } = await execAsync(cmd, {
+      cwd: projectPath,
+      timeout: 60000,
+    });
+
+    return `Pull request created:\n${stdout}\n${stderr}`;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("gh: command not found")) {
+      return "Error: GitHub CLI (gh) not installed. Install with: brew install gh";
+    }
+    return `PR creation error: ${msg}`;
+  }
+}
+
 export async function npmAudit(projectPath: string): Promise<string> {
   const startTime = Date.now();
 
@@ -2591,6 +2661,173 @@ export async function securityAnalysis(projectPath: string): Promise<string> {
   return results.join("\n");
 }
 
+const devServers = new Map<string, { sessionName: string; port?: number }>();
+
+async function scaffoldProjectTool(
+  projectName: string,
+  projectType: string,
+  outputPath: string,
+  database?: string,
+  authentication?: string,
+  features?: string[]
+): Promise<string> {
+  const validTypes = [
+    "react",
+    "nextjs",
+    "vue",
+    "svelte",
+    "express",
+    "fastapi",
+    "rails",
+  ];
+  if (!validTypes.includes(projectType)) {
+    return `Error: Invalid project type. Must be one of: ${validTypes.join(", ")}`;
+  }
+
+  const config: ScaffoldConfig = {
+    projectName,
+    projectType: projectType as ScaffoldConfig["projectType"],
+    outputPath: outputPath || "/tmp/jarvis-projects",
+    database: database as ScaffoldConfig["database"],
+    authentication: authentication as ScaffoldConfig["authentication"],
+    features,
+  };
+
+  const result = await scaffoldProject(config);
+
+  if (!result.success) {
+    return `Error creating project: ${result.error}`;
+  }
+
+  return `Project "${projectName}" created successfully!
+
+Location: ${result.projectPath}
+Files created: ${result.filesCreated.length}
+
+Files:
+${result.filesCreated.map(f => `  - ${f}`).join("\n")}
+
+Next steps:
+1. cd ${result.projectPath}
+2. npm install (or pnpm install)
+3. npm run dev`;
+}
+
+async function startDevServerTool(
+  projectPath: string,
+  command?: string
+): Promise<string> {
+  const absPath = path.resolve(projectPath);
+
+  if (devServers.has(absPath)) {
+    const existing = devServers.get(absPath)!;
+    return `Dev server already running for this project. Session: ${existing.sessionName}`;
+  }
+
+  const sessionName = `jarvis-dev-${Date.now()}`;
+  const devCommand = command || "npm run dev";
+
+  try {
+    await execAsync(
+      `tmux new-session -d -s ${sessionName} -c "${absPath}" "${devCommand}"`,
+      {
+        timeout: 10000,
+      }
+    );
+
+    devServers.set(absPath, { sessionName });
+
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    const { stdout: output } = await execAsync(
+      `tmux capture-pane -t ${sessionName} -p`,
+      { timeout: 5000 }
+    ).catch(() => ({ stdout: "" }));
+
+    return `Dev server started!
+
+Session: ${sessionName}
+Project: ${absPath}
+Command: ${devCommand}
+
+Initial output:
+${output.slice(-1000) || "(starting...)"}
+
+Use get_dev_server_output to check status.
+Use stop_dev_server to stop when done.`;
+  } catch (error) {
+    return `Error starting dev server: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function stopDevServerTool(projectPath: string): Promise<string> {
+  const absPath = path.resolve(projectPath);
+  const server = devServers.get(absPath);
+
+  if (!server) {
+    return `No dev server found for: ${absPath}`;
+  }
+
+  try {
+    await execAsync(`tmux kill-session -t ${server.sessionName}`, {
+      timeout: 5000,
+    });
+    devServers.delete(absPath);
+    return `Dev server stopped for: ${absPath}`;
+  } catch (error) {
+    devServers.delete(absPath);
+    return `Server session ended (may have already stopped): ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function getDevServerOutputTool(projectPath: string): Promise<string> {
+  const absPath = path.resolve(projectPath);
+  const server = devServers.get(absPath);
+
+  if (!server) {
+    return `No dev server found for: ${absPath}`;
+  }
+
+  try {
+    const { stdout } = await execAsync(
+      `tmux capture-pane -t ${server.sessionName} -p`,
+      { timeout: 5000 }
+    );
+    return `Dev server output for ${absPath}:
+
+${stdout.slice(-2000) || "(no output)"}`;
+  } catch (error) {
+    return `Error getting output: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function installDependenciesTool(
+  projectPath: string,
+  packageManager?: string
+): Promise<string> {
+  const absPath = path.resolve(projectPath);
+  const pm = packageManager || "pnpm";
+  const validPMs = ["npm", "pnpm", "yarn", "bun"];
+
+  if (!validPMs.includes(pm)) {
+    return `Invalid package manager. Use: ${validPMs.join(", ")}`;
+  }
+
+  try {
+    const { stdout, stderr } = await execAsync(`${pm} install`, {
+      cwd: absPath,
+      timeout: 300000,
+    });
+
+    return `Dependencies installed successfully!
+
+${stdout}
+${stderr ? `Warnings:\n${stderr}` : ""}`;
+  } catch (error) {
+    return `Error installing dependencies: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 export async function executeTool(
   name: string,
   input: Record<string, unknown>
@@ -2610,6 +2847,8 @@ export async function executeTool(
     case "execute_javascript":
       return executeJavaScript(input.code as string);
     case "run_shell":
+    case "execute_shell":
+    case "shell":
       return runShell(input.command as string);
     case "read_file":
       return readFile(input.path as string);
@@ -2797,6 +3036,26 @@ export async function executeTool(
         list: input.list as boolean | undefined,
         message: input.message as string | undefined,
       });
+    case "git_clone":
+      return gitClone(input.repoUrl as string, input.outputPath as string, {
+        branch: input.branch as string | undefined,
+        depth: input.depth as number | undefined,
+      });
+    case "git_init":
+      return gitInit(input.projectPath as string, {
+        initialBranch: input.initialBranch as string | undefined,
+      });
+    case "git_create_pr":
+      return gitCreatePR(
+        input.projectPath as string,
+        input.title as string,
+        input.body as string,
+        {
+          base: input.base as string | undefined,
+          head: input.head as string | undefined,
+          draft: input.draft as boolean | undefined,
+        }
+      );
     case "tmux_start":
       return tmuxStart(input.sessionName as string, input.command as string);
     case "tmux_output":
@@ -2847,6 +3106,29 @@ export async function executeTool(
       return npmAudit(input.projectPath as string);
     case "security_analysis":
       return securityAnalysis(input.projectPath as string);
+    case "scaffold_project":
+      return scaffoldProjectTool(
+        (input.projectName || input.name) as string,
+        (input.projectType || input.template || input.type) as string,
+        (input.outputPath || input.path || "/tmp/jarvis-projects") as string,
+        input.database as string | undefined,
+        input.authentication as string | undefined,
+        input.features as string[] | undefined
+      );
+    case "start_dev_server":
+      return startDevServerTool(
+        input.projectPath as string,
+        input.command as string | undefined
+      );
+    case "stop_dev_server":
+      return stopDevServerTool(input.projectPath as string);
+    case "get_dev_server_output":
+      return getDevServerOutputTool(input.projectPath as string);
+    case "install_dependencies":
+      return installDependenciesTool(
+        input.projectPath as string,
+        input.packageManager as string | undefined
+      );
     default:
       return `Unknown tool: ${name}`;
   }
@@ -3129,6 +3411,85 @@ export function getAvailableTools(): Array<{
       },
     },
     {
+      name: "git_clone",
+      description: "Clone a Git repository to a local directory.",
+      parameters: {
+        repoUrl: {
+          type: "string",
+          description: "URL of the Git repository to clone",
+          required: true,
+        },
+        outputPath: {
+          type: "string",
+          description: "Local directory to clone into",
+          required: true,
+        },
+        branch: {
+          type: "string",
+          description: "Specific branch to clone",
+          required: false,
+        },
+        depth: {
+          type: "number",
+          description: "Create a shallow clone with specified depth",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "git_init",
+      description: "Initialize a new Git repository in a directory.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to initialize Git repository",
+          required: true,
+        },
+        initialBranch: {
+          type: "string",
+          description: "Name for the initial branch (default: main)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "git_create_pr",
+      description:
+        "Create a GitHub Pull Request using the GitHub CLI (gh). Requires gh to be installed and authenticated.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the Git repository",
+          required: true,
+        },
+        title: {
+          type: "string",
+          description: "PR title",
+          required: true,
+        },
+        body: {
+          type: "string",
+          description: "PR description/body",
+          required: true,
+        },
+        base: {
+          type: "string",
+          description: "Base branch (default: main)",
+          required: false,
+        },
+        head: {
+          type: "string",
+          description: "Head branch (default: current branch)",
+          required: false,
+        },
+        draft: {
+          type: "boolean",
+          description: "Create as draft PR",
+          required: false,
+        },
+      },
+    },
+    {
       name: "npm_audit",
       description:
         "Run npm/pnpm security audit on a project to find vulnerable dependencies. Returns severity breakdown and remediation steps.",
@@ -3149,6 +3510,102 @@ export function getAvailableTools(): Array<{
           type: "string",
           description: "Path to the project directory to analyze",
           required: true,
+        },
+      },
+    },
+    {
+      name: "scaffold_project",
+      description:
+        "Create a new web application project with proper structure, config files, and boilerplate. Supports React, Next.js, Vue, Svelte, Express, FastAPI, and Rails.",
+      parameters: {
+        projectName: {
+          type: "string",
+          description: "Name of the project (will be used as folder name)",
+          required: true,
+        },
+        projectType: {
+          type: "string",
+          description:
+            "Type of project: react, nextjs, vue, svelte, express, fastapi, or rails",
+          required: true,
+        },
+        outputPath: {
+          type: "string",
+          description:
+            "Directory where the project will be created (default: /tmp/jarvis-projects)",
+          required: false,
+        },
+        database: {
+          type: "string",
+          description: "Database type: postgresql, mysql, mongodb, or sqlite",
+          required: false,
+        },
+        authentication: {
+          type: "string",
+          description: "Auth type: jwt, oauth, or session",
+          required: false,
+        },
+        features: {
+          type: "array",
+          description: "List of features to include",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "start_dev_server",
+      description:
+        "Start a development server for a project in the background. Returns session info for monitoring.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project directory",
+          required: true,
+        },
+        command: {
+          type: "string",
+          description: "Custom dev command (default: npm run dev)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "stop_dev_server",
+      description: "Stop a running development server.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project directory",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "get_dev_server_output",
+      description: "Get recent output from a running development server.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project directory",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "install_dependencies",
+      description:
+        "Install project dependencies using npm, pnpm, yarn, or bun.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project directory",
+          required: true,
+        },
+        packageManager: {
+          type: "string",
+          description:
+            "Package manager to use: npm, pnpm, yarn, or bun (default: pnpm)",
+          required: false,
         },
       },
     },
