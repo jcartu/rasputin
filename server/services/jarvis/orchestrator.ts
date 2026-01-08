@@ -2099,6 +2099,13 @@ export async function runOrchestrator(
               summary: string;
               artifacts?: unknown[];
             };
+            // Emit tool result for task_complete so UI can show completed status
+            const result: ToolResult = {
+              toolCallId: tc.id,
+              output: input.summary,
+              isError: false,
+            };
+            callbacks.onToolResult(result);
             callbacks.onComplete(input.summary, input.artifacts);
             isComplete = true;
             break;

@@ -83,23 +83,29 @@ interface ServerToClientEvents {
     totalTokens: number;
     totalCost: number;
   }) => void;
-  "jarvis:thinking": (data: { content: string; timestamp: number }) => void;
+  "jarvis:thinking": (data: {
+    taskId: number;
+    content: string;
+    timestamp: number;
+  }) => void;
   "jarvis:tool_start": (data: {
-    id: string;
-    name: string;
+    taskId: number;
+    toolName: string;
     input: Record<string, unknown>;
     timestamp: number;
   }) => void;
   "jarvis:tool_end": (data: {
-    id: string;
+    taskId: number;
+    toolName: string;
     output: string;
     isError: boolean;
     durationMs: number;
     timestamp: number;
   }) => void;
   "jarvis:iteration": (data: {
-    current: number;
-    max: number;
+    taskId: number;
+    iteration: number;
+    maxIterations: number;
     timestamp: number;
   }) => void;
   "jarvis:complete": (data: {
@@ -111,8 +117,8 @@ interface ServerToClientEvents {
     timestamp: number;
   }) => void;
   "jarvis:error": (data: {
-    message: string;
-    code?: string;
+    taskId?: number;
+    error: string;
     timestamp: number;
   }) => void;
   error: (data: { message: string; code?: string }) => void;
@@ -175,8 +181,7 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
         } catch (error) {
           console.error("[WebSocket] JARVIS error:", error);
           socket.emit("jarvis:error", {
-            message: error instanceof Error ? error.message : "Unknown error",
-            code: "JARVIS_ERROR",
+            error: error instanceof Error ? error.message : "Unknown error",
             timestamp: Date.now(),
           });
         } finally {
@@ -450,8 +455,7 @@ async function handleJarvisTask(
   const rateLimit = await db.checkRateLimit(userId, today, 100);
   if (!rateLimit.allowed) {
     socket.emit("jarvis:error", {
-      message: `Rate limit exceeded. Used ${rateLimit.current}/${rateLimit.limit} tasks today.`,
-      code: "RATE_LIMIT",
+      error: `Rate limit exceeded. Used ${rateLimit.current}/${rateLimit.limit} tasks today.`,
       timestamp: Date.now(),
     });
     return;
@@ -479,6 +483,9 @@ async function handleJarvisTask(
 
   const toolStartTimes = new Map<string, number>();
 
+  // Map tool call IDs to tool names for use in tool_end
+  const toolCallNames = new Map<string, string>();
+
   try {
     await runOrchestrator(
       task,
@@ -486,6 +493,7 @@ async function handleJarvisTask(
         onThinking: (thought: string) => {
           if (activeQueries.get(queryKey)?.cancelled) return;
           socket.emit("jarvis:thinking", {
+            taskId,
             content: thought,
             timestamp: Date.now(),
           });
@@ -495,24 +503,28 @@ async function handleJarvisTask(
           iterationCount++;
           toolsUsed.push(toolCall.name);
           toolStartTimes.set(toolCall.id, Date.now());
+          toolCallNames.set(toolCall.id, toolCall.name);
 
           socket.emit("jarvis:tool_start", {
-            id: toolCall.id,
-            name: toolCall.name,
+            taskId,
+            toolName: toolCall.name,
             input: toolCall.input,
             timestamp: Date.now(),
           });
           socket.emit("jarvis:iteration", {
-            current: iterationCount,
-            max: 15,
+            taskId,
+            iteration: iterationCount,
+            maxIterations: 15,
             timestamp: Date.now(),
           });
         },
         onToolResult: (result: ToolResult) => {
           if (activeQueries.get(queryKey)?.cancelled) return;
           const startTs = toolStartTimes.get(result.toolCallId) || Date.now();
+          const toolName = toolCallNames.get(result.toolCallId) || "unknown";
           socket.emit("jarvis:tool_end", {
-            id: result.toolCallId,
+            taskId,
+            toolName,
             output: result.output,
             isError: result.isError,
             durationMs: Date.now() - startTs,
@@ -526,8 +538,8 @@ async function handleJarvisTask(
           hasError = true;
           finalResult = error;
           socket.emit("jarvis:error", {
-            message: error,
-            code: "EXECUTION_ERROR",
+            taskId,
+            error,
             timestamp: Date.now(),
           });
         },

@@ -57,7 +57,7 @@ export function useJarvisStream() {
   const [state, setState] = useState<StreamingState>(initialState);
   const activeTaskIdRef = useRef<number | null>(null);
 
-  const startTask = useCallback((task: string) => {
+  const startTask = useCallback((task: string, userId: number) => {
     const socket = getSocket();
 
     setState({
@@ -65,7 +65,7 @@ export function useJarvisStream() {
       isStreaming: true,
     });
 
-    socket.emit("jarvis:start", { task });
+    socket.emit("jarvis:start", { task, userId });
   }, []);
 
   const cancelTask = useCallback(() => {
@@ -190,14 +190,19 @@ export function useJarvisStream() {
     };
 
     const handleError = (event: JarvisErrorEvent) => {
-      if (event.taskId !== activeTaskIdRef.current) return;
+      // Handle errors - if taskId is present, check it matches, otherwise accept all errors during streaming
+      if (event.taskId && event.taskId !== activeTaskIdRef.current) return;
 
-      setState(prev => ({
-        ...prev,
-        isStreaming: false,
-        error: event.error,
-        success: false,
-      }));
+      setState(prev => {
+        // Only update if we're currently streaming
+        if (!prev.isStreaming) return prev;
+        return {
+          ...prev,
+          isStreaming: false,
+          error: event.error,
+          success: false,
+        };
+      });
       activeTaskIdRef.current = null;
     };
 

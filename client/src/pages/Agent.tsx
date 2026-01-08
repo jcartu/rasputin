@@ -1096,14 +1096,14 @@ export default function AgentPage() {
   }, []);
 
   const handleSubmitStreaming = useCallback(() => {
-    if (!input.trim() || jarvisStream.isStreaming) return;
+    if (!input.trim() || jarvisStream.isStreaming || !user?.id) return;
 
     const taskInput = input.trim();
     setInput("");
     setCurrentTask(null);
     jarvisStream.reset();
-    jarvisStream.startTask(taskInput);
-  }, [input, jarvisStream]);
+    jarvisStream.startTask(taskInput, user.id);
+  }, [input, jarvisStream, user?.id]);
 
   const handleSubmitLegacy = useCallback(async () => {
     if (!input.trim() || isProcessing) return;

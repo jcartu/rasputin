@@ -39,7 +39,7 @@ export interface JarvisCompleteEvent {
 }
 
 export interface JarvisErrorEvent {
-  taskId: number;
+  taskId?: number;
   error: string;
   timestamp: number;
 }
