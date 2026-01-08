@@ -1,6 +1,6 @@
 /**
  * WebSocket Service
- * Handles real-time streaming for consensus and synthesis modes
+ * Handles real-time streaming for consensus, synthesis, and JARVIS agent modes
  */
 
 import { Server as HttpServer } from "http";
@@ -9,6 +9,19 @@ import { QueryMode, SpeedTier, SynthesisStage } from "../../shared/rasputin";
 import { generateConsensus } from "./consensus";
 import { generateSynthesis } from "./synthesis";
 import * as db from "../db";
+import {
+  runOrchestrator,
+  type ToolCall,
+  type ToolResult,
+} from "./jarvis/orchestrator";
+import { executeTool } from "./jarvis/tools";
+import {
+  getPreTaskContext,
+  learnFromTask,
+  type TaskContext,
+  type TaskOutcome,
+} from "./jarvis/memoryIntegration";
+import { createSelfReflectionSystem } from "./memory/selfReflection";
 
 // ============================================================================
 // Types
@@ -22,9 +35,17 @@ interface QueryRequest {
   userId: number;
 }
 
+interface JarvisRequest {
+  task: string;
+  taskId?: number;
+  userId: number;
+}
+
 interface ClientToServerEvents {
   "query:start": (data: QueryRequest) => void;
   "query:cancel": (data: { chatId: number }) => void;
+  "jarvis:start": (data: JarvisRequest) => void;
+  "jarvis:cancel": (data: { taskId?: number }) => void;
 }
 
 interface ServerToClientEvents {
@@ -61,6 +82,38 @@ interface ServerToClientEvents {
     totalLatencyMs: number;
     totalTokens: number;
     totalCost: number;
+  }) => void;
+  "jarvis:thinking": (data: { content: string; timestamp: number }) => void;
+  "jarvis:tool_start": (data: {
+    id: string;
+    name: string;
+    input: Record<string, unknown>;
+    timestamp: number;
+  }) => void;
+  "jarvis:tool_end": (data: {
+    id: string;
+    output: string;
+    isError: boolean;
+    durationMs: number;
+    timestamp: number;
+  }) => void;
+  "jarvis:iteration": (data: {
+    current: number;
+    max: number;
+    timestamp: number;
+  }) => void;
+  "jarvis:complete": (data: {
+    taskId: number;
+    summary: string;
+    success: boolean;
+    iterationCount: number;
+    durationMs: number;
+    timestamp: number;
+  }) => void;
+  "jarvis:error": (data: {
+    message: string;
+    code?: string;
+    timestamp: number;
   }) => void;
   error: (data: { message: string; code?: string }) => void;
 }
@@ -111,6 +164,32 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
         if (query) {
           query.cancelled = true;
         }
+      });
+
+      socket.on("jarvis:start", async (data: JarvisRequest) => {
+        const queryKey = `jarvis-${socket.id}-${Date.now()}`;
+        activeQueries.set(queryKey, { cancelled: false });
+
+        try {
+          await handleJarvisTask(socket, data, queryKey);
+        } catch (error) {
+          console.error("[WebSocket] JARVIS error:", error);
+          socket.emit("jarvis:error", {
+            message: error instanceof Error ? error.message : "Unknown error",
+            code: "JARVIS_ERROR",
+            timestamp: Date.now(),
+          });
+        } finally {
+          activeQueries.delete(queryKey);
+        }
+      });
+
+      socket.on("jarvis:cancel", () => {
+        activeQueries.forEach((query, key) => {
+          if (key.startsWith(`jarvis-${socket.id}`)) {
+            query.cancelled = true;
+          }
+        });
       });
 
       socket.on("disconnect", () => {
@@ -353,6 +432,195 @@ async function handleQuery(
       totalCost: result.totalCost,
     });
   }
+}
+
+async function handleJarvisTask(
+  socket: Socket<ClientToServerEvents, ServerToClientEvents>,
+  data: JarvisRequest,
+  queryKey: string
+): Promise<void> {
+  const { task, userId } = data;
+  const startTime = Date.now();
+  let iterationCount = 0;
+  const toolsUsed: string[] = [];
+  let finalResult = "";
+  let hasError = false;
+
+  const today = new Date().toISOString().split("T")[0];
+  const rateLimit = await db.checkRateLimit(userId, today, 100);
+  if (!rateLimit.allowed) {
+    socket.emit("jarvis:error", {
+      message: `Rate limit exceeded. Used ${rateLimit.current}/${rateLimit.limit} tasks today.`,
+      code: "RATE_LIMIT",
+      timestamp: Date.now(),
+    });
+    return;
+  }
+
+  const title = task.slice(0, 100) + (task.length > 100 ? "..." : "");
+  const dbTask = await db.createAgentTask({
+    userId,
+    title,
+    query: task,
+    status: "running",
+  });
+  const taskId = dbTask.id;
+
+  await db.incrementUsage(userId, today, "agentTaskCount");
+  await db.createAgentMessage({ taskId, role: "user", content: task });
+
+  let memoryPromptAddition = "";
+  try {
+    const { promptAddition } = await getPreTaskContext(task, userId);
+    memoryPromptAddition = promptAddition;
+  } catch (error) {
+    console.error("[JARVIS WS] Memory context retrieval failed:", error);
+  }
+
+  const toolStartTimes = new Map<string, number>();
+
+  try {
+    await runOrchestrator(
+      task,
+      {
+        onThinking: (thought: string) => {
+          if (activeQueries.get(queryKey)?.cancelled) return;
+          socket.emit("jarvis:thinking", {
+            content: thought,
+            timestamp: Date.now(),
+          });
+        },
+        onToolCall: (toolCall: ToolCall) => {
+          if (activeQueries.get(queryKey)?.cancelled) return;
+          iterationCount++;
+          toolsUsed.push(toolCall.name);
+          toolStartTimes.set(toolCall.id, Date.now());
+
+          socket.emit("jarvis:tool_start", {
+            id: toolCall.id,
+            name: toolCall.name,
+            input: toolCall.input,
+            timestamp: Date.now(),
+          });
+          socket.emit("jarvis:iteration", {
+            current: iterationCount,
+            max: 15,
+            timestamp: Date.now(),
+          });
+        },
+        onToolResult: (result: ToolResult) => {
+          if (activeQueries.get(queryKey)?.cancelled) return;
+          const startTs = toolStartTimes.get(result.toolCallId) || Date.now();
+          socket.emit("jarvis:tool_end", {
+            id: result.toolCallId,
+            output: result.output,
+            isError: result.isError,
+            durationMs: Date.now() - startTs,
+            timestamp: Date.now(),
+          });
+        },
+        onComplete: (summary: string) => {
+          finalResult = summary;
+        },
+        onError: (error: string) => {
+          hasError = true;
+          finalResult = error;
+          socket.emit("jarvis:error", {
+            message: error,
+            code: "EXECUTION_ERROR",
+            timestamp: Date.now(),
+          });
+        },
+      },
+      async (toolName, toolInput) => {
+        const toolCallRecord = await db.createAgentToolCall({
+          taskId,
+          toolName,
+          input: toolInput,
+          status: "running",
+        });
+
+        const toolStartTime = Date.now();
+        try {
+          const enrichedInput = { ...toolInput, userId };
+          const result = await executeTool(toolName, enrichedInput);
+          await db.incrementUsage(userId, today, "totalApiCalls");
+          await db.updateAgentToolCall(toolCallRecord.id, {
+            output: result,
+            status: "completed",
+            durationMs: Date.now() - toolStartTime,
+          });
+          return result;
+        } catch (error) {
+          const errorMsg =
+            error instanceof Error ? error.message : String(error);
+          await db.updateAgentToolCall(toolCallRecord.id, {
+            status: "error",
+            errorMessage: errorMsg,
+            durationMs: Date.now() - toolStartTime,
+          });
+          throw error;
+        }
+      },
+      { memoryContext: memoryPromptAddition }
+    );
+  } catch (error) {
+    hasError = true;
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    if (!finalResult) finalResult = errorMsg;
+  }
+
+  const durationMs = Date.now() - startTime;
+  await db.updateAgentTask(taskId, {
+    status: hasError ? "failed" : "completed",
+    result: finalResult,
+    errorMessage: hasError ? finalResult : undefined,
+    iterationCount,
+    durationMs,
+    completedAt: new Date(),
+  });
+
+  await db.createAgentMessage({
+    taskId,
+    role: "assistant",
+    content: finalResult || "Task completed",
+  });
+
+  try {
+    const taskContext: TaskContext = { taskId, userId, query: task };
+    const outcome: TaskOutcome = {
+      success: !hasError,
+      result: finalResult,
+      error: hasError ? finalResult : undefined,
+      toolsUsed: Array.from(new Set(toolsUsed)),
+      duration: durationMs,
+      iterations: iterationCount,
+    };
+    await learnFromTask(taskContext, outcome);
+
+    if (iterationCount > 2 || hasError) {
+      const reflectionSystem = createSelfReflectionSystem(userId);
+      await reflectionSystem
+        .reflectOnTask(taskId, {
+          taskDescription: task,
+          toolCalls: [],
+          finalResult: finalResult || "",
+          errorMessages: hasError ? [finalResult] : [],
+        })
+        .catch(() => {});
+    }
+  } catch (error) {
+    console.error("[JARVIS WS] Learning/reflection failed:", error);
+  }
+
+  socket.emit("jarvis:complete", {
+    taskId,
+    summary: finalResult,
+    success: !hasError,
+    iterationCount,
+    durationMs,
+    timestamp: Date.now(),
+  });
 }
 
 export { io };

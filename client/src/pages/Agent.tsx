@@ -3,6 +3,8 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
+import { useJarvisStream } from "@/hooks/useJarvisStream";
+import { JarvisStreamView } from "@/components/JarvisStreamView";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -50,29 +52,24 @@ import {
   Copy,
   Calculator,
   Image as ImageIcon,
-  // Activity,
   ChevronDown,
   ChevronRight,
   RefreshCw,
   Sparkles,
-  // BarChart3,
-  // AlertCircle,
   Mic,
   MicOff,
   Volume2,
   VolumeX,
   Calendar,
-  // Users,
   Play,
   Pause,
   Square,
-  // Settings,
   Server,
   Activity,
   Users,
   GitBranch,
   Webhook,
-  MoreVertical,
+  StopCircle,
 } from "lucide-react";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { WorkspaceIDE } from "@/components/WorkspaceIDE";
@@ -985,6 +982,9 @@ export default function AgentPage() {
   const _analyserRef = useRef<AnalyserNode | null>(null);
   const _audioElementRef = useRef<HTMLAudioElement | null>(null);
 
+  const jarvisStream = useJarvisStream();
+  const [useStreamingMode, setUseStreamingMode] = useState(true);
+
   // Fetch persisted tasks from database
   const { data: dbTasks, refetch: refetchTasks } =
     trpc.jarvis.listTasks.useQuery({ limit: 50 }, { enabled: !!user });
@@ -1047,8 +1047,9 @@ export default function AgentPage() {
   const handleNewTask = useCallback(() => {
     setCurrentTask(null);
     setInput("");
+    jarvisStream.reset();
     inputRef.current?.focus();
-  }, []);
+  }, [jarvisStream]);
 
   // Delete task
   const handleDeleteTask = useCallback(
@@ -1094,8 +1095,17 @@ export default function AgentPage() {
     inputRef.current?.focus();
   }, []);
 
-  // Submit task
-  const handleSubmit = useCallback(async () => {
+  const handleSubmitStreaming = useCallback(() => {
+    if (!input.trim() || jarvisStream.isStreaming) return;
+
+    const taskInput = input.trim();
+    setInput("");
+    setCurrentTask(null);
+    jarvisStream.reset();
+    jarvisStream.startTask(taskInput);
+  }, [input, jarvisStream]);
+
+  const handleSubmitLegacy = useCallback(async () => {
     if (!input.trim() || isProcessing) return;
 
     const userMessage: AgentMessage = {
@@ -1105,7 +1115,6 @@ export default function AgentPage() {
       timestamp: Date.now(),
     };
 
-    // Create task if none exists
     let task = currentTask;
     if (!task) {
       task = {
@@ -1130,7 +1139,6 @@ export default function AgentPage() {
     setInput("");
     setIsProcessing(true);
 
-    // Create assistant message placeholder for live updates
     const assistantMessage: AgentMessage = {
       id: crypto.randomUUID(),
       role: "assistant",
@@ -1147,12 +1155,10 @@ export default function AgentPage() {
       };
     });
 
-    // Call JARVIS orchestrator API
     try {
-      // Build conversation history from previous messages
       const conversationHistory = task.messages
         .filter(m => m.role === "user" || m.role === "assistant")
-        .slice(0, -1) // Exclude current user message
+        .slice(0, -1)
         .map(m => ({
           role: m.role as "user" | "assistant",
           content: m.content,
@@ -1163,7 +1169,6 @@ export default function AgentPage() {
         conversationHistory,
       });
 
-      // Process steps from orchestrator
       const steps: AgentStep[] = [];
       let finalContent = "";
 
@@ -1176,7 +1181,6 @@ export default function AgentPage() {
             timestamp: Date.now(),
           });
         } else if (step.type === "tool_use" && step.toolCall) {
-          // task_complete is handled specially - mark as completed immediately
           const isTaskComplete = step.toolCall.name === "task_complete";
           steps.push({
             id: crypto.randomUUID(),
@@ -1188,7 +1192,6 @@ export default function AgentPage() {
             timestamp: Date.now(),
           });
         } else if (step.type === "tool_result" && step.toolResult) {
-          // Update the last tool step with output
           const lastToolStep = steps.findLast(s => s.type === "tool");
           if (lastToolStep) {
             lastToolStep.output = step.toolResult.output;
@@ -1198,7 +1201,6 @@ export default function AgentPage() {
           finalContent = step.content;
         } else if (step.type === "complete" && step.summary) {
           finalContent = step.summary;
-          // Also mark any task_complete tool as success
           const taskCompleteStep = steps.findLast(
             s => s.tool === "task_complete"
           );
@@ -1234,13 +1236,11 @@ export default function AgentPage() {
         return updated;
       });
 
-      // Refetch persisted tasks
       refetchTasks();
     } catch (_error) {
       const errorMsg =
         _error instanceof Error ? _error.message : String(_error);
 
-      // Determine error type for better user feedback
       let errorType: AgentTask["errorType"] = "unknown";
       if (
         errorMsg.toLowerCase().includes("timeout") ||
@@ -1295,6 +1295,20 @@ export default function AgentPage() {
 
     setIsProcessing(false);
   }, [input, isProcessing, currentTask, jarvisExecute, refetchTasks]);
+
+  const handleSubmit = useCallback(() => {
+    if (useStreamingMode) {
+      handleSubmitStreaming();
+    } else {
+      handleSubmitLegacy();
+    }
+  }, [useStreamingMode, handleSubmitStreaming, handleSubmitLegacy]);
+
+  useEffect(() => {
+    if (!jarvisStream.isStreaming && jarvisStream.taskId) {
+      refetchTasks();
+    }
+  }, [jarvisStream.isStreaming, jarvisStream.taskId, refetchTasks]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -1692,7 +1706,13 @@ export default function AgentPage() {
           />
         ) : (
           <ScrollArea className="flex-1 p-4">
-            {currentTask ? (
+            {useStreamingMode &&
+            (jarvisStream.isStreaming || jarvisStream.steps.length > 0) ? (
+              <div className="max-w-4xl mx-auto">
+                <JarvisStreamView state={jarvisStream} />
+                <div ref={messagesEndRef} />
+              </div>
+            ) : currentTask ? (
               <div className="max-w-4xl mx-auto space-y-6">
                 {currentTask.messages.map((message, idx) => (
                   <AgentMessageView
@@ -1820,40 +1840,55 @@ export default function AgentPage() {
                 }}
                 placeholder="Give JARVIS a task... (e.g., 'Research the latest AI news and summarize')"
                 className="flex-1 bg-muted/30 border-border focus:border-purple-500/50"
-                disabled={isProcessing}
+                disabled={isProcessing || jarvisStream.isStreaming}
               />
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => {
-                  if (voiceMode) {
-                    setIsListening(!isListening);
-                    if (!isListening) {
-                      toast.info("Listening... speak now");
+              {jarvisStream.isStreaming ? (
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  onClick={() => {
+                    jarvisStream.cancelTask();
+                    toast.info("Task cancelled");
+                  }}
+                >
+                  <StopCircle className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    if (voiceMode) {
+                      setIsListening(!isListening);
+                      if (!isListening) {
+                        toast.info("Listening... speak now");
+                      }
+                    } else {
+                      setActiveTab("voice");
+                      toast.info("Enable voice mode first");
                     }
-                  } else {
-                    setActiveTab("voice");
-                    toast.info("Enable voice mode first");
-                  }
-                }}
-                className={cn(
-                  "transition-all",
-                  isListening && "bg-red-500/20 border-red-500 text-red-400"
-                )}
-                disabled={isProcessing}
-              >
-                {isListening ? (
-                  <Square className="h-4 w-4" />
-                ) : (
-                  <Mic className="h-4 w-4" />
-                )}
-              </Button>
+                  }}
+                  className={cn(
+                    "transition-all",
+                    isListening && "bg-red-500/20 border-red-500 text-red-400"
+                  )}
+                  disabled={isProcessing}
+                >
+                  {isListening ? (
+                    <Square className="h-4 w-4" />
+                  ) : (
+                    <Mic className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
               <Button
                 onClick={handleSubmit}
-                disabled={!input.trim() || isProcessing}
+                disabled={
+                  !input.trim() || isProcessing || jarvisStream.isStreaming
+                }
                 className="bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600"
               >
-                {isProcessing ? (
+                {isProcessing || jarvisStream.isStreaming ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Send className="h-4 w-4" />
@@ -1861,9 +1896,23 @@ export default function AgentPage() {
               </Button>
             </div>
             <div className="flex items-center justify-between mt-2">
-              <p className="text-xs text-muted-foreground">
-                JARVIS will autonomously use tools to complete your task
-              </p>
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-muted-foreground">
+                  JARVIS will autonomously use tools to complete your task
+                </p>
+                <button
+                  onClick={() => setUseStreamingMode(!useStreamingMode)}
+                  className={cn(
+                    "flex items-center gap-1.5 text-xs px-2 py-1 rounded-full transition-colors",
+                    useStreamingMode
+                      ? "bg-purple-500/20 text-purple-400"
+                      : "bg-muted text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Sparkles className="h-3 w-3" />
+                  {useStreamingMode ? "Live Mode" : "Classic Mode"}
+                </button>
+              </div>
               <p className="text-xs text-muted-foreground">
                 Press{" "}
                 <kbd className="px-1 py-0.5 rounded bg-muted text-xs">
