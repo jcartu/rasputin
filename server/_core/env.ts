@@ -1,3 +1,6 @@
+const getApiKeyWithFallbacks = (...keys: string[]): string =>
+  keys.map(k => process.env[k]).find(Boolean) ?? "";
+
 export const ENV = {
   appId: process.env.VITE_APP_ID ?? "",
   cookieSecret: process.env.JWT_SECRET ?? "",
@@ -6,5 +9,9 @@ export const ENV = {
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
-  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  forgeApiKey: getApiKeyWithFallbacks(
+    "BUILT_IN_FORGE_API_KEY",
+    "OPENAI_API_KEY",
+    "OPENROUTER_API_KEY"
+  ),
 };

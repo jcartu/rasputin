@@ -1,6 +1,6 @@
 /**
  * Self-Reflection System - Analyze task outcomes and learn from experiences
- * 
+ *
  * After each task, JARVIS reflects on:
  * 1. What worked well
  * 2. What could be improved
@@ -11,7 +11,11 @@
 import { invokeLLM } from "../../_core/llm";
 import { createMemorySystem, MemorySystem } from "./memorySystem";
 import { getDb } from "../../db";
-import { agentTasks, agentToolCalls, selfModificationLog } from "../../../drizzle/schema";
+import {
+  agentTasks,
+  agentToolCalls,
+  selfModificationLog,
+} from "../../../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
 
 export interface TaskReflection {
@@ -86,8 +90,14 @@ Output your analysis as JSON.`,
           schema: {
             type: "object",
             properties: {
-              success: { type: "boolean", description: "Whether the task was successful" },
-              summary: { type: "string", description: "Brief summary of what happened" },
+              success: {
+                type: "boolean",
+                description: "Whether the task was successful",
+              },
+              summary: {
+                type: "string",
+                description: "Brief summary of what happened",
+              },
               whatWorked: {
                 type: "array",
                 items: { type: "string" },
@@ -118,7 +128,12 @@ Output your analysis as JSON.`,
                     triggerCondition: { type: "string" },
                     pattern: { type: "string" },
                   },
-                  required: ["name", "description", "triggerCondition", "pattern"],
+                  required: [
+                    "name",
+                    "description",
+                    "triggerCondition",
+                    "pattern",
+                  ],
                   additionalProperties: false,
                 },
                 description: "New skills or patterns learned",
@@ -144,7 +159,9 @@ Output your analysis as JSON.`,
       },
     });
 
-    const reflectionContent = response.choices[0]?.message?.content || "{}";
+    const rawContent = response.choices[0]?.message?.content;
+    const reflectionContent =
+      typeof rawContent === "string" ? rawContent : "{}";
     let reflection: TaskReflection;
 
     try {
@@ -182,19 +199,16 @@ Output your analysis as JSON.`,
       });
     }
 
-    // Record learning event
     await this.memorySystem.recordLearningEvent({
-      eventType: "self_reflection",
-      sourceTaskId: taskId,
-      description: reflection.summary,
-      beforeState: { taskDescription: context.taskDescription },
-      afterState: { reflection },
-      improvement: reflection.suggestedImprovements.join("; "),
-      metrics: {
-        toolCallCount: context.toolCalls.length,
-        successRate: context.toolCalls.filter((t) => t.success).length / context.toolCalls.length,
-        confidenceScore: reflection.confidenceScore,
+      eventType: "pattern_detected",
+      taskId,
+      summary: reflection.summary,
+      content: {
+        taskDescription: context.taskDescription,
+        reflection,
+        suggestedImprovements: reflection.suggestedImprovements,
       },
+      confidence: Math.round(reflection.confidenceScore * 100),
     });
 
     return reflection;
@@ -205,12 +219,13 @@ Output your analysis as JSON.`,
    */
   private buildReflectionPrompt(context: ReflectionContext): string {
     const toolSummary = context.toolCalls
-      .map((t) => `- ${t.toolName}: ${t.success ? "✓" : "✗"} (${t.duration}ms)`)
+      .map(t => `- ${t.toolName}: ${t.success ? "✓" : "✗"} (${t.duration}ms)`)
       .join("\n");
 
-    const errorSummary = context.errorMessages.length > 0
-      ? `\nErrors encountered:\n${context.errorMessages.map((e) => `- ${e}`).join("\n")}`
-      : "";
+    const errorSummary =
+      context.errorMessages.length > 0
+        ? `\nErrors encountered:\n${context.errorMessages.map(e => `- ${e}`).join("\n")}`
+        : "";
 
     return `Analyze this task execution and provide a detailed reflection:
 
@@ -249,17 +264,14 @@ Please analyze:
       memoryType,
       title: `Task: ${context.taskDescription.slice(0, 100)}`,
       description: reflection.summary,
-      context: {
-        toolCalls: context.toolCalls.map((t) => t.toolName),
+      context: JSON.stringify({
+        toolCalls: context.toolCalls.map(t => t.toolName),
         errorCount: context.errorMessages.length,
-      },
+      }),
       outcome: context.finalResult,
-      lessonsLearned: reflection.lessonsLearned,
+      lessons: reflection.lessonsLearned,
       importance,
-      tags: [
-        memoryType,
-        ...context.toolCalls.map((t) => t.toolName),
-      ],
+      tags: [memoryType, ...context.toolCalls.map(t => t.toolName)],
     });
   }
 
@@ -271,21 +283,24 @@ Please analyze:
     skills: Array<{ name: string; pattern: string; confidence: number }>;
   }> {
     // Search for relevant memories
-    const memoryResults = await this.memorySystem.searchMemories(taskDescription, {
-      limit: 5,
-      minImportance: 0.3,
-    });
+    const memoryResults = await this.memorySystem.searchMemories(
+      taskDescription,
+      {
+        limit: 5,
+        minImportance: 0.3,
+      }
+    );
 
     // Get relevant skills
     const skills = await this.memorySystem.getRelevantSkills(taskDescription);
 
     return {
-      memories: memoryResults.map((r) => ({
+      memories: memoryResults.map(r => ({
         title: r.memory.title,
         lessons: r.memory.tags,
         relevance: r.relevanceScore,
       })),
-      skills: skills.slice(0, 5).map((s) => ({
+      skills: skills.slice(0, 5).map(s => ({
         name: s.name,
         pattern: s.pattern,
         confidence: parseFloat(s.confidence || "0.5"),
@@ -297,9 +312,9 @@ Please analyze:
    * Suggest improvements based on accumulated learnings
    */
   async suggestImprovements(): Promise<string[]> {
-    const db = getDb();
+    const db = await getDb();
+    if (!db) return [];
 
-    // Get recent learning events
     const recentLearnings = await db
       .select()
       .from(selfModificationLog)
@@ -314,7 +329,7 @@ Please analyze:
     const prompt = `Based on these recent learnings and statistics, suggest 3-5 specific improvements:
 
 Recent Modifications:
-${recentLearnings.map((l) => `- ${l.modificationType}: ${l.description}`).join("\n")}
+${recentLearnings.map(l => `- ${l.modificationType}: ${l.description}`).join("\n")}
 
 Memory Statistics:
 - Total memories: ${stats.totalMemories}
@@ -327,20 +342,24 @@ Suggest concrete, actionable improvements for the AI agent.`;
       messages: [
         {
           role: "system",
-          content: "You are an AI improvement advisor. Suggest specific, actionable improvements.",
+          content:
+            "You are an AI improvement advisor. Suggest specific, actionable improvements.",
         },
         { role: "user", content: prompt },
       ],
     });
 
-    const content = response.choices[0]?.message?.content || "";
-    
-    // Parse suggestions from response
+    const rawContent = response.choices[0]?.message?.content;
+    const content = typeof rawContent === "string" ? rawContent : "";
+
     const suggestions = content
       .split("\n")
-      .filter((line) => line.trim().startsWith("-") || line.trim().match(/^\d+\./))
-      .map((line) => line.replace(/^[-\d.]+\s*/, "").trim())
-      .filter((s) => s.length > 10);
+      .filter(
+        (line: string) =>
+          line.trim().startsWith("-") || line.trim().match(/^\d+\./)
+      )
+      .map((line: string) => line.replace(/^[-\d.]+\s*/, "").trim())
+      .filter((s: string) => s.length > 10);
 
     return suggestions;
   }
@@ -359,11 +378,10 @@ Suggest concrete, actionable improvements for the AI agent.`;
     // Get improvement suggestions
     const suggestions = await this.suggestImprovements();
 
-    // Record the self-improvement event
     await this.memorySystem.recordLearningEvent({
-      eventType: "performance_improvement",
-      description: "Periodic self-improvement cycle",
-      improvement: suggestions.join("; "),
+      eventType: "skill_improved",
+      summary: "Periodic self-improvement cycle",
+      content: { improvements: suggestions },
     });
 
     return {
@@ -377,6 +395,8 @@ Suggest concrete, actionable improvements for the AI agent.`;
 /**
  * Create a self-reflection system instance for a user
  */
-export function createSelfReflectionSystem(userId: number): SelfReflectionSystem {
+export function createSelfReflectionSystem(
+  userId: number
+): SelfReflectionSystem {
   return new SelfReflectionSystem(userId);
 }

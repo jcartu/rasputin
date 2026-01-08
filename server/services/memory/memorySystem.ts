@@ -1,19 +1,10 @@
-/**
- * Memory System - Long-term memory with vector embeddings for JARVIS
- * 
- * Three types of memory:
- * 1. Episodic Memory - Specific experiences and events (what happened)
- * 2. Semantic Memory - General knowledge and facts (what is known)
- * 3. Procedural Memory - Skills and how-to knowledge (how to do things)
- */
-
 import { getDb } from "../../db";
 import {
   episodicMemories,
   agentSkills,
   learningEvents,
 } from "../../../drizzle/schema";
-import { eq, desc, and, like, sql } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { invokeLLM } from "../../_core/llm";
 
 export interface Memory {
@@ -33,12 +24,10 @@ export interface MemorySearchResult {
   relevanceScore: number;
 }
 
-/**
- * Generate embedding for text using LLM
- */
+type EpisodicMemory = typeof episodicMemories.$inferSelect;
+type AgentSkill = typeof agentSkills.$inferSelect;
+
 async function generateEmbedding(text: string): Promise<number[]> {
-  // Use a simple hash-based embedding for now
-  // In production, this would use OpenAI's embedding API or similar
   const hash = simpleHash(text);
   const embedding: number[] = [];
   for (let i = 0; i < 384; i++) {
@@ -51,28 +40,25 @@ function simpleHash(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash;
   }
   return hash;
 }
 
-/**
- * Calculate cosine similarity between two vectors
- */
 function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length) return 0;
-  
+
   let dotProduct = 0;
   let normA = 0;
   let normB = 0;
-  
+
   for (let i = 0; i < a.length; i++) {
     dotProduct += a[i] * b[i];
     normA += a[i] * a[i];
     normB += b[i] * b[i];
   }
-  
+
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
@@ -83,25 +69,28 @@ export class MemorySystem {
     this.userId = userId;
   }
 
-  /**
-   * Store a new episodic memory (experience)
-   */
   async storeEpisodicMemory(params: {
     taskId?: number;
-    memoryType: "task_success" | "task_failure" | "user_preference" | "system_discovery" | "error_resolution" | "optimization" | "interaction";
+    memoryType:
+      | "task_success"
+      | "task_failure"
+      | "user_preference"
+      | "system_discovery"
+      | "error_resolution"
+      | "optimization"
+      | "interaction";
     title: string;
     description: string;
-    context?: Record<string, unknown>;
+    context?: string;
+    action?: string;
     outcome?: string;
-    lessonsLearned?: string[];
-    importance?: number;
+    lessons?: string[];
+    entities?: string[];
     tags?: string[];
+    importance?: number;
   }): Promise<number> {
-    const db = getDb();
-    
-    const embedding = await generateEmbedding(
-      `${params.title} ${params.description} ${params.outcome || ""}`
-    );
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
 
     const result = await db.insert(episodicMemories).values({
       userId: this.userId,
@@ -110,19 +99,17 @@ export class MemorySystem {
       title: params.title,
       description: params.description,
       context: params.context,
+      action: params.action,
       outcome: params.outcome,
-      lessonsLearned: params.lessonsLearned,
-      importance: params.importance?.toString() || "0.5",
-      embedding: JSON.stringify(embedding),
+      lessons: params.lessons,
+      entities: params.entities,
       tags: params.tags,
+      importance: params.importance ?? 50,
     });
 
     return result[0].insertId;
   }
 
-  /**
-   * Store a learned skill (procedural memory)
-   */
   async storeSkill(params: {
     name: string;
     description: string;
@@ -133,7 +120,8 @@ export class MemorySystem {
     tags?: string[];
     sourceTaskId?: number;
   }): Promise<number> {
-    const db = getDb();
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
 
     const result = await db.insert(agentSkills).values({
       userId: this.userId,
@@ -150,37 +138,35 @@ export class MemorySystem {
     return result[0].insertId;
   }
 
-  /**
-   * Record a learning event
-   */
   async recordLearningEvent(params: {
-    eventType: "task_completion" | "error_encountered" | "user_feedback" | "self_reflection" | "skill_acquisition" | "performance_improvement";
-    sourceTaskId?: number;
-    description: string;
-    beforeState?: Record<string, unknown>;
-    afterState?: Record<string, unknown>;
-    improvement?: string;
-    metrics?: Record<string, number>;
+    eventType:
+      | "new_knowledge"
+      | "skill_acquired"
+      | "skill_improved"
+      | "error_learned"
+      | "preference_learned"
+      | "pattern_detected"
+      | "feedback_received";
+    taskId?: number;
+    summary: string;
+    content?: Record<string, unknown>;
+    confidence?: number;
   }): Promise<number> {
-    const db = getDb();
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
 
     const result = await db.insert(learningEvents).values({
       userId: this.userId,
+      taskId: params.taskId,
       eventType: params.eventType,
-      sourceTaskId: params.sourceTaskId,
-      description: params.description,
-      beforeState: params.beforeState,
-      afterState: params.afterState,
-      improvement: params.improvement,
-      metrics: params.metrics,
+      summary: params.summary,
+      content: params.content,
+      confidence: params.confidence ?? 70,
     });
 
     return result[0].insertId;
   }
 
-  /**
-   * Search memories by semantic similarity
-   */
   async searchMemories(
     query: string,
     options: {
@@ -189,13 +175,12 @@ export class MemorySystem {
       minImportance?: number;
     } = {}
   ): Promise<MemorySearchResult[]> {
-    const db = getDb();
-    const limit = options.limit || 10;
+    const db = await getDb();
+    if (!db) return [];
 
-    // Generate query embedding
+    const limit = options.limit || 10;
     const queryEmbedding = await generateEmbedding(query);
 
-    // Get all memories for this user
     const memories = await db
       .select()
       .from(episodicMemories)
@@ -203,19 +188,22 @@ export class MemorySystem {
       .orderBy(desc(episodicMemories.importance))
       .limit(100);
 
-    // Calculate similarity scores
     const results: MemorySearchResult[] = memories
-      .map((mem) => {
+      .map((mem: EpisodicMemory) => {
         let embedding: number[] = [];
         try {
-          embedding = JSON.parse(mem.embedding || "[]");
+          const embeddingStr = mem.embeddingId;
+          if (embeddingStr) {
+            embedding = JSON.parse(embeddingStr);
+          }
         } catch {
           embedding = [];
         }
 
-        const relevanceScore = embedding.length > 0
-          ? cosineSimilarity(queryEmbedding, embedding)
-          : 0;
+        const relevanceScore =
+          embedding.length > 0
+            ? cosineSimilarity(queryEmbedding, embedding)
+            : 0;
 
         return {
           memory: {
@@ -223,24 +211,29 @@ export class MemorySystem {
             type: "episodic" as const,
             title: mem.title,
             content: mem.description,
-            importance: parseFloat(mem.importance || "0.5"),
+            importance: mem.importance,
             lastAccessed: mem.lastAccessedAt || new Date(),
-            accessCount: mem.accessCount || 0,
+            accessCount: mem.accessCount,
             tags: mem.tags || [],
           },
           relevanceScore,
         };
       })
-      .filter((r) => {
-        if (options.minImportance && r.memory.importance < options.minImportance) {
+      .filter((r: MemorySearchResult) => {
+        if (
+          options.minImportance &&
+          r.memory.importance < options.minImportance
+        ) {
           return false;
         }
-        return r.relevanceScore > 0.3; // Minimum similarity threshold
+        return r.relevanceScore > 0.3;
       })
-      .sort((a, b) => b.relevanceScore - a.relevanceScore)
+      .sort(
+        (a: MemorySearchResult, b: MemorySearchResult) =>
+          b.relevanceScore - a.relevanceScore
+      )
       .slice(0, limit);
 
-    // Update access counts for retrieved memories
     for (const result of results) {
       await db
         .update(episodicMemories)
@@ -254,45 +247,34 @@ export class MemorySystem {
     return results;
   }
 
-  /**
-   * Get relevant skills for a task
-   */
-  async getRelevantSkills(taskDescription: string): Promise<typeof agentSkills.$inferSelect[]> {
-    const db = getDb();
+  async getRelevantSkills(taskDescription: string): Promise<AgentSkill[]> {
+    const db = await getDb();
+    if (!db) return [];
 
-    // Get all active skills for this user
     const skills = await db
       .select()
       .from(agentSkills)
       .where(
-        and(
-          eq(agentSkills.userId, this.userId),
-          eq(agentSkills.isActive, 1)
-        )
+        and(eq(agentSkills.userId, this.userId), eq(agentSkills.isActive, 1))
       )
       .orderBy(desc(agentSkills.confidence));
 
-    // Filter skills by trigger condition match
-    const relevantSkills = skills.filter((skill) => {
+    const relevantSkills = skills.filter((skill: AgentSkill) => {
       const trigger = skill.triggerCondition.toLowerCase();
       const task = taskDescription.toLowerCase();
-      
-      // Simple keyword matching - in production, use semantic similarity
       const keywords = trigger.split(/\s+/);
-      return keywords.some((keyword) => task.includes(keyword));
+      return keywords.some((keyword: string) => task.includes(keyword));
     });
 
     return relevantSkills;
   }
 
-  /**
-   * Update skill confidence based on outcome
-   */
   async updateSkillConfidence(
     skillId: number,
     success: boolean
   ): Promise<void> {
-    const db = getDb();
+    const db = await getDb();
+    if (!db) return;
 
     if (success) {
       await db
@@ -315,13 +297,10 @@ export class MemorySystem {
     }
   }
 
-  /**
-   * Consolidate old memories (compress and summarize)
-   */
   async consolidateMemories(): Promise<void> {
-    const db = getDb();
+    const db = await getDb();
+    if (!db) return;
 
-    // Get old, low-importance memories
     const oldMemories = await db
       .select()
       .from(episodicMemories)
@@ -329,51 +308,65 @@ export class MemorySystem {
         and(
           eq(episodicMemories.userId, this.userId),
           sql`${episodicMemories.createdAt} < DATE_SUB(NOW(), INTERVAL 30 DAY)`,
-          sql`${episodicMemories.importance} < 0.5`
+          sql`${episodicMemories.importance} < 50`
         )
       )
       .limit(50);
 
     if (oldMemories.length < 10) return;
 
-    // Group memories by type and summarize
-    const grouped = oldMemories.reduce((acc, mem) => {
-      const type = mem.memoryType;
-      if (!acc[type]) acc[type] = [];
-      acc[type].push(mem);
-      return acc;
-    }, {} as Record<string, typeof oldMemories>);
+    const grouped = oldMemories.reduce(
+      (acc: Record<string, EpisodicMemory[]>, mem: EpisodicMemory) => {
+        const type = mem.memoryType;
+        if (!acc[type]) acc[type] = [];
+        acc[type].push(mem);
+        return acc;
+      },
+      {} as Record<string, EpisodicMemory[]>
+    );
 
     for (const [type, memories] of Object.entries(grouped)) {
       if (memories.length < 5) continue;
 
-      // Generate summary using LLM
-      const summaryPrompt = `Summarize these ${memories.length} experiences into key learnings:\n\n${memories.map((m) => `- ${m.title}: ${m.description}`).join("\n")}`;
+      const summaryPrompt = `Summarize these ${memories.length} experiences into key learnings:\n\n${memories.map((m: EpisodicMemory) => `- ${m.title}: ${m.description}`).join("\n")}`;
 
       try {
         const response = await invokeLLM({
           messages: [
-            { role: "system", content: "You are a memory consolidation system. Summarize experiences into concise, actionable learnings." },
+            {
+              role: "system",
+              content:
+                "You are a memory consolidation system. Summarize experiences into concise, actionable learnings.",
+            },
             { role: "user", content: summaryPrompt },
           ],
         });
 
-        const summary = response.choices[0]?.message?.content || "";
+        const rawContent = response.choices[0]?.message?.content;
+        const summary =
+          typeof rawContent === "string"
+            ? rawContent
+            : JSON.stringify(rawContent);
 
-        // Create consolidated memory
         await this.storeEpisodicMemory({
-          memoryType: type as any,
+          memoryType: type as
+            | "task_success"
+            | "task_failure"
+            | "user_preference"
+            | "system_discovery"
+            | "error_resolution"
+            | "optimization"
+            | "interaction",
           title: `Consolidated: ${type} learnings`,
           description: summary,
-          importance: 0.7,
+          importance: 70,
           tags: ["consolidated", type],
         });
 
-        // Mark old memories as consolidated (or delete)
         for (const mem of memories) {
           await db
             .update(episodicMemories)
-            .set({ importance: "0.1" })
+            .set({ importance: 10 })
             .where(eq(episodicMemories.id, mem.id));
         }
       } catch (error) {
@@ -382,18 +375,23 @@ export class MemorySystem {
     }
   }
 
-  /**
-   * Get memory statistics
-   */
   async getStats(): Promise<{
     totalMemories: number;
     totalSkills: number;
     learningEvents: number;
     memoryByType: Record<string, number>;
   }> {
-    const db = getDb();
+    const db = await getDb();
+    if (!db) {
+      return {
+        totalMemories: 0,
+        totalSkills: 0,
+        learningEvents: 0,
+        memoryByType: {},
+      };
+    }
 
-    const [memories, skills, events] = await Promise.all([
+    const [memoriesResult, skillsResult, eventsResult] = await Promise.all([
       db
         .select({ count: sql<number>`COUNT(*)` })
         .from(episodicMemories)
@@ -408,7 +406,6 @@ export class MemorySystem {
         .where(eq(learningEvents.userId, this.userId)),
     ]);
 
-    // Get memory count by type
     const byType = await db
       .select({
         type: episodicMemories.memoryType,
@@ -424,17 +421,14 @@ export class MemorySystem {
     }
 
     return {
-      totalMemories: memories[0]?.count || 0,
-      totalSkills: skills[0]?.count || 0,
-      learningEvents: events[0]?.count || 0,
+      totalMemories: memoriesResult[0]?.count || 0,
+      totalSkills: skillsResult[0]?.count || 0,
+      learningEvents: eventsResult[0]?.count || 0,
       memoryByType,
     };
   }
 }
 
-/**
- * Create a memory system instance for a user
- */
 export function createMemorySystem(userId: number): MemorySystem {
   return new MemorySystem(userId);
 }

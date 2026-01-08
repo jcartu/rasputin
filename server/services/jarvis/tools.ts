@@ -17,6 +17,97 @@ import * as crypto from "crypto";
 
 const execAsync = promisify(exec);
 
+type ToolResult = {
+  success: boolean;
+  output: string;
+  fallbackUsed?: string;
+  attempts?: number;
+};
+
+type FallbackFn = () => Promise<string>;
+
+async function withRetryAndFallback(
+  primaryFn: () => Promise<string>,
+  fallbacks: Array<{ name: string; fn: FallbackFn }> = [],
+  maxRetries: number = 2
+): Promise<ToolResult> {
+  let attempts = 0;
+  let lastError = "";
+
+  for (let retry = 0; retry <= maxRetries; retry++) {
+    attempts++;
+    try {
+      const result = await primaryFn();
+      if (!result.startsWith("Error:") && !result.includes("error:")) {
+        return { success: true, output: result, attempts };
+      }
+      lastError = result;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  for (const fallback of fallbacks) {
+    attempts++;
+    try {
+      const result = await fallback.fn();
+      if (!result.startsWith("Error:") && !result.includes("error:")) {
+        return {
+          success: true,
+          output: result,
+          fallbackUsed: fallback.name,
+          attempts,
+        };
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return { success: false, output: lastError, attempts };
+}
+
+async function verifyFileCreated(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function verifyCommandOutput(
+  output: string,
+  expectedPatterns: string[]
+): Promise<{ verified: boolean; missing: string[] }> {
+  const missing: string[] = [];
+  for (const pattern of expectedPatterns) {
+    if (!output.includes(pattern)) {
+      missing.push(pattern);
+    }
+  }
+  return { verified: missing.length === 0, missing };
+}
+
+async function verifyServerRunning(
+  port: number,
+  maxAttempts: number = 5
+): Promise<boolean> {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const response = await fetch(`http://localhost:${port}`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      if (response.ok || response.status < 500) {
+        return true;
+      }
+    } catch {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  return false;
+}
+
 // File backup storage for rollback capability
 interface FileBackup {
   id: string;
@@ -70,76 +161,95 @@ async function ensureSandbox(): Promise<void> {
   }
 }
 
-/**
- * Web Search using Perplexity Sonar
- */
+async function perplexitySearch(query: string): Promise<string> {
+  if (!SONAR_API_KEY) {
+    throw new Error("Perplexity API key not configured");
+  }
+
+  const response = await fetch("https://api.perplexity.ai/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${SONAR_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "sonar-pro",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a helpful research assistant. Provide accurate, current information with sources when available.",
+        },
+        { role: "user", content: query },
+      ],
+      max_tokens: 2048,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Perplexity API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content || "No results found";
+  const citations = data.citations || [];
+
+  if (citations.length > 0) {
+    return `${content}\n\nSources:\n${citations.map((c: string, i: number) => `${i + 1}. ${c}`).join("\n")}`;
+  }
+  return content;
+}
+
+async function directHttpSearch(query: string): Promise<string> {
+  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+  const response = await fetch(searchUrl, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (compatible; JARVIS/1.0; +https://rasputin.manus.space)",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP search failed: ${response.status}`);
+  }
+
+  const html = await response.text();
+  const text = html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return text.length > 5000
+    ? text.substring(0, 5000) + "... [truncated]"
+    : text;
+}
+
 export async function webSearch(query: string): Promise<string> {
   const cached = await getCachedResult(query, "web_search", 24);
   if (cached) {
     return `[CACHED] ${cached}`;
   }
 
-  if (!SONAR_API_KEY) {
-    const searxngResult = await searxngSearch(query);
-    if (!searxngResult.startsWith("SearXNG error")) {
-      await setCachedResult(query, "searxng", searxngResult);
-      return `[FALLBACK:SearXNG] ${searxngResult}`;
-    }
-    return "Error: No search providers available (Perplexity API key not configured, SearXNG unavailable)";
+  const result = await withRetryAndFallback(
+    () => perplexitySearch(query),
+    [
+      { name: "SearXNG", fn: () => searxngSearch(query) },
+      { name: "DirectHTTP", fn: () => directHttpSearch(query) },
+    ],
+    1
+  );
+
+  if (result.success) {
+    const prefix = result.fallbackUsed
+      ? `[FALLBACK:${result.fallbackUsed}] `
+      : "";
+    await setCachedResult(query, "web_search", result.output);
+    return prefix + result.output;
   }
 
-  try {
-    const response = await fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${SONAR_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "sonar-pro",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a helpful research assistant. Provide accurate, current information with sources when available.",
-          },
-          {
-            role: "user",
-            content: query,
-          },
-        ],
-        max_tokens: 2048,
-      }),
-    });
-
-    if (!response.ok) {
-      const searxngResult = await searxngSearch(query);
-      if (!searxngResult.startsWith("SearXNG error")) {
-        await setCachedResult(query, "searxng", searxngResult);
-        return `[FALLBACK:SearXNG] ${searxngResult}`;
-      }
-      return `Search error: ${await response.text()}`;
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || "No results found";
-
-    const citations = data.citations || [];
-    let result = content;
-    if (citations.length > 0) {
-      result = `${content}\n\nSources:\n${citations.map((c: string, i: number) => `${i + 1}. ${c}`).join("\n")}`;
-    }
-
-    await setCachedResult(query, "web_search", result);
-    return result;
-  } catch (error) {
-    const searxngResult = await searxngSearch(query);
-    if (!searxngResult.startsWith("SearXNG error")) {
-      await setCachedResult(query, "searxng", searxngResult);
-      return `[FALLBACK:SearXNG] ${searxngResult}`;
-    }
-    return `Search error: ${error instanceof Error ? error.message : String(error)}`;
-  }
+  return `Error: All search methods failed after ${result.attempts} attempts. Last error: ${result.output}`;
 }
 
 /**
@@ -395,26 +505,27 @@ export async function readFile(filePath: string): Promise<string> {
   }
 }
 
-/**
- * Write file contents
- */
 export async function writeFile(
   filePath: string,
   content: string
 ): Promise<string> {
   await ensureSandbox();
 
-  // Resolve path relative to sandbox
   const resolvedPath = filePath.startsWith("/")
     ? filePath
     : path.join(JARVIS_SANDBOX, filePath);
 
   try {
-    // Ensure parent directory exists
     await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
-
     await fs.writeFile(resolvedPath, content, "utf-8");
-    return `File written successfully: ${resolvedPath}`;
+
+    const verified = await verifyFileCreated(resolvedPath);
+    if (!verified) {
+      return `Warning: File write reported success but verification failed: ${resolvedPath}`;
+    }
+
+    const stats = await fs.stat(resolvedPath);
+    return `File written and verified: ${resolvedPath} (${stats.size} bytes)`;
   } catch (error) {
     return `Error writing file: ${error instanceof Error ? error.message : String(error)}`;
   }
@@ -2335,9 +2446,151 @@ export async function gitStash(
   }
 }
 
-/**
- * Execute a tool by name
- */
+export async function npmAudit(projectPath: string): Promise<string> {
+  const startTime = Date.now();
+
+  try {
+    const { stdout, stderr } = await execAsync("pnpm audit --json", {
+      cwd: projectPath,
+      maxBuffer: 1024 * 1024 * 5,
+      timeout: 120000,
+    });
+
+    const duration = Date.now() - startTime;
+
+    try {
+      const auditData = JSON.parse(stdout);
+      const advisories = auditData.advisories || {};
+      const metadata = auditData.metadata || {};
+
+      let result = `NPM SECURITY AUDIT (${Math.round(duration / 1000)}s)\n`;
+      result += `=`.repeat(50) + "\n\n";
+
+      const vulnCount = Object.keys(advisories).length;
+      if (vulnCount === 0) {
+        result += "No vulnerabilities found.\n";
+        if (metadata.dependencies) {
+          result += `\nScanned ${metadata.dependencies} dependencies.\n`;
+        }
+        return result;
+      }
+
+      result += `VULNERABILITIES FOUND: ${vulnCount}\n\n`;
+
+      const bySeverity: Record<string, number> = {};
+      for (const adv of Object.values(advisories) as Array<{
+        severity: string;
+        title: string;
+        module_name: string;
+        patched_versions: string;
+        recommendation: string;
+      }>) {
+        bySeverity[adv.severity] = (bySeverity[adv.severity] || 0) + 1;
+      }
+
+      result += "BY SEVERITY:\n";
+      for (const [sev, count] of Object.entries(bySeverity).sort()) {
+        result += `  ${sev.toUpperCase()}: ${count}\n`;
+      }
+      result += "\n";
+
+      result += "DETAILS:\n";
+      let shown = 0;
+      for (const [, adv] of Object.entries(advisories) as Array<
+        [
+          string,
+          {
+            severity: string;
+            title: string;
+            module_name: string;
+            patched_versions: string;
+            recommendation: string;
+          },
+        ]
+      >) {
+        if (shown >= 10) {
+          result += `\n... and ${vulnCount - 10} more vulnerabilities\n`;
+          break;
+        }
+        result += `\n[${adv.severity.toUpperCase()}] ${adv.title}\n`;
+        result += `  Package: ${adv.module_name}\n`;
+        result += `  Patched: ${adv.patched_versions || "No patch available"}\n`;
+        if (adv.recommendation) {
+          result += `  Action: ${adv.recommendation}\n`;
+        }
+        shown++;
+      }
+
+      return result;
+    } catch {
+      return `NPM Audit Output:\n${stdout}\n${stderr}`;
+    }
+  } catch (error) {
+    const execError = error as { stdout?: string; stderr?: string };
+    const output = (execError.stdout || "") + (execError.stderr || "");
+
+    if (output.includes("No dependencies found")) {
+      return "No dependencies to audit.";
+    }
+
+    return `NPM Audit Error: ${error instanceof Error ? error.message : String(error)}\n\nOutput:\n${output.substring(0, 2000)}`;
+  }
+}
+
+export async function securityAnalysis(projectPath: string): Promise<string> {
+  const results: string[] = [];
+
+  results.push("SECURITY ANALYSIS REPORT");
+  results.push("=".repeat(50) + "\n");
+
+  const auditResult = await npmAudit(projectPath);
+  results.push("1. NPM DEPENDENCY AUDIT");
+  results.push("-".repeat(30));
+  results.push(auditResult);
+  results.push("");
+
+  try {
+    const packageJsonPath = path.join(projectPath, "package.json");
+    const packageJson = JSON.parse(await fs.readFile(packageJsonPath, "utf-8"));
+    const deps = {
+      ...packageJson.dependencies,
+      ...packageJson.devDependencies,
+    };
+
+    results.push("2. DEPENDENCY OVERVIEW");
+    results.push("-".repeat(30));
+    results.push(`Total packages: ${Object.keys(deps).length}`);
+
+    const outdatedCheck = await execAsync("pnpm outdated --json", {
+      cwd: projectPath,
+      timeout: 60000,
+    }).catch(() => ({ stdout: "{}" }));
+
+    try {
+      const outdated = JSON.parse(outdatedCheck.stdout);
+      const outdatedCount = Object.keys(outdated).length;
+      if (outdatedCount > 0) {
+        results.push(`Outdated packages: ${outdatedCount}`);
+      }
+    } catch {
+      results.push("Could not check for outdated packages.");
+    }
+  } catch (e) {
+    results.push(
+      `Could not read package.json: ${e instanceof Error ? e.message : String(e)}`
+    );
+  }
+
+  results.push("");
+  results.push("3. SECURITY RECOMMENDATIONS");
+  results.push("-".repeat(30));
+  results.push("- Run 'pnpm audit fix' to automatically fix vulnerabilities");
+  results.push("- Update outdated packages regularly");
+  results.push("- Review any high/critical vulnerabilities immediately");
+
+  return results.join("\n");
+}
+
 export async function executeTool(
   name: string,
   input: Record<string, unknown>
@@ -2590,6 +2843,10 @@ export async function executeTool(
       return endDebugSession(input.conclusion as string);
     case "get_debug_snapshot":
       return getDebugSnapshot(input.snapshotId as string);
+    case "npm_audit":
+      return npmAudit(input.projectPath as string);
+    case "security_analysis":
+      return securityAnalysis(input.projectPath as string);
     default:
       return `Unknown tool: ${name}`;
   }
@@ -2867,6 +3124,30 @@ export function getAvailableTools(): Array<{
         path: {
           type: "string",
           description: "Directory path to list on the remote host",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "npm_audit",
+      description:
+        "Run npm/pnpm security audit on a project to find vulnerable dependencies. Returns severity breakdown and remediation steps.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project directory containing package.json",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "security_analysis",
+      description:
+        "Comprehensive security analysis of a project including dependency audit, outdated package check, and security recommendations.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project directory to analyze",
           required: true,
         },
       },

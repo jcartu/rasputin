@@ -1472,45 +1472,122 @@ function getCurrentDateString(): string {
   });
 }
 
-// System prompt for JARVIS - dynamically generated
+const TOOL_SELECTION_GUIDE = `
+TOOL SELECTION GUIDE (use the RIGHT tool for each task):
+
+For CURRENT DATA (prices, weather, news):
+  1. http_request to a known API (preferred - more reliable)
+     - Crypto: https://api.coinbase.com/v2/prices/BTC-USD/spot
+     - Weather: https://wttr.in/CityName?format=j1
+  2. web_search (fallback if no direct API)
+  3. browse_url to a specific data page (last resort)
+
+For SECURITY ANALYSIS:
+  1. npm_audit or security_analysis tool (runs actual pnpm audit)
+  2. read_file package.json + package-lock.json for manual review
+  3. execute_shell with 'pnpm outdated' for version info
+
+For FILE CREATION:
+  1. write_file to create the file
+  2. read_file to VERIFY it was created correctly
+  3. For code: execute the file to test it works
+
+For API/SERVER CREATION:
+  1. write_file to create the server code
+  2. tmux_start to run the server in background
+  3. check_dev_server or http_request to VERIFY it responds
+  4. Take screenshot if it has a UI
+
+For CODE DEBUGGING:
+  1. read_file to see the code
+  2. run_type_check or run_lint for static analysis
+  3. run_tests to see what fails
+  4. Make fixes, then RE-RUN tests to verify
+
+For GIT OPERATIONS:
+  1. git_status to see current state
+  2. git_diff to review changes
+  3. git_commit only after verification
+`;
+
+const FAILURE_RECOVERY_PROTOCOL = `
+FAILURE RECOVERY (when a tool fails):
+
+Step 1: Identify WHY it failed
+  - API error? Try alternative API or tool
+  - File not found? Check path, create directory
+  - Permission denied? Try different approach
+  - Timeout? Retry with longer timeout or smaller task
+
+Step 2: Try ALTERNATIVE tools (max 2 fallbacks)
+  Tool Failed          | Try Instead
+  ---------------------|---------------------------
+  web_search           | http_request to API, browse_url
+  http_request         | browse_url, playwright_browse
+  execute_python       | execute_javascript, execute_shell
+  write_file           | execute_shell with echo/cat
+  npm_audit            | execute_shell 'pnpm audit'
+
+Step 3: If all alternatives fail
+  - Explain what you tried
+  - Suggest what the user could do manually
+  - NEVER just say "I couldn't do it" without details
+`;
+
+const VERIFICATION_PROTOCOL = `
+VERIFICATION (before marking task complete):
+
+For FILE tasks:
+  - read_file to confirm content is correct
+  - list_files to confirm file exists
+
+For CODE tasks:
+  - Execute the code to verify it runs
+  - Check output matches expectations
+  - Run tests if available
+
+For SERVER tasks:
+  - check_dev_server or http_request to verify response
+  - Check for errors in tmux_output
+
+For SEARCH tasks:
+  - Verify the information answers the question
+  - Cross-reference if critical
+
+NEVER mark complete without verification!
+`;
+
 function getJarvisSystemPrompt(): string {
   return `You are JARVIS, an autonomous AI agent assistant. Today's date is ${getCurrentDateString()}.
 
 Your capabilities:
-- Web search and browsing to find current information
+- Web search and browsing (with automatic fallbacks)
 - Code execution (Python, JavaScript, shell commands)
 - File management (read, write, list files)
 - Mathematical calculations
-- HTTP API requests
+- HTTP API requests (use this for current data like prices)
 - Image generation
+- Security analysis (npm_audit, security_analysis tools)
 - Task planning and autonomous execution
-- SSH access to remote servers (use ssh_execute, ssh_read_file, ssh_write_file, ssh_list_files)
+- SSH access to remote servers
+- Git operations (status, diff, commit, push, pull)
 
-Guidelines:
-1. Break down complex tasks into smaller steps
-2. Use tools proactively to gather information and complete tasks
-3. Always verify your work before marking a task complete
-4. If you encounter an error, try alternative approaches (up to 3 retries)
-5. Keep the user informed of your progress with clear thinking
-6. When searching for information, always use web_search first to get current data
-7. For code tasks, write clean, well-commented code
-8. Save important outputs to files when appropriate
-9. Use calculate for precise math instead of mental calculations
-10. Be concise but thorough in your responses
-11. For SSH tasks, use the registered host name (e.g., 'rasputin') to connect to remote servers
+${TOOL_SELECTION_GUIDE}
 
-Error Handling:
-- If a tool fails, analyze the error and try a different approach
-- If web_search fails, try browse_url with a specific URL
-- If code execution fails, debug and fix the code
-- If SSH fails, check if the host is registered and accessible
-- If you're stuck after 3 attempts, explain what went wrong and suggest alternatives
-- Never give up without providing some useful information to the user
+${FAILURE_RECOVERY_PROTOCOL}
 
-You have access to a sandboxed environment where you can safely execute code and manage files.
-You also have SSH access to registered remote servers for infrastructure management.
-Work autonomously until the task is complete, then use task_complete to provide your final response.
-Always provide a comprehensive summary of what you accomplished.`;
+${VERIFICATION_PROTOCOL}
+
+EXECUTION PATTERN:
+1. Plan: Break complex tasks into steps
+2. Execute: Use the RIGHT tool for each step
+3. Verify: Confirm each step succeeded
+4. Recover: If failed, try alternatives
+5. Complete: Only when verified
+
+You have access to a sandboxed environment for code execution.
+Work autonomously until verified complete, then use task_complete.
+Always provide a comprehensive summary of what you accomplished AND verified.`;
 }
 
 // Types
@@ -1546,6 +1623,83 @@ export interface OrchestratorCallbacks {
   onToolResult: (result: ToolResult) => void;
   onComplete: (summary: string, artifacts?: unknown[]) => void;
   onError: (error: string) => void;
+}
+
+const TOOL_ALTERNATIVES: Record<string, string[]> = {
+  web_search: ["searxng_search", "http_request", "browse_url"],
+  http_request: ["browse_url", "playwright_browse"],
+  execute_python: ["execute_javascript", "execute_shell"],
+  execute_javascript: ["execute_python", "execute_shell"],
+  browse_url: ["playwright_browse", "http_request"],
+  npm_audit: ["security_analysis", "execute_shell"],
+};
+
+interface ToolExecutionContext {
+  failedTools: Map<string, number>;
+  lastToolOutputs: Map<string, string>;
+}
+
+function getAlternativeTool(
+  failedTool: string,
+  context: ToolExecutionContext
+): string | null {
+  const alternatives = TOOL_ALTERNATIVES[failedTool] || [];
+  for (const alt of alternatives) {
+    const failCount = context.failedTools.get(alt) || 0;
+    if (failCount < 2) {
+      return alt;
+    }
+  }
+  return null;
+}
+
+function isToolResultError(output: string): boolean {
+  const errorPatterns = [
+    /^Error:/i,
+    /error:/i,
+    /failed/i,
+    /exception/i,
+    /ENOENT/,
+    /ECONNREFUSED/,
+    /timeout/i,
+    /not found/i,
+    /permission denied/i,
+  ];
+  return errorPatterns.some(p => p.test(output));
+}
+
+function suggestVerificationTool(
+  toolName: string,
+  input: Record<string, unknown>
+): { tool: string; input: Record<string, unknown> } | null {
+  switch (toolName) {
+    case "write_file":
+      return {
+        tool: "read_file",
+        input: { path: input.path },
+      };
+    case "tmux_start":
+      return {
+        tool: "tmux_output",
+        input: { sessionName: input.sessionName, lines: 20 },
+      };
+    case "start_dev_server":
+      return {
+        tool: "check_dev_server",
+        input: { port: input.port || 5173 },
+      };
+    case "git_commit":
+      return {
+        tool: "git_status",
+        input: { projectPath: input.projectPath },
+      };
+    case "execute_shell":
+    case "execute_python":
+    case "execute_javascript":
+      return null;
+    default:
+      return null;
+  }
 }
 
 // Export provider control functions
@@ -1886,6 +2040,11 @@ export async function runOrchestrator(
 
   const systemPrompt = getJarvisSystemPrompt() + memoryContext;
 
+  const executionContext: ToolExecutionContext = {
+    failedTools: new Map(),
+    lastToolOutputs: new Map(),
+  };
+
   while (!isComplete && iterations < maxIterations) {
     iterations++;
 
@@ -1900,12 +2059,10 @@ export async function runOrchestrator(
       const assistantMessage = choice.message;
       const toolCalls: ToolCall[] = [];
 
-      // Process text response
       if (assistantMessage.content) {
         callbacks.onThinking(assistantMessage.content);
       }
 
-      // Process tool calls
       if (
         assistantMessage.tool_calls &&
         assistantMessage.tool_calls.length > 0
@@ -1921,17 +2078,14 @@ export async function runOrchestrator(
         }
       }
 
-      // Add assistant message to conversation
       messages.push({
         role: "assistant",
         content: assistantMessage.content || "",
         tool_calls: assistantMessage.tool_calls,
       });
 
-      // If there are tool calls, execute them
       if (toolCalls.length > 0) {
         for (const tc of toolCalls) {
-          // Check if this is the task_complete tool
           if (tc.name === "task_complete") {
             const input = tc.input as {
               summary: string;
@@ -1942,42 +2096,72 @@ export async function runOrchestrator(
             break;
           }
 
-          // Execute the tool
-          try {
-            const output = await executeToolFn(tc.name, tc.input);
-            const result: ToolResult = {
-              toolCallId: tc.id,
-              output,
-              isError: false,
-            };
-            callbacks.onToolResult(result);
+          let output: string;
+          let isError = false;
 
-            // Add tool result to conversation
-            messages.push({
-              role: "tool",
-              content: output,
-              tool_call_id: tc.id,
-            });
+          try {
+            output = await executeToolFn(tc.name, tc.input);
+
+            if (isToolResultError(output)) {
+              isError = true;
+              const failCount =
+                (executionContext.failedTools.get(tc.name) || 0) + 1;
+              executionContext.failedTools.set(tc.name, failCount);
+
+              const altTool = getAlternativeTool(tc.name, executionContext);
+              if (altTool && failCount <= 2) {
+                output += `\n\n[JARVIS] Tool "${tc.name}" failed. Suggesting alternative: "${altTool}"`;
+              }
+            } else {
+              executionContext.lastToolOutputs.set(tc.name, output);
+
+              const verification = suggestVerificationTool(tc.name, tc.input);
+              if (verification) {
+                try {
+                  const verifyOutput = await executeToolFn(
+                    verification.tool,
+                    verification.input
+                  );
+                  if (!isToolResultError(verifyOutput)) {
+                    output += `\n\n[VERIFIED] ${verification.tool}: Success`;
+                  } else {
+                    output += `\n\n[VERIFICATION WARNING] ${verification.tool}: ${verifyOutput.substring(0, 200)}`;
+                  }
+                } catch {
+                  output += `\n\n[VERIFICATION SKIPPED] Could not run ${verification.tool}`;
+                }
+              }
+            }
           } catch (error) {
             const errorMsg =
               error instanceof Error ? error.message : String(error);
-            const result: ToolResult = {
-              toolCallId: tc.id,
-              output: `Error: ${errorMsg}`,
-              isError: true,
-            };
-            callbacks.onToolResult(result);
+            output = `Error: ${errorMsg}`;
+            isError = true;
 
-            // Add error result to conversation
-            messages.push({
-              role: "tool",
-              content: `Error: ${errorMsg}`,
-              tool_call_id: tc.id,
-            });
+            const failCount =
+              (executionContext.failedTools.get(tc.name) || 0) + 1;
+            executionContext.failedTools.set(tc.name, failCount);
+
+            const altTool = getAlternativeTool(tc.name, executionContext);
+            if (altTool) {
+              output += `\n\n[JARVIS] Consider using "${altTool}" as an alternative.`;
+            }
           }
+
+          const result: ToolResult = {
+            toolCallId: tc.id,
+            output,
+            isError,
+          };
+          callbacks.onToolResult(result);
+
+          messages.push({
+            role: "tool",
+            content: output,
+            tool_call_id: tc.id,
+          });
         }
       } else if (choice.finish_reason === "stop") {
-        // Model finished without tool calls - treat as complete
         callbacks.onComplete(assistantMessage.content || "Task completed.", []);
         isComplete = true;
       }
