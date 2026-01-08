@@ -52,10 +52,10 @@ console.log("[AI Models] API Keys loaded:", {
 // Provider-specific API calls
 // ============================================================================
 
-// Map our model IDs to actual Anthropic API model names
+// Map our model IDs to actual Anthropic API model names (Jan 2026)
 const ANTHROPIC_MODEL_MAP: Record<string, string> = {
-  "claude-sonnet-4.5": "claude-sonnet-4-20250514",
-  "claude-opus-4.5": "claude-sonnet-4-20250514", // Using sonnet as opus may not be available yet
+  "claude-sonnet-4.5": "claude-4-sonnet-20260101",
+  "claude-opus-4.5": "claude-4-opus-20260101",
 };
 
 async function queryAnthropicDirect(
@@ -70,7 +70,7 @@ async function queryAnthropicDirect(
   }
 
   const anthropicModel =
-    ANTHROPIC_MODEL_MAP[model.id] || "claude-sonnet-4-20250514";
+    ANTHROPIC_MODEL_MAP[model.id] || "claude-4-opus-20260101";
 
   const systemMessage = options.messages.find(m => m.role === "system");
   const nonSystemMessages = options.messages.filter(m => m.role !== "system");
@@ -206,12 +206,11 @@ async function queryGoogleDirect(
     throw new Error("GEMINI_API_KEY not configured");
   }
 
-  // Map model ID to Gemini API model name
   const geminiModelMap: Record<string, string> = {
-    "gemini-3-flash": "gemini-2.0-flash",
-    "gemini-3-pro": "gemini-2.0-flash", // Using flash as pro may not be available
+    "gemini-3-flash": "gemini-2.5-flash",
+    "gemini-3-pro": "gemini-2.5-pro",
   };
-  const geminiModel = geminiModelMap[model.id] || "gemini-2.0-flash";
+  const geminiModel = geminiModelMap[model.id] || "gemini-2.5-flash";
 
   const contents = options.messages
     .filter(m => m.role !== "system")
@@ -327,10 +326,9 @@ async function queryGoogleDirect(
   };
 }
 
-// Map our model IDs to actual xAI API model names
 const XAI_MODEL_MAP: Record<string, string> = {
-  "grok-4.1": "grok-3",
-  "grok-4.1-pro": "grok-3", // Using grok-3 as the latest available
+  "grok-4.1": "grok-4.1",
+  "grok-4.1-pro": "grok-4.2",
 };
 
 async function queryXAIDirect(
@@ -344,7 +342,7 @@ async function queryXAIDirect(
     throw new Error("XAI_API_KEY not configured");
   }
 
-  const xaiModel = XAI_MODEL_MAP[model.id] || "grok-3";
+  const xaiModel = XAI_MODEL_MAP[model.id] || "grok-4.1";
 
   // Use non-streaming for xAI to avoid SSE parsing issues
   const body: Record<string, unknown> = {
@@ -603,16 +601,15 @@ async function queryCerebrasDirect(
   return result;
 }
 
-// Map our model IDs to valid OpenRouter model names (verified Jan 2026)
 const OPENROUTER_MODEL_MAP: Record<string, string> = {
-  "gpt-5": "openai/gpt-5-chat",
+  "gpt-5": "openai/gpt-5.2",
   "gpt-5.2-pro": "openai/gpt-5.2",
-  "claude-sonnet-4.5": "anthropic/claude-sonnet-4",
-  "claude-opus-4.5": "anthropic/claude-sonnet-4",
-  "gemini-3-flash": "google/gemini-2.0-flash-001",
-  "gemini-3-pro": "google/gemini-2.0-flash-001",
-  "grok-4.1": "x-ai/grok-4",
-  "grok-4.1-pro": "x-ai/grok-4",
+  "claude-sonnet-4.5": "anthropic/claude-4-sonnet",
+  "claude-opus-4.5": "anthropic/claude-4-opus",
+  "gemini-3-flash": "google/gemini-2.5-flash",
+  "gemini-3-pro": "google/gemini-2.5-pro",
+  "grok-4.1": "x-ai/grok-4.1",
+  "grok-4.1-pro": "x-ai/grok-4.2",
   "sonar-pro": "perplexity/sonar-pro",
 };
 
