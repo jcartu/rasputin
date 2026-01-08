@@ -1741,6 +1741,9 @@ function toAnthropicMessages(messages: OpenRouterMessage[]): Array<{
     | Array<{
         type: string;
         text?: string;
+        id?: string;
+        name?: string;
+        input?: Record<string, unknown>;
         tool_use_id?: string;
         content?: string;
       }>;
@@ -1761,6 +1764,43 @@ function toAnthropicMessages(messages: OpenRouterMessage[]): Array<{
         ],
       };
     }
+
+    if (
+      msg.role === "assistant" &&
+      msg.tool_calls &&
+      msg.tool_calls.length > 0
+    ) {
+      const contentBlocks: Array<{
+        type: string;
+        text?: string;
+        id?: string;
+        name?: string;
+        input?: Record<string, unknown>;
+      }> = [];
+
+      if (
+        msg.content &&
+        typeof msg.content === "string" &&
+        msg.content.trim()
+      ) {
+        contentBlocks.push({ type: "text", text: msg.content });
+      }
+
+      for (const tc of msg.tool_calls) {
+        contentBlocks.push({
+          type: "tool_use",
+          id: tc.id,
+          name: tc.function.name,
+          input: JSON.parse(tc.function.arguments || "{}"),
+        });
+      }
+
+      return {
+        role: "assistant",
+        content: contentBlocks,
+      };
+    }
+
     return {
       role: msg.role === "assistant" ? "assistant" : "user",
       content:
