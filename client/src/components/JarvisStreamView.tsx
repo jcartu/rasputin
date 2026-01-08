@@ -33,6 +33,7 @@ import type {
 } from "@/hooks/useJarvisStream";
 import { useState } from "react";
 import { ToolOutputPreview } from "./ToolOutputPreview";
+import { Streamdown } from "streamdown";
 
 const TOOL_ICONS: Record<string, React.ReactNode> = {
   web_search: <Search className="h-4 w-4" />,
@@ -67,12 +68,14 @@ function ThinkingBubble({ content }: { content: string }) {
       <motion.div
         animate={{ scale: [1, 1.1, 1] }}
         transition={{ duration: 2, repeat: Infinity }}
-        className="p-2 rounded-full bg-purple-500/20"
+        className="p-2 rounded-full bg-purple-500/20 flex-shrink-0"
       >
         <Brain className="h-5 w-5 text-purple-400" />
       </motion.div>
-      <div className="flex-1 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
-        <p className="text-sm text-purple-200 italic">{content}</p>
+      <div className="flex-1 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20 overflow-hidden">
+        <div className="prose prose-invert prose-sm max-w-none prose-p:text-purple-200 prose-headings:text-purple-100 prose-strong:text-purple-100 prose-code:text-purple-300 prose-pre:bg-purple-950/50">
+          <Streamdown>{content}</Streamdown>
+        </div>
       </div>
     </motion.div>
   );
@@ -351,9 +354,9 @@ function CompletionCard({
                 )}
               </div>
               {summary && (
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                  {summary}
-                </p>
+                <div className="prose prose-invert prose-sm max-w-none">
+                  <Streamdown>{summary}</Streamdown>
+                </div>
               )}
             </div>
           </div>
