@@ -20,6 +20,7 @@ import {
   type TaskContext,
   type TaskOutcome,
 } from "./services/jarvis/memoryIntegration";
+import { createSelfReflectionSystem } from "./services/memory/selfReflection";
 import * as ssh from "./ssh";
 
 // ============================================================================
@@ -846,6 +847,46 @@ export const appRouter = router({
           console.info(
             `[JARVIS] Learned from task ${taskId} (success: ${!hasError})`
           );
+
+          // Trigger self-reflection for significant tasks (>2 iterations or failures)
+          if (iterationCount > 2 || hasError) {
+            try {
+              const reflectionSystem = createSelfReflectionSystem(ctx.user.id);
+              const toolCallDetails = steps
+                .filter(s => s.type === "tool_use" && s.toolCall)
+                .map((s, i) => {
+                  const resultStep = steps.find(
+                    (r, ri) =>
+                      ri > i && r.type === "tool_result" && r.toolResult
+                  );
+                  return {
+                    toolName: s.toolCall!.name,
+                    input: s.toolCall!.input,
+                    output: resultStep?.toolResult?.output || "",
+                    success: !resultStep?.toolResult?.isError,
+                    duration: 0, // Not tracked per-tool currently
+                  };
+                });
+
+              const reflection = await reflectionSystem.reflectOnTask(taskId!, {
+                taskDescription: input.task,
+                toolCalls: toolCallDetails,
+                finalResult: finalResult || "",
+                errorMessages: steps
+                  .filter(s => s.type === "error")
+                  .map(s => s.content || "Unknown error"),
+              });
+
+              console.info(
+                `[JARVIS] Self-reflection complete: ${reflection.lessonsLearned.length} lessons, ${reflection.newSkills.length} new skills`
+              );
+            } catch (reflectionError) {
+              console.error(
+                "[JARVIS] Self-reflection failed:",
+                reflectionError
+              );
+            }
+          }
         } catch (error) {
           console.error("[JARVIS] Failed to learn from task:", error);
         }

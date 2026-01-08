@@ -149,8 +149,8 @@ let activeDebugSession: string | null = null;
 // Perplexity API for web search
 const SONAR_API_KEY = process.env.SONAR_API_KEY || "";
 
-// Sandbox directory for JARVIS operations
-const JARVIS_SANDBOX = "/home/ubuntu/jarvis-workspace";
+// Sandbox directory for JARVIS operations - use /tmp for cross-platform compatibility
+const JARVIS_SANDBOX = process.env.JARVIS_SANDBOX || "/tmp/jarvis-workspace";
 
 // Ensure sandbox directory exists
 async function ensureSandbox(): Promise<void> {
