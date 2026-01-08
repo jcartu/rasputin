@@ -1791,7 +1791,7 @@ async function callAnthropic(
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-4-opus-20260101",
+      model: "claude-opus-4-5-20251101",
       max_tokens: 8192,
       system: systemPrompt,
       messages: anthropicMessages,

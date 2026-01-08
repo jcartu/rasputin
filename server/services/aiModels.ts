@@ -52,10 +52,9 @@ console.log("[AI Models] API Keys loaded:", {
 // Provider-specific API calls
 // ============================================================================
 
-// Map our model IDs to actual Anthropic API model names (Jan 2026)
 const ANTHROPIC_MODEL_MAP: Record<string, string> = {
-  "claude-sonnet-4.5": "claude-4-sonnet-20260101",
-  "claude-opus-4.5": "claude-4-opus-20260101",
+  "claude-sonnet-4.5": "claude-sonnet-4-5-20250929",
+  "claude-opus-4.5": "claude-opus-4-5-20251101",
 };
 
 async function queryAnthropicDirect(
@@ -70,7 +69,7 @@ async function queryAnthropicDirect(
   }
 
   const anthropicModel =
-    ANTHROPIC_MODEL_MAP[model.id] || "claude-4-opus-20260101";
+    ANTHROPIC_MODEL_MAP[model.id] || "claude-opus-4-5-20251101";
 
   const systemMessage = options.messages.find(m => m.role === "system");
   const nonSystemMessages = options.messages.filter(m => m.role !== "system");

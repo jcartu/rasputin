@@ -64,6 +64,13 @@
       "when": 1767607139857,
       "tag": "0008_married_shard",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1767902915478,
+      "tag": "0009_light_saracen",
+      "breakpoints": true
     }
   ]
 }

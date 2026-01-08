@@ -257,7 +257,6 @@ class SDKServer {
   }
 
   async authenticateRequest(req: Request): Promise<User> {
-    // Regular authentication flow
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);
     const session = await this.verifySession(sessionCookie);
@@ -268,9 +267,23 @@ class SDKServer {
 
     const sessionUserId = session.openId;
     const signedInAt = new Date();
+
+    if (ENV.devBypassAuth && !ENV.isProduction) {
+      console.log("[Auth] DEV_BYPASS_AUTH enabled - returning mock user");
+      return {
+        id: 1,
+        openId: sessionUserId,
+        name: session.name || "Dev User",
+        email: "dev@localhost",
+        loginMethod: "dev-bypass",
+        avatarUrl: null,
+        createdAt: new Date(),
+        lastSignedIn: signedInAt,
+      } as User;
+    }
+
     let user = await db.getUserByOpenId(sessionUserId);
 
-    // If user not in DB, sync from OAuth server automatically
     if (!user) {
       try {
         const userInfo = await this.getUserInfoWithJwt(sessionCookie ?? "");
