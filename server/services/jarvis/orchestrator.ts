@@ -1482,10 +1482,11 @@ For CURRENT DATA (prices, weather, news):
   2. web_search (fallback if no direct API)
   3. browse_url to a specific data page (last resort)
 
-For SECURITY ANALYSIS:
-  1. npm_audit or security_analysis tool (runs actual pnpm audit)
-  2. read_file package.json + package-lock.json for manual review
-  3. execute_shell with 'pnpm outdated' for version info
+For SECURITY ANALYSIS (ALWAYS use specialized tools first!):
+  1. npm_audit tool - REQUIRED for vulnerability scanning (DO NOT use execute_shell for this)
+  2. security_analysis tool - for comprehensive security report
+  3. read_file package.json + package-lock.json for manual review
+  NOTE: execute_shell 'pnpm audit' is a fallback ONLY if npm_audit tool fails
 
 For FILE CREATION:
   1. write_file to create the file
