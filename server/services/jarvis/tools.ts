@@ -1237,6 +1237,1104 @@ export async function playwrightBrowse(
   }
 }
 
+interface BrowserSessionData {
+  browser: Awaited<ReturnType<typeof import("playwright").chromium.launch>>;
+  page: Awaited<
+    ReturnType<
+      Awaited<
+        ReturnType<typeof import("playwright").chromium.launch>
+      >["newPage"]
+    >
+  >;
+  consoleMessages: Array<{ type: string; text: string; timestamp: Date }>;
+  networkErrors: Array<{ url: string; status: number; timestamp: Date }>;
+  startedAt: Date;
+}
+
+const browserSessions: Map<string, BrowserSessionData> = new Map();
+
+export async function browserSessionStart(
+  sessionId: string,
+  url: string
+): Promise<string> {
+  if (browserSessions.has(sessionId)) {
+    return `Error: Session "${sessionId}" already exists. Use browser_session_end first.`;
+  }
+
+  try {
+    const { chromium } = await import("playwright");
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+
+    const consoleMessages: BrowserSessionData["consoleMessages"] = [];
+    const networkErrors: BrowserSessionData["networkErrors"] = [];
+
+    page.on("console", msg => {
+      consoleMessages.push({
+        type: msg.type(),
+        text: msg.text(),
+        timestamp: new Date(),
+      });
+    });
+
+    page.on("response", response => {
+      if (response.status() >= 400) {
+        networkErrors.push({
+          url: response.url(),
+          status: response.status(),
+          timestamp: new Date(),
+        });
+      }
+    });
+
+    await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
+
+    browserSessions.set(sessionId, {
+      browser,
+      page,
+      consoleMessages,
+      networkErrors,
+      startedAt: new Date(),
+    });
+
+    const title = await page.title();
+    return `Browser session "${sessionId}" started.
+URL: ${url}
+Title: ${title}
+Console/network monitoring active.
+
+Available actions: browser_click, browser_fill, browser_select, browser_navigate, browser_screenshot, browser_get_content, browser_get_logs, browser_session_end`;
+  } catch (error) {
+    return `Error starting browser session: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function browserClick(
+  sessionId: string,
+  selector: string
+): Promise<string> {
+  const session = browserSessions.get(sessionId);
+  if (!session) {
+    return `Error: No browser session "${sessionId}". Start one with browser_session_start.`;
+  }
+
+  try {
+    await session.page.click(selector, { timeout: 10000 });
+    await session.page
+      .waitForLoadState("networkidle", { timeout: 5000 })
+      .catch(() => {});
+
+    const url = session.page.url();
+    return `Clicked "${selector}". Current URL: ${url}`;
+  } catch (error) {
+    return `Click error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function browserFill(
+  sessionId: string,
+  selector: string,
+  value: string
+): Promise<string> {
+  const session = browserSessions.get(sessionId);
+  if (!session) {
+    return `Error: No browser session "${sessionId}".`;
+  }
+
+  try {
+    await session.page.fill(selector, value, { timeout: 10000 });
+    return `Filled "${selector}" with "${value.length > 50 ? value.substring(0, 50) + "..." : value}"`;
+  } catch (error) {
+    return `Fill error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function browserSelect(
+  sessionId: string,
+  selector: string,
+  value: string
+): Promise<string> {
+  const session = browserSessions.get(sessionId);
+  if (!session) {
+    return `Error: No browser session "${sessionId}".`;
+  }
+
+  try {
+    await session.page.selectOption(selector, value, { timeout: 10000 });
+    return `Selected "${value}" in "${selector}"`;
+  } catch (error) {
+    return `Select error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function browserNavigate(
+  sessionId: string,
+  url: string
+): Promise<string> {
+  const session = browserSessions.get(sessionId);
+  if (!session) {
+    return `Error: No browser session "${sessionId}".`;
+  }
+
+  try {
+    await session.page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
+    const title = await session.page.title();
+    return `Navigated to: ${url}\nTitle: ${title}`;
+  } catch (error) {
+    return `Navigate error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function browserScreenshot(
+  sessionId: string,
+  options?: { fullPage?: boolean; name?: string }
+): Promise<string> {
+  const session = browserSessions.get(sessionId);
+  if (!session) {
+    return `Error: No browser session "${sessionId}".`;
+  }
+
+  try {
+    const filename = options?.name || `session_${sessionId}_${Date.now()}`;
+    const screenshotPath = path.join(JARVIS_SANDBOX, `${filename}.png`);
+
+    await session.page.screenshot({
+      path: screenshotPath,
+      fullPage: options?.fullPage ?? false,
+    });
+
+    return `Screenshot saved: ${screenshotPath}`;
+  } catch (error) {
+    return `Screenshot error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function browserGetContent(sessionId: string): Promise<string> {
+  const session = browserSessions.get(sessionId);
+  if (!session) {
+    return `Error: No browser session "${sessionId}".`;
+  }
+
+  try {
+    const content = await session.page.evaluate(() => {
+      const body = document.body.cloneNode(true) as HTMLElement;
+      const scripts = body.querySelectorAll("script, style, noscript");
+      scripts.forEach(s => s.remove());
+      return body.innerText;
+    });
+
+    const title = await session.page.title();
+    const url = session.page.url();
+
+    let result = `URL: ${url}\nTitle: ${title}\n\nContent:\n${content}`;
+    if (result.length > 15000) {
+      result = result.substring(0, 15000) + "\n... [truncated]";
+    }
+
+    return result;
+  } catch (error) {
+    return `Content error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export function browserGetLogs(sessionId: string): string {
+  const session = browserSessions.get(sessionId);
+  if (!session) {
+    return `Error: No browser session "${sessionId}".`;
+  }
+
+  const recentConsole = session.consoleMessages.slice(-50);
+  const recentNetwork = session.networkErrors.slice(-20);
+
+  let result = `CONSOLE MESSAGES (${session.consoleMessages.length} total, showing last 50):\n`;
+  if (recentConsole.length === 0) {
+    result += "  (none)\n";
+  } else {
+    for (const msg of recentConsole) {
+      result += `  [${msg.type.toUpperCase()}] ${msg.text}\n`;
+    }
+  }
+
+  result += `\nNETWORK ERRORS (${session.networkErrors.length} total, showing last 20):\n`;
+  if (recentNetwork.length === 0) {
+    result += "  (none)\n";
+  } else {
+    for (const err of recentNetwork) {
+      result += `  [${err.status}] ${err.url}\n`;
+    }
+  }
+
+  return result;
+}
+
+export async function browserWaitFor(
+  sessionId: string,
+  selector: string,
+  options?: { timeout?: number; state?: "visible" | "hidden" | "attached" }
+): Promise<string> {
+  const session = browserSessions.get(sessionId);
+  if (!session) {
+    return `Error: No browser session "${sessionId}".`;
+  }
+
+  try {
+    await session.page.waitForSelector(selector, {
+      timeout: options?.timeout ?? 10000,
+      state: options?.state ?? "visible",
+    });
+    return `Element "${selector}" is now ${options?.state ?? "visible"}`;
+  } catch (error) {
+    return `Wait error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function browserSessionEnd(sessionId: string): Promise<string> {
+  const session = browserSessions.get(sessionId);
+  if (!session) {
+    return `Error: No browser session "${sessionId}".`;
+  }
+
+  const consoleCount = session.consoleMessages.length;
+  const errorCount = session.networkErrors.length;
+  const duration = Date.now() - session.startedAt.getTime();
+
+  await session.browser.close();
+  browserSessions.delete(sessionId);
+
+  return `Browser session "${sessionId}" ended.
+Duration: ${Math.round(duration / 1000)}s
+Console messages captured: ${consoleCount}
+Network errors captured: ${errorCount}`;
+}
+
+export async function browserGetElements(
+  sessionId: string,
+  selector: string
+): Promise<string> {
+  const session = browserSessions.get(sessionId);
+  if (!session) {
+    return `Error: No browser session "${sessionId}".`;
+  }
+
+  try {
+    const elements = await session.page.$$eval(selector, els =>
+      els.map(el => ({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || null,
+        class: el.className || null,
+        text: el.textContent?.trim().substring(0, 100) || null,
+        href: (el as HTMLAnchorElement).href || null,
+        type: (el as HTMLInputElement).type || null,
+        value: (el as HTMLInputElement).value || null,
+      }))
+    );
+
+    if (elements.length === 0) {
+      return `No elements found matching "${selector}"`;
+    }
+
+    let result = `Found ${elements.length} elements matching "${selector}":\n`;
+    for (let i = 0; i < Math.min(elements.length, 20); i++) {
+      const el = elements[i];
+      result += `  ${i + 1}. <${el.tag}`;
+      if (el.id) result += ` id="${el.id}"`;
+      if (el.class) result += ` class="${el.class}"`;
+      if (el.type) result += ` type="${el.type}"`;
+      result += `>`;
+      if (el.text) result += ` "${el.text}"`;
+      if (el.href) result += ` href="${el.href}"`;
+      result += "\n";
+    }
+
+    if (elements.length > 20) {
+      result += `  ... and ${elements.length - 20} more\n`;
+    }
+
+    return result;
+  } catch (error) {
+    return `Elements error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+interface BuildTestResult {
+  success: boolean;
+  exitCode: number;
+  duration: number;
+  errors: Array<{ file?: string; line?: number; message: string }>;
+  warnings: Array<{ file?: string; line?: number; message: string }>;
+  summary: string;
+  rawOutput: string;
+}
+
+function parseTypeScriptErrors(
+  output: string
+): Array<{ file?: string; line?: number; message: string }> {
+  const errors: Array<{ file?: string; line?: number; message: string }> = [];
+  const lines = output.split("\n");
+
+  for (const line of lines) {
+    const match = line.match(/^(.+?)\((\d+),\d+\):\s*error\s+TS\d+:\s*(.+)$/);
+    if (match) {
+      errors.push({
+        file: match[1],
+        line: parseInt(match[2], 10),
+        message: match[3],
+      });
+    }
+  }
+
+  return errors;
+}
+
+function parseVitestOutput(output: string): {
+  passed: number;
+  failed: number;
+  errors: Array<{ file?: string; line?: number; message: string }>;
+} {
+  const errors: Array<{ file?: string; line?: number; message: string }> = [];
+  const result = { passed: 0, failed: 0, errors };
+
+  const summaryMatch = output.match(/Tests\s+(\d+)\s+passed.*?(\d+)\s+failed/i);
+  if (summaryMatch) {
+    result.passed = parseInt(summaryMatch[1], 10);
+    result.failed = parseInt(summaryMatch[2], 10);
+  } else {
+    const passedMatch = output.match(/(\d+)\s+passed/i);
+    const failedMatch = output.match(/(\d+)\s+failed/i);
+    if (passedMatch) result.passed = parseInt(passedMatch[1], 10);
+    if (failedMatch) result.failed = parseInt(failedMatch[1], 10);
+  }
+
+  const failBlocks = output.split(/FAIL\s+/);
+  for (let i = 1; i < failBlocks.length; i++) {
+    const block = failBlocks[i];
+    const fileMatch = block.match(/^([^\s]+)/);
+    const errorMatch = block.match(/Error:\s*(.+?)(?:\n|$)/);
+    if (errorMatch) {
+      result.errors.push({
+        file: fileMatch?.[1],
+        message: errorMatch[1],
+      });
+    }
+  }
+
+  return result;
+}
+
+function parseEslintOutput(
+  output: string
+): Array<{ file?: string; line?: number; message: string }> {
+  const errors: Array<{ file?: string; line?: number; message: string }> = [];
+  const lines = output.split("\n");
+
+  let currentFile = "";
+  for (const line of lines) {
+    const fileMatch = line.match(/^([^\s].+\.(ts|tsx|js|jsx))$/);
+    if (fileMatch) {
+      currentFile = fileMatch[1];
+      continue;
+    }
+
+    const errorMatch = line.match(
+      /^\s*(\d+):(\d+)\s+error\s+(.+?)\s+[\w/@-]+$/
+    );
+    if (errorMatch && currentFile) {
+      errors.push({
+        file: currentFile,
+        line: parseInt(errorMatch[1], 10),
+        message: errorMatch[3],
+      });
+    }
+  }
+
+  return errors;
+}
+
+export async function runBuild(
+  projectPath: string,
+  command?: string
+): Promise<string> {
+  const buildCommand = command || "pnpm build";
+  const startTime = Date.now();
+
+  try {
+    const { stdout, stderr } = await execAsync(buildCommand, {
+      cwd: projectPath,
+      maxBuffer: 1024 * 1024 * 10,
+      timeout: 300000,
+    });
+
+    const duration = Date.now() - startTime;
+    const output = stdout + stderr;
+
+    const result: BuildTestResult = {
+      success: true,
+      exitCode: 0,
+      duration,
+      errors: [],
+      warnings: [],
+      summary: `Build completed successfully in ${Math.round(duration / 1000)}s`,
+      rawOutput:
+        output.length > 5000
+          ? output.substring(0, 5000) + "\n...[truncated]"
+          : output,
+    };
+
+    return formatBuildResult(result);
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    const execError = error as {
+      stdout?: string;
+      stderr?: string;
+      code?: number;
+    };
+    const output = (execError.stdout || "") + (execError.stderr || "");
+
+    const tsErrors = parseTypeScriptErrors(output);
+    const eslintErrors = parseEslintOutput(output);
+
+    const result: BuildTestResult = {
+      success: false,
+      exitCode: execError.code || 1,
+      duration,
+      errors: [...tsErrors, ...eslintErrors],
+      warnings: [],
+      summary: `Build failed with exit code ${execError.code || 1}`,
+      rawOutput:
+        output.length > 5000
+          ? output.substring(0, 5000) + "\n...[truncated]"
+          : output,
+    };
+
+    return formatBuildResult(result);
+  }
+}
+
+export async function runTests(
+  projectPath: string,
+  options?: { pattern?: string; command?: string }
+): Promise<string> {
+  let testCommand = options?.command || "pnpm test";
+  if (options?.pattern && !options?.command) {
+    testCommand = `pnpm vitest run ${options.pattern}`;
+  }
+
+  const startTime = Date.now();
+
+  try {
+    const { stdout, stderr } = await execAsync(testCommand, {
+      cwd: projectPath,
+      maxBuffer: 1024 * 1024 * 10,
+      timeout: 300000,
+    });
+
+    const duration = Date.now() - startTime;
+    const output = stdout + stderr;
+    const testResults = parseVitestOutput(output);
+
+    const result: BuildTestResult = {
+      success: testResults.failed === 0,
+      exitCode: 0,
+      duration,
+      errors: testResults.errors,
+      warnings: [],
+      summary: `Tests: ${testResults.passed} passed, ${testResults.failed} failed (${Math.round(duration / 1000)}s)`,
+      rawOutput:
+        output.length > 5000
+          ? output.substring(0, 5000) + "\n...[truncated]"
+          : output,
+    };
+
+    return formatBuildResult(result);
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    const execError = error as {
+      stdout?: string;
+      stderr?: string;
+      code?: number;
+    };
+    const output = (execError.stdout || "") + (execError.stderr || "");
+    const testResults = parseVitestOutput(output);
+
+    const result: BuildTestResult = {
+      success: false,
+      exitCode: execError.code || 1,
+      duration,
+      errors: testResults.errors,
+      warnings: [],
+      summary: `Tests failed: ${testResults.passed} passed, ${testResults.failed} failed`,
+      rawOutput:
+        output.length > 5000
+          ? output.substring(0, 5000) + "\n...[truncated]"
+          : output,
+    };
+
+    return formatBuildResult(result);
+  }
+}
+
+export async function runTypeCheck(projectPath: string): Promise<string> {
+  const startTime = Date.now();
+
+  try {
+    const { stdout, stderr } = await execAsync("pnpm check", {
+      cwd: projectPath,
+      maxBuffer: 1024 * 1024 * 10,
+      timeout: 120000,
+    });
+
+    const duration = Date.now() - startTime;
+    const output = stdout + stderr;
+
+    const result: BuildTestResult = {
+      success: true,
+      exitCode: 0,
+      duration,
+      errors: [],
+      warnings: [],
+      summary: `Type check passed in ${Math.round(duration / 1000)}s`,
+      rawOutput: output,
+    };
+
+    return formatBuildResult(result);
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    const execError = error as {
+      stdout?: string;
+      stderr?: string;
+      code?: number;
+    };
+    const output = (execError.stdout || "") + (execError.stderr || "");
+    const tsErrors = parseTypeScriptErrors(output);
+
+    const result: BuildTestResult = {
+      success: false,
+      exitCode: execError.code || 1,
+      duration,
+      errors: tsErrors,
+      warnings: [],
+      summary: `Type check failed with ${tsErrors.length} errors`,
+      rawOutput:
+        output.length > 5000
+          ? output.substring(0, 5000) + "\n...[truncated]"
+          : output,
+    };
+
+    return formatBuildResult(result);
+  }
+}
+
+export async function runLint(projectPath: string): Promise<string> {
+  const startTime = Date.now();
+
+  try {
+    const { stdout, stderr } = await execAsync("pnpm lint", {
+      cwd: projectPath,
+      maxBuffer: 1024 * 1024 * 10,
+      timeout: 120000,
+    });
+
+    const duration = Date.now() - startTime;
+    const output = stdout + stderr;
+
+    const result: BuildTestResult = {
+      success: true,
+      exitCode: 0,
+      duration,
+      errors: [],
+      warnings: [],
+      summary: `Lint passed in ${Math.round(duration / 1000)}s`,
+      rawOutput: output,
+    };
+
+    return formatBuildResult(result);
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    const execError = error as {
+      stdout?: string;
+      stderr?: string;
+      code?: number;
+    };
+    const output = (execError.stdout || "") + (execError.stderr || "");
+    const eslintErrors = parseEslintOutput(output);
+
+    const result: BuildTestResult = {
+      success: false,
+      exitCode: execError.code || 1,
+      duration,
+      errors: eslintErrors,
+      warnings: [],
+      summary: `Lint failed with ${eslintErrors.length} errors`,
+      rawOutput:
+        output.length > 5000
+          ? output.substring(0, 5000) + "\n...[truncated]"
+          : output,
+    };
+
+    return formatBuildResult(result);
+  }
+}
+
+function formatBuildResult(result: BuildTestResult): string {
+  let output = `${result.success ? "✓" : "✗"} ${result.summary}\n`;
+  output += `Duration: ${Math.round(result.duration / 1000)}s | Exit code: ${result.exitCode}\n`;
+
+  if (result.errors.length > 0) {
+    output += `\nERRORS (${result.errors.length}):\n`;
+    for (const err of result.errors.slice(0, 20)) {
+      if (err.file) {
+        output += `  ${err.file}`;
+        if (err.line) output += `:${err.line}`;
+        output += ` - ${err.message}\n`;
+      } else {
+        output += `  ${err.message}\n`;
+      }
+    }
+    if (result.errors.length > 20) {
+      output += `  ... and ${result.errors.length - 20} more errors\n`;
+    }
+  }
+
+  if (result.warnings.length > 0) {
+    output += `\nWARNINGS (${result.warnings.length}):\n`;
+    for (const warn of result.warnings.slice(0, 10)) {
+      output += `  ${warn.file || ""}${warn.line ? `:${warn.line}` : ""} - ${warn.message}\n`;
+    }
+  }
+
+  output += `\nRAW OUTPUT:\n${result.rawOutput}`;
+
+  return output;
+}
+
+export async function startDevServer(
+  projectPath: string,
+  options?: { port?: number; command?: string }
+): Promise<string> {
+  const port = options?.port || 5173;
+  const command = options?.command || `pnpm dev --port ${port}`;
+  const sessionName = `devserver_${port}`;
+
+  const checkExists = await execAsync(
+    `tmux has-session -t jarvis_${sessionName} 2>/dev/null && echo "exists" || echo "not_exists"`
+  ).catch(() => ({ stdout: "not_exists" }));
+
+  if (checkExists.stdout.trim() === "exists") {
+    return `Dev server already running on port ${port}. Session: jarvis_${sessionName}`;
+  }
+
+  try {
+    await execAsync(
+      `tmux new-session -d -s jarvis_${sessionName} -c ${projectPath} "${command}"`
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    const serverReady = await fetch(`http://localhost:${port}`, {
+      signal: AbortSignal.timeout(5000),
+    })
+      .then(r => r.ok)
+      .catch(() => false);
+
+    if (serverReady) {
+      return `Dev server started on http://localhost:${port}
+Session: jarvis_${sessionName}
+Use browser_session_start to test the UI.
+Use tmux_output("devserver_${port}") to check server logs.
+Use tmux_stop("devserver_${port}") to stop the server.`;
+    }
+
+    return `Dev server starting on http://localhost:${port}
+Session: jarvis_${sessionName}
+Server may still be initializing. Check with tmux_output("devserver_${port}").`;
+  } catch (error) {
+    return `Error starting dev server: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function checkDevServer(port: number = 5173): Promise<string> {
+  try {
+    const response = await fetch(`http://localhost:${port}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+
+    return `Dev server status: ${response.ok ? "RUNNING" : "ERROR"}
+URL: http://localhost:${port}
+Status: ${response.status} ${response.statusText}`;
+  } catch (error) {
+    return `Dev server status: NOT RUNNING
+URL: http://localhost:${port}
+Error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function saveBaselineScreenshot(
+  sessionId: string,
+  name: string
+): Promise<string> {
+  const session = browserSessions.get(sessionId);
+  if (!session) {
+    return `Error: No browser session "${sessionId}".`;
+  }
+
+  try {
+    const baselineDir = path.join(JARVIS_SANDBOX, "baselines");
+    await fs.mkdir(baselineDir, { recursive: true });
+
+    const baselinePath = path.join(baselineDir, `${name}.png`);
+    await session.page.screenshot({ path: baselinePath, fullPage: false });
+
+    return `Baseline screenshot saved: ${baselinePath}
+Use compare_screenshot("${sessionId}", "${name}") to compare against this baseline.`;
+  } catch (error) {
+    return `Error saving baseline: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function compareScreenshot(
+  sessionId: string,
+  baselineName: string
+): Promise<string> {
+  const session = browserSessions.get(sessionId);
+  if (!session) {
+    return `Error: No browser session "${sessionId}".`;
+  }
+
+  try {
+    const baselineDir = path.join(JARVIS_SANDBOX, "baselines");
+    const baselinePath = path.join(baselineDir, `${baselineName}.png`);
+
+    try {
+      await fs.access(baselinePath);
+    } catch {
+      return `Error: No baseline found at ${baselinePath}. Save one first with save_baseline_screenshot.`;
+    }
+
+    const currentPath = path.join(
+      JARVIS_SANDBOX,
+      `current_${baselineName}_${Date.now()}.png`
+    );
+    await session.page.screenshot({ path: currentPath, fullPage: false });
+
+    const baselineStats = await fs.stat(baselinePath);
+    const currentStats = await fs.stat(currentPath);
+
+    const sizeDiff = Math.abs(baselineStats.size - currentStats.size);
+    const sizeRatio = sizeDiff / baselineStats.size;
+
+    const diffPath = path.join(
+      JARVIS_SANDBOX,
+      `diff_${baselineName}_${Date.now()}.png`
+    );
+
+    if (sizeRatio < 0.01) {
+      return `VISUAL COMPARISON: LIKELY MATCH
+Baseline: ${baselinePath}
+Current: ${currentPath}
+Size difference: ${sizeDiff} bytes (${(sizeRatio * 100).toFixed(2)}%)
+
+Note: File sizes are nearly identical, suggesting no visual changes.
+For pixel-perfect comparison, install pixelmatch: pnpm add pixelmatch pngjs`;
+    }
+
+    return `VISUAL COMPARISON: POTENTIAL DIFFERENCES DETECTED
+Baseline: ${baselinePath}
+Current: ${currentPath}
+Size difference: ${sizeDiff} bytes (${(sizeRatio * 100).toFixed(2)}%)
+
+Screenshots saved for manual inspection.
+For pixel-perfect diff, install pixelmatch: pnpm add pixelmatch pngjs
+Then re-run this comparison.`;
+  } catch (error) {
+    return `Comparison error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function listBaselines(): Promise<string> {
+  try {
+    const baselineDir = path.join(JARVIS_SANDBOX, "baselines");
+
+    try {
+      await fs.access(baselineDir);
+    } catch {
+      return "No baselines directory. Save a baseline first with save_baseline_screenshot.";
+    }
+
+    const files = await fs.readdir(baselineDir);
+    const pngFiles = files.filter(f => f.endsWith(".png"));
+
+    if (pngFiles.length === 0) {
+      return "No baseline screenshots found.";
+    }
+
+    let result = `Baseline screenshots (${pngFiles.length}):\n`;
+    for (const file of pngFiles) {
+      const stats = await fs.stat(path.join(baselineDir, file));
+      result += `  - ${file.replace(".png", "")} (${Math.round(stats.size / 1024)}KB, ${stats.mtime.toISOString()})\n`;
+    }
+
+    return result;
+  } catch (error) {
+    return `Error listing baselines: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function gitStatus(projectPath: string): Promise<string> {
+  try {
+    const { stdout } = await execAsync("git status --porcelain -b", {
+      cwd: projectPath,
+      timeout: 30000,
+    });
+
+    if (!stdout.trim()) {
+      return "Working tree clean. No changes.";
+    }
+
+    const lines = stdout.trim().split("\n");
+    const branchLine = lines[0];
+    const changes = lines.slice(1);
+
+    let result = `Branch: ${branchLine.replace("## ", "")}\n\n`;
+
+    const staged: string[] = [];
+    const unstaged: string[] = [];
+    const untracked: string[] = [];
+
+    for (const line of changes) {
+      const index = line[0];
+      const worktree = line[1];
+      const file = line.substring(3);
+
+      if (index === "?" && worktree === "?") {
+        untracked.push(file);
+      } else if (index !== " " && index !== "?") {
+        staged.push(`${index} ${file}`);
+      }
+      if (worktree !== " " && worktree !== "?") {
+        unstaged.push(`${worktree} ${file}`);
+      }
+    }
+
+    if (staged.length > 0) {
+      result += `STAGED (${staged.length}):\n${staged.map(f => `  ${f}`).join("\n")}\n\n`;
+    }
+    if (unstaged.length > 0) {
+      result += `UNSTAGED (${unstaged.length}):\n${unstaged.map(f => `  ${f}`).join("\n")}\n\n`;
+    }
+    if (untracked.length > 0) {
+      result += `UNTRACKED (${untracked.length}):\n${untracked.map(f => `  ${f}`).join("\n")}\n`;
+    }
+
+    return result;
+  } catch (error) {
+    return `Git error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function gitDiff(
+  projectPath: string,
+  options?: { staged?: boolean; file?: string }
+): Promise<string> {
+  try {
+    let cmd = "git diff";
+    if (options?.staged) cmd += " --staged";
+    if (options?.file) cmd += ` -- ${options.file}`;
+    cmd += " --stat";
+
+    const { stdout: statOutput } = await execAsync(cmd, {
+      cwd: projectPath,
+      timeout: 30000,
+    });
+
+    let detailCmd = cmd.replace(" --stat", "");
+    const { stdout: diffOutput } = await execAsync(detailCmd, {
+      cwd: projectPath,
+      timeout: 30000,
+      maxBuffer: 1024 * 1024 * 5,
+    });
+
+    let result = `DIFF SUMMARY${options?.staged ? " (staged)" : ""}:\n${statOutput}\n`;
+
+    if (diffOutput.length > 10000) {
+      result += `\nDETAILED DIFF (truncated):\n${diffOutput.substring(0, 10000)}\n...[truncated]`;
+    } else if (diffOutput) {
+      result += `\nDETAILED DIFF:\n${diffOutput}`;
+    }
+
+    return result || "No differences found.";
+  } catch (error) {
+    return `Git error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function gitBranch(
+  projectPath: string,
+  options?: { create?: string; checkout?: string; delete?: string }
+): Promise<string> {
+  try {
+    if (options?.create) {
+      await execAsync(`git checkout -b ${options.create}`, {
+        cwd: projectPath,
+        timeout: 30000,
+      });
+      return `Created and switched to branch: ${options.create}`;
+    }
+
+    if (options?.checkout) {
+      await execAsync(`git checkout ${options.checkout}`, {
+        cwd: projectPath,
+        timeout: 30000,
+      });
+      return `Switched to branch: ${options.checkout}`;
+    }
+
+    if (options?.delete) {
+      await execAsync(`git branch -d ${options.delete}`, {
+        cwd: projectPath,
+        timeout: 30000,
+      });
+      return `Deleted branch: ${options.delete}`;
+    }
+
+    const { stdout } = await execAsync("git branch -vv", {
+      cwd: projectPath,
+      timeout: 30000,
+    });
+
+    return `BRANCHES:\n${stdout}`;
+  } catch (error) {
+    return `Git error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function gitCommit(
+  projectPath: string,
+  message: string,
+  options?: { addAll?: boolean; files?: string[] }
+): Promise<string> {
+  try {
+    if (options?.addAll) {
+      await execAsync("git add -A", { cwd: projectPath, timeout: 30000 });
+    } else if (options?.files && options.files.length > 0) {
+      await execAsync(`git add ${options.files.join(" ")}`, {
+        cwd: projectPath,
+        timeout: 30000,
+      });
+    }
+
+    const { stdout } = await execAsync(
+      `git commit -m "${message.replace(/"/g, '\\"')}"`,
+      {
+        cwd: projectPath,
+        timeout: 30000,
+      }
+    );
+
+    return `Commit created:\n${stdout}`;
+  } catch (error) {
+    const execError = error as { stdout?: string; stderr?: string };
+    if (execError.stdout?.includes("nothing to commit")) {
+      return "Nothing to commit. Working tree clean.";
+    }
+    return `Git error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function gitLog(
+  projectPath: string,
+  options?: { count?: number; oneline?: boolean }
+): Promise<string> {
+  try {
+    const count = options?.count || 10;
+    const format = options?.oneline
+      ? "--oneline"
+      : "--pretty=format:'%h %s (%cr) <%an>'";
+
+    const { stdout } = await execAsync(`git log -${count} ${format}`, {
+      cwd: projectPath,
+      timeout: 30000,
+    });
+
+    return `RECENT COMMITS:\n${stdout}`;
+  } catch (error) {
+    return `Git error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function gitPush(
+  projectPath: string,
+  options?: { setUpstream?: string; force?: boolean }
+): Promise<string> {
+  try {
+    let cmd = "git push";
+    if (options?.setUpstream) {
+      cmd += ` -u origin ${options.setUpstream}`;
+    }
+    if (options?.force) {
+      cmd += " --force-with-lease";
+    }
+
+    const { stdout, stderr } = await execAsync(cmd, {
+      cwd: projectPath,
+      timeout: 60000,
+    });
+
+    return `Push successful:\n${stdout}\n${stderr}`;
+  } catch (error) {
+    return `Git error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function gitPull(projectPath: string): Promise<string> {
+  try {
+    const { stdout, stderr } = await execAsync("git pull", {
+      cwd: projectPath,
+      timeout: 60000,
+    });
+
+    return `Pull successful:\n${stdout}\n${stderr}`;
+  } catch (error) {
+    return `Git error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function gitStash(
+  projectPath: string,
+  options?: { pop?: boolean; list?: boolean; message?: string }
+): Promise<string> {
+  try {
+    if (options?.list) {
+      const { stdout } = await execAsync("git stash list", {
+        cwd: projectPath,
+        timeout: 30000,
+      });
+      return stdout || "No stashes found.";
+    }
+
+    if (options?.pop) {
+      const { stdout } = await execAsync("git stash pop", {
+        cwd: projectPath,
+        timeout: 30000,
+      });
+      return `Stash popped:\n${stdout}`;
+    }
+
+    let cmd = "git stash";
+    if (options?.message) {
+      cmd += ` push -m "${options.message.replace(/"/g, '\\"')}"`;
+    }
+
+    const { stdout } = await execAsync(cmd, {
+      cwd: projectPath,
+      timeout: 30000,
+    });
+
+    return `Stashed changes:\n${stdout}`;
+  } catch (error) {
+    return `Git error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 /**
  * Execute a tool by name
  */
@@ -1330,6 +2428,121 @@ export async function executeTool(
       return playwrightBrowse(input.url as string, {
         waitFor: input.waitFor as string | undefined,
         timeout: input.timeout as number | undefined,
+      });
+    case "browser_session_start":
+      return browserSessionStart(
+        input.sessionId as string,
+        input.url as string
+      );
+    case "browser_click":
+      return browserClick(input.sessionId as string, input.selector as string);
+    case "browser_fill":
+      return browserFill(
+        input.sessionId as string,
+        input.selector as string,
+        input.value as string
+      );
+    case "browser_select":
+      return browserSelect(
+        input.sessionId as string,
+        input.selector as string,
+        input.value as string
+      );
+    case "browser_navigate":
+      return browserNavigate(input.sessionId as string, input.url as string);
+    case "browser_screenshot":
+      return browserScreenshot(input.sessionId as string, {
+        fullPage: input.fullPage as boolean | undefined,
+        name: input.name as string | undefined,
+      });
+    case "browser_get_content":
+      return browserGetContent(input.sessionId as string);
+    case "browser_get_logs":
+      return browserGetLogs(input.sessionId as string);
+    case "browser_wait_for":
+      return browserWaitFor(
+        input.sessionId as string,
+        input.selector as string,
+        {
+          timeout: input.timeout as number | undefined,
+          state: input.state as "visible" | "hidden" | "attached" | undefined,
+        }
+      );
+    case "browser_get_elements":
+      return browserGetElements(
+        input.sessionId as string,
+        input.selector as string
+      );
+    case "browser_session_end":
+      return browserSessionEnd(input.sessionId as string);
+    case "run_build":
+      return runBuild(
+        input.projectPath as string,
+        input.command as string | undefined
+      );
+    case "run_tests":
+      return runTests(input.projectPath as string, {
+        pattern: input.pattern as string | undefined,
+        command: input.command as string | undefined,
+      });
+    case "run_type_check":
+      return runTypeCheck(input.projectPath as string);
+    case "run_lint":
+      return runLint(input.projectPath as string);
+    case "start_dev_server":
+      return startDevServer(input.projectPath as string, {
+        port: input.port as number | undefined,
+        command: input.command as string | undefined,
+      });
+    case "check_dev_server":
+      return checkDevServer(input.port as number | undefined);
+    case "save_baseline_screenshot":
+      return saveBaselineScreenshot(
+        input.sessionId as string,
+        input.name as string
+      );
+    case "compare_screenshot":
+      return compareScreenshot(
+        input.sessionId as string,
+        input.baselineName as string
+      );
+    case "list_baselines":
+      return listBaselines();
+    case "git_status":
+      return gitStatus(input.projectPath as string);
+    case "git_diff":
+      return gitDiff(input.projectPath as string, {
+        staged: input.staged as boolean | undefined,
+        file: input.file as string | undefined,
+      });
+    case "git_branch":
+      return gitBranch(input.projectPath as string, {
+        create: input.create as string | undefined,
+        checkout: input.checkout as string | undefined,
+        delete: input.delete as string | undefined,
+      });
+    case "git_commit":
+      return gitCommit(input.projectPath as string, input.message as string, {
+        addAll: input.addAll as boolean | undefined,
+        files: input.files as string[] | undefined,
+      });
+    case "git_log":
+      return gitLog(input.projectPath as string, {
+        count: input.count as number | undefined,
+        oneline: input.oneline as boolean | undefined,
+      });
+    case "git_push":
+      return gitPush(input.projectPath as string, {
+        setUpstream: input.setUpstream as string | undefined,
+        force: input.force as boolean | undefined,
+      });
+    case "git_pull":
+      return gitPull(input.projectPath as string);
+    case "git_stash":
+      return gitStash(input.projectPath as string, {
+        pop: input.pop as boolean | undefined,
+        list: input.list as boolean | undefined,
+        message: input.message as string | undefined,
       });
     case "tmux_start":
       return tmuxStart(input.sessionName as string, input.command as string);

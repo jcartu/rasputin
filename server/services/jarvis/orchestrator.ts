@@ -561,6 +561,632 @@ const JARVIS_TOOLS: OpenRouterTool[] = [
   {
     type: "function",
     function: {
+      name: "browser_session_start",
+      description:
+        "Start a persistent browser session for interactive testing. Enables clicking, typing, navigating, and captures console/network errors. Use for end-to-end UI testing.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "Unique identifier for this browser session",
+          },
+          url: {
+            type: "string",
+            description: "The initial URL to navigate to",
+          },
+        },
+        required: ["sessionId", "url"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "browser_click",
+      description: "Click an element in the browser session.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "The browser session ID",
+          },
+          selector: {
+            type: "string",
+            description: "CSS selector of element to click",
+          },
+        },
+        required: ["sessionId", "selector"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "browser_fill",
+      description: "Fill a text input in the browser session.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "The browser session ID",
+          },
+          selector: {
+            type: "string",
+            description: "CSS selector of input element",
+          },
+          value: {
+            type: "string",
+            description: "Text to fill in the input",
+          },
+        },
+        required: ["sessionId", "selector", "value"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "browser_select",
+      description: "Select an option from a dropdown in the browser session.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "The browser session ID",
+          },
+          selector: {
+            type: "string",
+            description: "CSS selector of select element",
+          },
+          value: {
+            type: "string",
+            description: "Value to select",
+          },
+        },
+        required: ["sessionId", "selector", "value"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "browser_navigate",
+      description: "Navigate to a different URL in the browser session.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "The browser session ID",
+          },
+          url: {
+            type: "string",
+            description: "URL to navigate to",
+          },
+        },
+        required: ["sessionId", "url"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "browser_screenshot",
+      description: "Take a screenshot in the browser session.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "The browser session ID",
+          },
+          fullPage: {
+            type: "boolean",
+            description: "Capture full scrollable page (default: false)",
+          },
+          name: {
+            type: "string",
+            description: "Custom filename for the screenshot",
+          },
+        },
+        required: ["sessionId"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "browser_get_content",
+      description:
+        "Get the text content of the current page in the browser session.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "The browser session ID",
+          },
+        },
+        required: ["sessionId"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "browser_get_logs",
+      description:
+        "Get console messages and network errors captured during the browser session. Essential for debugging runtime issues.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "The browser session ID",
+          },
+        },
+        required: ["sessionId"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "browser_wait_for",
+      description:
+        "Wait for an element to appear/disappear in the browser session.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "The browser session ID",
+          },
+          selector: {
+            type: "string",
+            description: "CSS selector to wait for",
+          },
+          timeout: {
+            type: "number",
+            description: "Timeout in milliseconds (default: 10000)",
+          },
+          state: {
+            type: "string",
+            enum: ["visible", "hidden", "attached"],
+            description: "State to wait for (default: visible)",
+          },
+        },
+        required: ["sessionId", "selector"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "browser_get_elements",
+      description:
+        "Query elements matching a selector and get their attributes. Useful for finding buttons, links, inputs.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "The browser session ID",
+          },
+          selector: {
+            type: "string",
+            description: "CSS selector to query",
+          },
+        },
+        required: ["sessionId", "selector"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "browser_session_end",
+      description: "End a browser session and get a summary of captured logs.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "The browser session ID to end",
+          },
+        },
+        required: ["sessionId"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "run_build",
+      description:
+        "Run the build command for a project and get structured results. Parses TypeScript and ESLint errors automatically.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Path to the project directory",
+          },
+          command: {
+            type: "string",
+            description: "Custom build command (default: pnpm build)",
+          },
+        },
+        required: ["projectPath"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "run_tests",
+      description:
+        "Run tests for a project and get structured results. Parses test results automatically.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Path to the project directory",
+          },
+          pattern: {
+            type: "string",
+            description: "Test file pattern to run (e.g., '*.test.ts')",
+          },
+          command: {
+            type: "string",
+            description: "Custom test command (default: pnpm test)",
+          },
+        },
+        required: ["projectPath"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "run_type_check",
+      description:
+        "Run TypeScript type checking and get structured error list.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Path to the project directory",
+          },
+        },
+        required: ["projectPath"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "run_lint",
+      description: "Run ESLint and get structured error list.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Path to the project directory",
+          },
+        },
+        required: ["projectPath"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "start_dev_server",
+      description:
+        "Start the development server in a background tmux session. Automatically checks if server is ready.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Path to the project directory",
+          },
+          port: {
+            type: "number",
+            description: "Port to run on (default: 5173)",
+          },
+          command: {
+            type: "string",
+            description: "Custom dev command (default: pnpm dev)",
+          },
+        },
+        required: ["projectPath"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "check_dev_server",
+      description: "Check if the dev server is running and responding.",
+      parameters: {
+        type: "object",
+        properties: {
+          port: {
+            type: "number",
+            description: "Port to check (default: 5173)",
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_baseline_screenshot",
+      description:
+        "Save the current browser view as a baseline screenshot for regression testing.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "The browser session ID",
+          },
+          name: {
+            type: "string",
+            description:
+              "Name for the baseline (e.g., 'homepage', 'login-form')",
+          },
+        },
+        required: ["sessionId", "name"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "compare_screenshot",
+      description:
+        "Compare the current browser view against a saved baseline screenshot.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "The browser session ID",
+          },
+          baselineName: {
+            type: "string",
+            description: "Name of the baseline to compare against",
+          },
+        },
+        required: ["sessionId", "baselineName"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_baselines",
+      description: "List all saved baseline screenshots.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "git_status",
+      description:
+        "Get git status showing staged, unstaged, and untracked files.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Path to the git repository",
+          },
+        },
+        required: ["projectPath"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "git_diff",
+      description: "Show git diff of changes.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Path to the git repository",
+          },
+          staged: {
+            type: "boolean",
+            description: "Show staged changes only",
+          },
+          file: {
+            type: "string",
+            description: "Show diff for specific file only",
+          },
+        },
+        required: ["projectPath"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "git_branch",
+      description: "List, create, checkout, or delete git branches.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Path to the git repository",
+          },
+          create: {
+            type: "string",
+            description: "Create and checkout new branch with this name",
+          },
+          checkout: {
+            type: "string",
+            description: "Checkout existing branch",
+          },
+          delete: {
+            type: "string",
+            description: "Delete branch with this name",
+          },
+        },
+        required: ["projectPath"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "git_commit",
+      description: "Create a git commit.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Path to the git repository",
+          },
+          message: {
+            type: "string",
+            description: "Commit message",
+          },
+          addAll: {
+            type: "boolean",
+            description: "Stage all changes before committing",
+          },
+          files: {
+            type: "array",
+            items: { type: "string" },
+            description: "Specific files to stage before committing",
+          },
+        },
+        required: ["projectPath", "message"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "git_log",
+      description: "Show recent git commits.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Path to the git repository",
+          },
+          count: {
+            type: "number",
+            description: "Number of commits to show (default: 10)",
+          },
+          oneline: {
+            type: "boolean",
+            description: "Show compact one-line format",
+          },
+        },
+        required: ["projectPath"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "git_push",
+      description: "Push commits to remote repository.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Path to the git repository",
+          },
+          setUpstream: {
+            type: "string",
+            description: "Set upstream branch (for new branches)",
+          },
+          force: {
+            type: "boolean",
+            description: "Force push with lease (safe force push)",
+          },
+        },
+        required: ["projectPath"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "git_pull",
+      description: "Pull latest changes from remote.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Path to the git repository",
+          },
+        },
+        required: ["projectPath"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "git_stash",
+      description: "Stash or restore uncommitted changes.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Path to the git repository",
+          },
+          pop: {
+            type: "boolean",
+            description: "Pop most recent stash",
+          },
+          list: {
+            type: "boolean",
+            description: "List all stashes",
+          },
+          message: {
+            type: "string",
+            description: "Message for new stash",
+          },
+        },
+        required: ["projectPath"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "preview_file_edit",
       description:
         "Preview changes to a file before applying them. Shows a diff and creates a backup. Use this for large or complex file edits to verify changes first.",
