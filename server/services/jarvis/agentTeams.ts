@@ -256,7 +256,7 @@ Complete this task and provide your findings/output.`;
     async (name, input) => {
       return await executeTool(name, input);
     },
-    5 // Max iterations per agent
+    { maxIterations: 5 }
   );
 
   return result;

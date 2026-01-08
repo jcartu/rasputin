@@ -100,11 +100,13 @@ const JARVIS_TOOLS: OpenRouterTool[] = [
           },
           engines: {
             type: "string",
-            description: "Optional: Comma-separated list of engines to use (e.g., 'google,bing,duckduckgo'). Leave empty for all engines.",
+            description:
+              "Optional: Comma-separated list of engines to use (e.g., 'google,bing,duckduckgo'). Leave empty for all engines.",
           },
           categories: {
             type: "string",
-            description: "Optional: Search category (general, images, news, science, files, it, social media)",
+            description:
+              "Optional: Search category (general, images, news, science, files, it, social media)",
           },
         },
         required: ["query"],
@@ -407,6 +409,399 @@ const JARVIS_TOOLS: OpenRouterTool[] = [
   {
     type: "function",
     function: {
+      name: "tmux_start",
+      description:
+        "Start a long-running process in a background tmux session. Use for dev servers, build watchers, or any process that needs to keep running.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionName: {
+            type: "string",
+            description:
+              "Name for the tmux session (e.g., 'devserver', 'build')",
+          },
+          command: {
+            type: "string",
+            description:
+              "The command to run (e.g., 'npm run dev', 'pnpm build --watch')",
+          },
+        },
+        required: ["sessionName", "command"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "tmux_output",
+      description:
+        "Get the recent output from a running tmux session. Use to check status of background processes.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionName: {
+            type: "string",
+            description: "Name of the tmux session to check",
+          },
+          lines: {
+            type: "number",
+            description: "Number of lines to retrieve (default: 100)",
+          },
+        },
+        required: ["sessionName"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "tmux_stop",
+      description: "Stop a running tmux session.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionName: {
+            type: "string",
+            description: "Name of the tmux session to stop",
+          },
+        },
+        required: ["sessionName"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "tmux_list",
+      description: "List all running JARVIS tmux sessions.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "tmux_send",
+      description:
+        "Send input/commands to a running tmux session. Use for interactive processes.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionName: {
+            type: "string",
+            description: "Name of the tmux session",
+          },
+          input: {
+            type: "string",
+            description: "Input to send to the session",
+          },
+        },
+        required: ["sessionName", "input"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "screenshot",
+      description:
+        "Take a screenshot of a web page. Useful for verifying frontend changes, capturing visual state, or debugging UI issues.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: {
+            type: "string",
+            description:
+              "The URL to screenshot (e.g., 'http://localhost:5173' for dev server)",
+          },
+          fullPage: {
+            type: "boolean",
+            description:
+              "Whether to capture the full scrollable page (default: false)",
+          },
+          waitFor: {
+            type: "number",
+            description:
+              "Milliseconds to wait after page load before taking screenshot",
+          },
+        },
+        required: ["url"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "playwright_browse",
+      description:
+        "Browse a web page using a real browser (Playwright). Better than simple fetch for JavaScript-rendered content.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: {
+            type: "string",
+            description: "The URL to browse",
+          },
+          waitFor: {
+            type: "string",
+            description: "CSS selector to wait for before extracting content",
+          },
+          timeout: {
+            type: "number",
+            description: "Timeout in milliseconds (default: 30000)",
+          },
+        },
+        required: ["url"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "preview_file_edit",
+      description:
+        "Preview changes to a file before applying them. Shows a diff and creates a backup. Use this for large or complex file edits to verify changes first.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "The path to the file to edit",
+          },
+          content: {
+            type: "string",
+            description: "The new content for the file",
+          },
+        },
+        required: ["path", "content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "apply_file_edit",
+      description:
+        "Apply a previously previewed file edit. Use the backup_id from preview_file_edit.",
+      parameters: {
+        type: "object",
+        properties: {
+          backupId: {
+            type: "string",
+            description: "The backup ID from the preview",
+          },
+        },
+        required: ["backupId"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "rollback_file_edit",
+      description:
+        "Rollback a file to its state before an edit was applied. Use if changes caused problems.",
+      parameters: {
+        type: "object",
+        properties: {
+          backupId: {
+            type: "string",
+            description: "The backup ID of the edit to rollback",
+          },
+        },
+        required: ["backupId"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "discard_file_edit",
+      description: "Discard a previewed file edit without applying it.",
+      parameters: {
+        type: "object",
+        properties: {
+          backupId: {
+            type: "string",
+            description: "The backup ID of the edit to discard",
+          },
+        },
+        required: ["backupId"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_pending_edits",
+      description:
+        "List all pending file edits that have been previewed but not yet applied or discarded.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "start_debug_session",
+      description:
+        "Start a structured debugging session with a hypothesis about the bug. Use this when debugging complex issues to track attempts and state.",
+      parameters: {
+        type: "object",
+        properties: {
+          hypothesis: {
+            type: "string",
+            description:
+              "Your initial hypothesis about what might be causing the bug",
+          },
+        },
+        required: ["hypothesis"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "debug_snapshot",
+      description:
+        "Capture the current state during debugging. Use at key points to track progress.",
+      parameters: {
+        type: "object",
+        properties: {
+          label: {
+            type: "string",
+            description: "A descriptive label for this snapshot",
+          },
+          state: {
+            type: "object",
+            description:
+              "Key-value pairs of relevant state (variables, config values, etc.)",
+          },
+        },
+        required: ["label", "state"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "debug_log_output",
+      description:
+        "Log command/execution output to the current debug snapshot.",
+      parameters: {
+        type: "object",
+        properties: {
+          output: {
+            type: "string",
+            description: "The output to log",
+          },
+        },
+        required: ["output"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "debug_log_error",
+      description: "Log an error to the current debug snapshot.",
+      parameters: {
+        type: "object",
+        properties: {
+          error: {
+            type: "string",
+            description: "The error message to log",
+          },
+        },
+        required: ["error"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "debug_attempt",
+      description:
+        "Log a fix attempt and its result. After 3 failures, you'll be prompted to reconsider the approach.",
+      parameters: {
+        type: "object",
+        properties: {
+          description: {
+            type: "string",
+            description: "What you tried to do",
+          },
+          result: {
+            type: "string",
+            enum: ["success", "failure"],
+            description: "Whether the attempt succeeded or failed",
+          },
+          error: {
+            type: "string",
+            description: "Error message if the attempt failed",
+          },
+        },
+        required: ["description", "result"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "debug_summary",
+      description:
+        "Get a summary of the current debug session including all attempts and snapshots.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "end_debug_session",
+      description:
+        "End the current debug session with a conclusion about what was found/fixed.",
+      parameters: {
+        type: "object",
+        properties: {
+          conclusion: {
+            type: "string",
+            description:
+              "Summary of what was discovered and whether the issue was resolved",
+          },
+        },
+        required: ["conclusion"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_debug_snapshot",
+      description: "Retrieve details of a specific debug snapshot by ID.",
+      parameters: {
+        type: "object",
+        properties: {
+          snapshotId: {
+            type: "string",
+            description: "The snapshot ID (e.g., 'snap_1')",
+          },
+        },
+        required: ["snapshotId"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "task_complete",
       description:
         "Mark the task as complete and provide a final summary. Use this when you have finished all required work.",
@@ -540,7 +935,8 @@ export function getInferenceProvider(): InferenceProvider {
 // For backwards compatibility with existing UI
 export function setInferenceTier(tier: string): void {
   if (tier === "cerebras") setInferenceProvider("cerebras");
-  else if (tier === "local") setInferenceProvider("anthropic"); // fallback to anthropic
+  else if (tier === "local")
+    setInferenceProvider("anthropic"); // fallback to anthropic
   else if (tier === "cloud") setInferenceProvider("anthropic");
   else setInferenceProvider("anthropic");
 }
@@ -550,31 +946,51 @@ export function getInferenceTier(): string {
 }
 
 // Convert messages to Anthropic format
-function toAnthropicMessages(messages: OpenRouterMessage[]): Array<{role: string; content: string | Array<{type: string; text?: string; tool_use_id?: string; content?: string}>}> {
+function toAnthropicMessages(messages: OpenRouterMessage[]): Array<{
+  role: string;
+  content:
+    | string
+    | Array<{
+        type: string;
+        text?: string;
+        tool_use_id?: string;
+        content?: string;
+      }>;
+}> {
   return messages.map(msg => {
     if (msg.role === "tool") {
       return {
         role: "user",
-        content: [{
-          type: "tool_result",
-          tool_use_id: msg.tool_call_id || "",
-          content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content)
-        }]
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: msg.tool_call_id || "",
+            content:
+              typeof msg.content === "string"
+                ? msg.content
+                : JSON.stringify(msg.content),
+          },
+        ],
       };
     }
     return {
       role: msg.role === "assistant" ? "assistant" : "user",
-      content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content)
+      content:
+        typeof msg.content === "string"
+          ? msg.content
+          : JSON.stringify(msg.content),
     };
   });
 }
 
 // Convert tools to Anthropic format
-function toAnthropicTools(tools: OpenRouterTool[]): Array<{name: string; description: string; input_schema: object}> {
+function toAnthropicTools(
+  tools: OpenRouterTool[]
+): Array<{ name: string; description: string; input_schema: object }> {
   return tools.map(t => ({
     name: t.function.name,
     description: t.function.description,
-    input_schema: t.function.parameters
+    input_schema: t.function.parameters,
   }));
 }
 
@@ -608,11 +1024,11 @@ async function callAnthropic(
   }
 
   const data = await response.json();
-  
+
   // Convert Anthropic response to OpenRouter format
   const toolCalls: OpenRouterToolCall[] = [];
   let textContent = "";
-  
+
   for (const block of data.content || []) {
     if (block.type === "text") {
       textContent += block.text;
@@ -622,22 +1038,24 @@ async function callAnthropic(
         type: "function",
         function: {
           name: block.name,
-          arguments: JSON.stringify(block.input)
-        }
+          arguments: JSON.stringify(block.input),
+        },
       });
     }
   }
 
   return {
     id: data.id,
-    choices: [{
-      message: {
-        role: "assistant",
-        content: textContent || null,
-        tool_calls: toolCalls.length > 0 ? toolCalls : undefined
+    choices: [
+      {
+        message: {
+          role: "assistant",
+          content: textContent || null,
+          tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+        },
+        finish_reason: data.stop_reason || "stop",
       },
-      finish_reason: data.stop_reason || "stop"
-    }]
+    ],
   };
 }
 
@@ -650,7 +1068,7 @@ async function callCerebras(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${CEREBRAS_API_KEY}`,
+      Authorization: `Bearer ${CEREBRAS_API_KEY}`,
     },
     body: JSON.stringify({
       model: "llama-3.3-70b",
@@ -677,7 +1095,14 @@ async function callGemini(
   // Convert to Gemini format
   const geminiContents = messages.map(msg => ({
     role: msg.role === "assistant" ? "model" : "user",
-    parts: [{ text: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content) }]
+    parts: [
+      {
+        text:
+          typeof msg.content === "string"
+            ? msg.content
+            : JSON.stringify(msg.content),
+      },
+    ],
   }));
 
   const response = await fetch(
@@ -688,13 +1113,15 @@ async function callGemini(
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: geminiContents,
-        tools: [{
-          functionDeclarations: JARVIS_TOOLS.map(t => ({
-            name: t.function.name,
-            description: t.function.description,
-            parameters: t.function.parameters
-          }))
-        }]
+        tools: [
+          {
+            functionDeclarations: JARVIS_TOOLS.map(t => ({
+              name: t.function.name,
+              description: t.function.description,
+              parameters: t.function.parameters,
+            })),
+          },
+        ],
       }),
     }
   );
@@ -707,10 +1134,10 @@ async function callGemini(
   const data = await response.json();
   const candidate = data.candidates?.[0];
   const parts = candidate?.content?.parts || [];
-  
+
   let textContent = "";
   const toolCalls: OpenRouterToolCall[] = [];
-  
+
   for (const part of parts) {
     if (part.text) textContent += part.text;
     if (part.functionCall) {
@@ -719,22 +1146,24 @@ async function callGemini(
         type: "function",
         function: {
           name: part.functionCall.name,
-          arguments: JSON.stringify(part.functionCall.args)
-        }
+          arguments: JSON.stringify(part.functionCall.args),
+        },
       });
     }
   }
 
   return {
     id: `gemini_${Date.now()}`,
-    choices: [{
-      message: {
-        role: "assistant",
-        content: textContent || null,
-        tool_calls: toolCalls.length > 0 ? toolCalls : undefined
+    choices: [
+      {
+        message: {
+          role: "assistant",
+          content: textContent || null,
+          tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+        },
+        finish_reason: candidate?.finishReason || "stop",
       },
-      finish_reason: candidate?.finishReason || "stop"
-    }]
+    ],
   };
 }
 
@@ -747,7 +1176,7 @@ async function callGrok(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${XAI_API_KEY}`,
+      Authorization: `Bearer ${XAI_API_KEY}`,
     },
     body: JSON.stringify({
       model: "grok-3-fast",
@@ -771,7 +1200,11 @@ async function callLLM(
   messages: OpenRouterMessage[],
   systemPrompt: string
 ): Promise<OpenRouterResponse> {
-  const providers: Array<{name: InferenceProvider; fn: typeof callAnthropic; hasKey: boolean}> = [
+  const providers: Array<{
+    name: InferenceProvider;
+    fn: typeof callAnthropic;
+    hasKey: boolean;
+  }> = [
     { name: "anthropic", fn: callAnthropic, hasKey: !!ANTHROPIC_API_KEY },
     { name: "cerebras", fn: callCerebras, hasKey: !!CEREBRAS_API_KEY },
     { name: "gemini", fn: callGemini, hasKey: !!GEMINI_API_KEY },
@@ -788,7 +1221,7 @@ async function callLLM(
   // Try each provider in order
   for (const provider of providers) {
     if (!provider.hasKey) continue;
-    
+
     try {
       console.log(`[JARVIS] Calling ${provider.name} API...`);
       const result = await provider.fn(messages, systemPrompt);
@@ -803,7 +1236,11 @@ async function callLLM(
   throw new Error("All LLM providers failed");
 }
 
-// Main orchestrator function
+export interface OrchestratorOptions {
+  maxIterations?: number;
+  memoryContext?: string;
+}
+
 export async function runOrchestrator(
   task: string,
   callbacks: OrchestratorCallbacks,
@@ -811,22 +1248,23 @@ export async function runOrchestrator(
     name: string,
     input: Record<string, unknown>
   ) => Promise<string>,
-  maxIterations: number = 15
+  options: OrchestratorOptions = {}
 ): Promise<void> {
+  const { maxIterations = 15, memoryContext = "" } = options;
   const messages: OpenRouterMessage[] = [];
 
-  // Add the new user task
   messages.push({ role: "user", content: task });
 
   let iterations = 0;
   let isComplete = false;
 
+  const systemPrompt = getJarvisSystemPrompt() + memoryContext;
+
   while (!isComplete && iterations < maxIterations) {
     iterations++;
 
     try {
-      // Call LLM (direct API - Anthropic, Cerebras, Gemini, or Grok)
-      const response = await callLLM(messages, getJarvisSystemPrompt());
+      const response = await callLLM(messages, systemPrompt);
 
       const choice = response.choices[0];
       if (!choice) {

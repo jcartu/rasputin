@@ -12,8 +12,48 @@ import { SSHConnectionManager } from "../../ssh";
 import { getDb } from "../../db";
 import { sshHosts } from "../../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
+import { getCachedResult, setCachedResult } from "../knowledgeCache";
+import * as crypto from "crypto";
 
 const execAsync = promisify(exec);
+
+// File backup storage for rollback capability
+interface FileBackup {
+  id: string;
+  filePath: string;
+  originalContent: string;
+  newContent: string;
+  timestamp: Date;
+  diff: string;
+}
+
+const fileBackups: Map<string, FileBackup> = new Map();
+
+interface DebugSnapshot {
+  id: string;
+  label: string;
+  timestamp: Date;
+  state: Record<string, unknown>;
+  stackTrace: string[];
+  outputs: string[];
+  errors: string[];
+}
+
+interface DebugSession {
+  id: string;
+  startedAt: Date;
+  snapshots: DebugSnapshot[];
+  currentStep: number;
+  hypothesis: string | null;
+  attempts: Array<{
+    description: string;
+    result: "success" | "failure";
+    error?: string;
+  }>;
+}
+
+const debugSessions: Map<string, DebugSession> = new Map();
+let activeDebugSession: string | null = null;
 
 // Perplexity API for web search
 const SONAR_API_KEY = process.env.SONAR_API_KEY || "";
@@ -34,8 +74,18 @@ async function ensureSandbox(): Promise<void> {
  * Web Search using Perplexity Sonar
  */
 export async function webSearch(query: string): Promise<string> {
+  const cached = await getCachedResult(query, "web_search", 24);
+  if (cached) {
+    return `[CACHED] ${cached}`;
+  }
+
   if (!SONAR_API_KEY) {
-    return "Error: Perplexity API key not configured";
+    const searxngResult = await searxngSearch(query);
+    if (!searxngResult.startsWith("SearXNG error")) {
+      await setCachedResult(query, "searxng", searxngResult);
+      return `[FALLBACK:SearXNG] ${searxngResult}`;
+    }
+    return "Error: No search providers available (Perplexity API key not configured, SearXNG unavailable)";
   }
 
   try {
@@ -63,21 +113,31 @@ export async function webSearch(query: string): Promise<string> {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      return `Search error: ${error}`;
+      const searxngResult = await searxngSearch(query);
+      if (!searxngResult.startsWith("SearXNG error")) {
+        await setCachedResult(query, "searxng", searxngResult);
+        return `[FALLBACK:SearXNG] ${searxngResult}`;
+      }
+      return `Search error: ${await response.text()}`;
     }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "No results found";
 
-    // Include citations if available
     const citations = data.citations || [];
+    let result = content;
     if (citations.length > 0) {
-      return `${content}\n\nSources:\n${citations.map((c: string, i: number) => `${i + 1}. ${c}`).join("\n")}`;
+      result = `${content}\n\nSources:\n${citations.map((c: string, i: number) => `${i + 1}. ${c}`).join("\n")}`;
     }
 
-    return content;
+    await setCachedResult(query, "web_search", result);
+    return result;
   } catch (error) {
+    const searxngResult = await searxngSearch(query);
+    if (!searxngResult.startsWith("SearXNG error")) {
+      await setCachedResult(query, "searxng", searxngResult);
+      return `[FALLBACK:SearXNG] ${searxngResult}`;
+    }
     return `Search error: ${error instanceof Error ? error.message : String(error)}`;
   }
 }
@@ -86,9 +146,12 @@ export async function webSearch(query: string): Promise<string> {
  * SearXNG Search - Free, unlimited, privacy-focused search
  * Aggregates results from multiple search engines (Google, Bing, DuckDuckGo, etc.)
  */
-export async function searxngSearch(query: string, options?: { engines?: string; categories?: string }): Promise<string> {
+export async function searxngSearch(
+  query: string,
+  options?: { engines?: string; categories?: string }
+): Promise<string> {
   const SEARXNG_URL = process.env.SEARXNG_URL || "http://localhost:8888";
-  
+
   try {
     const params = new URLSearchParams({
       q: query,
@@ -99,7 +162,7 @@ export async function searxngSearch(query: string, options?: { engines?: string;
 
     const response = await fetch(`${SEARXNG_URL}/search?${params}`, {
       headers: {
-        "Accept": "application/json",
+        Accept: "application/json",
       },
     });
 
@@ -115,9 +178,22 @@ export async function searxngSearch(query: string, options?: { engines?: string;
     }
 
     // Format results nicely
-    const formattedResults = results.slice(0, 10).map((r: { title?: string; url?: string; content?: string; engine?: string }, i: number) => {
-      return `${i + 1}. ${r.title || "Untitled"}\n   URL: ${r.url || "N/A"}\n   ${r.content || "No description"}\n   Source: ${r.engine || "unknown"}`;
-    }).join("\n\n");
+    const formattedResults = results
+      .slice(0, 10)
+      .map(
+        (
+          r: {
+            title?: string;
+            url?: string;
+            content?: string;
+            engine?: string;
+          },
+          i: number
+        ) => {
+          return `${i + 1}. ${r.title || "Untitled"}\n   URL: ${r.url || "N/A"}\n   ${r.content || "No description"}\n   Source: ${r.engine || "unknown"}`;
+        }
+      )
+      .join("\n\n");
 
     return `Found ${data.number_of_results || results.length} results:\n\n${formattedResults}`;
   } catch (error) {
@@ -618,6 +694,550 @@ export async function sshListFiles(
 }
 
 /**
+ * Start a long-running process in a tmux session
+ */
+export async function tmuxStart(
+  sessionName: string,
+  command: string
+): Promise<string> {
+  try {
+    const sanitizedName = sessionName.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const fullSessionName = `jarvis_${sanitizedName}`;
+
+    const checkExists = await execAsync(
+      `tmux has-session -t ${fullSessionName} 2>/dev/null && echo "exists" || echo "not_exists"`
+    );
+
+    if (checkExists.stdout.trim() === "exists") {
+      return `Session '${fullSessionName}' already exists. Use tmux_output to check its status or tmux_stop to stop it.`;
+    }
+
+    await execAsync(
+      `tmux new-session -d -s ${fullSessionName} -c ${JARVIS_SANDBOX} "${command}"`
+    );
+
+    return `Started tmux session '${fullSessionName}' running: ${command}\nUse tmux_output('${sanitizedName}') to check output.`;
+  } catch (error) {
+    return `tmux error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Get output from a tmux session
+ */
+export async function tmuxOutput(
+  sessionName: string,
+  lines: number = 100
+): Promise<string> {
+  try {
+    const fullSessionName = `jarvis_${sessionName.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+
+    const { stdout } = await execAsync(
+      `tmux capture-pane -t ${fullSessionName} -p -S -${lines}`
+    );
+
+    return stdout || "(no output)";
+  } catch (error) {
+    return `tmux error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Stop a tmux session
+ */
+export async function tmuxStop(sessionName: string): Promise<string> {
+  try {
+    const fullSessionName = `jarvis_${sessionName.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+
+    await execAsync(`tmux kill-session -t ${fullSessionName}`);
+    return `Stopped tmux session '${fullSessionName}'`;
+  } catch (error) {
+    return `tmux error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * List all JARVIS tmux sessions
+ */
+export async function tmuxList(): Promise<string> {
+  try {
+    const { stdout } = await execAsync(
+      `tmux list-sessions -F "#{session_name}: #{session_created_string}" 2>/dev/null | grep "^jarvis_" || echo "No JARVIS sessions running"`
+    );
+
+    return stdout;
+  } catch (error) {
+    return "No JARVIS sessions running";
+  }
+}
+
+/**
+ * Send input to a tmux session
+ */
+export async function tmuxSend(
+  sessionName: string,
+  input: string
+): Promise<string> {
+  try {
+    const fullSessionName = `jarvis_${sessionName.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+
+    await execAsync(`tmux send-keys -t ${fullSessionName} "${input}" Enter`);
+    return `Sent input to session '${fullSessionName}'`;
+  } catch (error) {
+    return `tmux error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+function generateUnifiedDiff(
+  filePath: string,
+  original: string,
+  modified: string
+): string {
+  const originalLines = original.split("\n");
+  const modifiedLines = modified.split("\n");
+
+  const diff: string[] = [];
+  diff.push(`--- ${filePath}`);
+  diff.push(`+++ ${filePath}`);
+
+  let i = 0,
+    j = 0;
+  let hunkStart = -1;
+  let hunkLines: string[] = [];
+
+  const flushHunk = () => {
+    if (hunkLines.length > 0 && hunkStart >= 0) {
+      diff.push(`@@ -${hunkStart + 1} +${hunkStart + 1} @@`);
+      diff.push(...hunkLines);
+      hunkLines = [];
+    }
+    hunkStart = -1;
+  };
+
+  while (i < originalLines.length || j < modifiedLines.length) {
+    if (i < originalLines.length && j < modifiedLines.length) {
+      if (originalLines[i] === modifiedLines[j]) {
+        flushHunk();
+        i++;
+        j++;
+      } else {
+        if (hunkStart < 0) hunkStart = i;
+        const origInMod = modifiedLines.indexOf(originalLines[i], j);
+        const modInOrig = originalLines.indexOf(modifiedLines[j], i);
+
+        if (modInOrig >= 0 && (origInMod < 0 || modInOrig <= origInMod)) {
+          hunkLines.push(`-${originalLines[i]}`);
+          i++;
+        } else if (origInMod >= 0) {
+          hunkLines.push(`+${modifiedLines[j]}`);
+          j++;
+        } else {
+          hunkLines.push(`-${originalLines[i]}`);
+          hunkLines.push(`+${modifiedLines[j]}`);
+          i++;
+          j++;
+        }
+      }
+    } else if (i < originalLines.length) {
+      if (hunkStart < 0) hunkStart = i;
+      hunkLines.push(`-${originalLines[i]}`);
+      i++;
+    } else {
+      if (hunkStart < 0) hunkStart = j;
+      hunkLines.push(`+${modifiedLines[j]}`);
+      j++;
+    }
+  }
+
+  flushHunk();
+  return diff.join("\n");
+}
+
+export async function previewFileEdit(
+  filePath: string,
+  newContent: string
+): Promise<string> {
+  await ensureSandbox();
+
+  const resolvedPath = filePath.startsWith("/")
+    ? filePath
+    : path.join(JARVIS_SANDBOX, filePath);
+
+  try {
+    let originalContent = "";
+    try {
+      originalContent = await fs.readFile(resolvedPath, "utf-8");
+    } catch {
+      originalContent = "";
+    }
+
+    const diff = generateUnifiedDiff(resolvedPath, originalContent, newContent);
+    const backupId = crypto.randomBytes(8).toString("hex");
+
+    fileBackups.set(backupId, {
+      id: backupId,
+      filePath: resolvedPath,
+      originalContent,
+      newContent,
+      timestamp: new Date(),
+      diff,
+    });
+
+    const addedLines = (diff.match(/^\+[^+]/gm) || []).length;
+    const removedLines = (diff.match(/^-[^-]/gm) || []).length;
+
+    return `DIFF PREVIEW (backup_id: ${backupId})
+File: ${resolvedPath}
+Changes: +${addedLines} lines, -${removedLines} lines
+
+${diff}
+
+To apply these changes, use: apply_file_edit("${backupId}")
+To discard, use: discard_file_edit("${backupId}")`;
+  } catch (error) {
+    return `Error generating preview: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function applyFileEdit(backupId: string): Promise<string> {
+  const backup = fileBackups.get(backupId);
+  if (!backup) {
+    return `Error: No pending edit found with id "${backupId}". It may have been applied or discarded.`;
+  }
+
+  try {
+    await fs.mkdir(path.dirname(backup.filePath), { recursive: true });
+    await fs.writeFile(backup.filePath, backup.newContent, "utf-8");
+
+    return `Successfully applied changes to ${backup.filePath}
+Backup retained with id "${backupId}" for rollback if needed.
+To rollback, use: rollback_file_edit("${backupId}")`;
+  } catch (error) {
+    return `Error applying edit: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function rollbackFileEdit(backupId: string): Promise<string> {
+  const backup = fileBackups.get(backupId);
+  if (!backup) {
+    return `Error: No backup found with id "${backupId}".`;
+  }
+
+  try {
+    await fs.writeFile(backup.filePath, backup.originalContent, "utf-8");
+    fileBackups.delete(backupId);
+
+    return `Successfully rolled back ${backup.filePath} to its original state.
+Backup "${backupId}" has been removed.`;
+  } catch (error) {
+    return `Error rolling back: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export function discardFileEdit(backupId: string): string {
+  const backup = fileBackups.get(backupId);
+  if (!backup) {
+    return `Error: No pending edit found with id "${backupId}".`;
+  }
+
+  fileBackups.delete(backupId);
+  return `Discarded pending edit for ${backup.filePath}. No changes were made.`;
+}
+
+export function listPendingEdits(): string {
+  if (fileBackups.size === 0) {
+    return "No pending file edits.";
+  }
+
+  const edits = Array.from(fileBackups.values())
+    .map(b => `- ${b.id}: ${b.filePath} (${b.timestamp.toISOString()})`)
+    .join("\n");
+
+  return `Pending file edits:\n${edits}`;
+}
+
+export function startDebugSession(hypothesis: string): string {
+  const sessionId = crypto.randomBytes(8).toString("hex");
+
+  const session: DebugSession = {
+    id: sessionId,
+    startedAt: new Date(),
+    snapshots: [],
+    currentStep: 0,
+    hypothesis,
+    attempts: [],
+  };
+
+  debugSessions.set(sessionId, session);
+  activeDebugSession = sessionId;
+
+  return `Debug session started: ${sessionId}
+Hypothesis: ${hypothesis}
+
+Use debug_snapshot() to capture state at key points.
+Use debug_attempt() to log fix attempts.
+Use debug_summary() to get a report of the debugging process.`;
+}
+
+export function debugSnapshot(
+  label: string,
+  state: Record<string, unknown>
+): string {
+  if (!activeDebugSession) {
+    return "Error: No active debug session. Start one with start_debug_session().";
+  }
+
+  const session = debugSessions.get(activeDebugSession);
+  if (!session) {
+    return "Error: Debug session not found.";
+  }
+
+  const snapshotId = `snap_${session.snapshots.length + 1}`;
+  const snapshot: DebugSnapshot = {
+    id: snapshotId,
+    label,
+    timestamp: new Date(),
+    state,
+    stackTrace: [],
+    outputs: [],
+    errors: [],
+  };
+
+  session.snapshots.push(snapshot);
+  session.currentStep++;
+
+  return `Snapshot captured: ${snapshotId} - "${label}"
+State keys: ${Object.keys(state).join(", ")}
+Total snapshots: ${session.snapshots.length}`;
+}
+
+export function debugLogOutput(output: string): string {
+  if (!activeDebugSession) {
+    return "Error: No active debug session.";
+  }
+
+  const session = debugSessions.get(activeDebugSession);
+  if (!session || session.snapshots.length === 0) {
+    return "Error: No snapshots to attach output to. Create a snapshot first.";
+  }
+
+  const latestSnapshot = session.snapshots[session.snapshots.length - 1];
+  latestSnapshot.outputs.push(output);
+
+  return `Output logged to snapshot "${latestSnapshot.label}"`;
+}
+
+export function debugLogError(error: string): string {
+  if (!activeDebugSession) {
+    return "Error: No active debug session.";
+  }
+
+  const session = debugSessions.get(activeDebugSession);
+  if (!session || session.snapshots.length === 0) {
+    return "Error: No snapshots to attach error to.";
+  }
+
+  const latestSnapshot = session.snapshots[session.snapshots.length - 1];
+  latestSnapshot.errors.push(error);
+
+  return `Error logged to snapshot "${latestSnapshot.label}"`;
+}
+
+export function debugAttempt(
+  description: string,
+  result: "success" | "failure",
+  error?: string
+): string {
+  if (!activeDebugSession) {
+    return "Error: No active debug session.";
+  }
+
+  const session = debugSessions.get(activeDebugSession);
+  if (!session) {
+    return "Error: Debug session not found.";
+  }
+
+  session.attempts.push({ description, result, error });
+
+  if (session.attempts.length >= 3 && result === "failure") {
+    return `Attempt logged: ${description} - ${result}
+WARNING: 3+ failed attempts. Consider:
+1. Re-evaluating the hypothesis
+2. Consulting Oracle for alternative approaches
+3. Stepping back to examine assumptions`;
+  }
+
+  return `Attempt logged: ${description} - ${result}${error ? ` (${error})` : ""}
+Total attempts: ${session.attempts.length}`;
+}
+
+export function debugSummary(): string {
+  if (!activeDebugSession) {
+    return "Error: No active debug session.";
+  }
+
+  const session = debugSessions.get(activeDebugSession);
+  if (!session) {
+    return "Error: Debug session not found.";
+  }
+
+  const successCount = session.attempts.filter(
+    a => a.result === "success"
+  ).length;
+  const failureCount = session.attempts.filter(
+    a => a.result === "failure"
+  ).length;
+
+  let summary = `DEBUG SESSION SUMMARY: ${session.id}
+Started: ${session.startedAt.toISOString()}
+Hypothesis: ${session.hypothesis}
+
+ATTEMPTS: ${session.attempts.length} (${successCount} success, ${failureCount} failure)
+`;
+
+  for (const attempt of session.attempts) {
+    summary += `  - [${attempt.result.toUpperCase()}] ${attempt.description}`;
+    if (attempt.error) summary += ` (Error: ${attempt.error})`;
+    summary += "\n";
+  }
+
+  summary += `\nSNAPSHOTS: ${session.snapshots.length}\n`;
+  for (const snap of session.snapshots) {
+    summary += `  - ${snap.id}: ${snap.label} (${snap.timestamp.toISOString()})`;
+    if (snap.errors.length > 0) summary += ` [${snap.errors.length} errors]`;
+    summary += "\n";
+  }
+
+  return summary;
+}
+
+export function endDebugSession(conclusion: string): string {
+  if (!activeDebugSession) {
+    return "Error: No active debug session.";
+  }
+
+  const session = debugSessions.get(activeDebugSession);
+  if (!session) {
+    return "Error: Debug session not found.";
+  }
+
+  const summary = debugSummary();
+  const sessionId = activeDebugSession;
+  activeDebugSession = null;
+
+  return `${summary}
+CONCLUSION: ${conclusion}
+
+Debug session ${sessionId} ended.`;
+}
+
+export function getDebugSnapshot(snapshotId: string): string {
+  if (!activeDebugSession) {
+    return "Error: No active debug session.";
+  }
+
+  const session = debugSessions.get(activeDebugSession);
+  if (!session) {
+    return "Error: Debug session not found.";
+  }
+
+  const snapshot = session.snapshots.find(s => s.id === snapshotId);
+  if (!snapshot) {
+    return `Error: Snapshot "${snapshotId}" not found.`;
+  }
+
+  return `SNAPSHOT: ${snapshot.id} - ${snapshot.label}
+Timestamp: ${snapshot.timestamp.toISOString()}
+
+STATE:
+${JSON.stringify(snapshot.state, null, 2)}
+
+OUTPUTS (${snapshot.outputs.length}):
+${snapshot.outputs.map((o, i) => `  ${i + 1}. ${o}`).join("\n") || "  (none)"}
+
+ERRORS (${snapshot.errors.length}):
+${snapshot.errors.map((e, i) => `  ${i + 1}. ${e}`).join("\n") || "  (none)"}`;
+}
+
+/**
+ * Take a screenshot of a URL or the dev server
+ */
+export async function takeScreenshot(
+  url: string,
+  options?: { fullPage?: boolean; waitFor?: number }
+): Promise<string> {
+  try {
+    const { chromium } = await import("playwright");
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+
+    await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
+
+    if (options?.waitFor) {
+      await page.waitForTimeout(options.waitFor);
+    }
+
+    const screenshotPath = path.join(
+      JARVIS_SANDBOX,
+      `screenshot_${Date.now()}.png`
+    );
+
+    await page.screenshot({
+      path: screenshotPath,
+      fullPage: options?.fullPage ?? false,
+    });
+
+    await browser.close();
+
+    return `Screenshot saved to: ${screenshotPath}\nYou can view this file or use it for analysis.`;
+  } catch (error) {
+    return `Screenshot error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Browse a page with Playwright and extract content (better than simple fetch)
+ */
+export async function playwrightBrowse(
+  url: string,
+  options?: { waitFor?: string; timeout?: number }
+): Promise<string> {
+  try {
+    const { chromium } = await import("playwright");
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+
+    await page.goto(url, {
+      waitUntil: "networkidle",
+      timeout: options?.timeout ?? 30000,
+    });
+
+    if (options?.waitFor) {
+      await page.waitForSelector(options.waitFor, { timeout: 10000 });
+    }
+
+    const content = await page.evaluate(() => {
+      const body = document.body;
+      const scripts = body.querySelectorAll("script, style, noscript");
+      scripts.forEach(s => s.remove());
+      return body.innerText;
+    });
+
+    const title = await page.title();
+    await browser.close();
+
+    let result = `Title: ${title}\n\nContent:\n${content}`;
+    if (result.length > 15000) {
+      result = result.substring(0, 15000) + "\n... [truncated]";
+    }
+
+    return result;
+  } catch (error) {
+    return `Browse error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
  * Execute a tool by name
  */
 export async function executeTool(
@@ -701,6 +1321,62 @@ export async function executeTool(
         input.path as string,
         input.userId as number
       );
+    case "screenshot":
+      return takeScreenshot(input.url as string, {
+        fullPage: input.fullPage as boolean | undefined,
+        waitFor: input.waitFor as number | undefined,
+      });
+    case "playwright_browse":
+      return playwrightBrowse(input.url as string, {
+        waitFor: input.waitFor as string | undefined,
+        timeout: input.timeout as number | undefined,
+      });
+    case "tmux_start":
+      return tmuxStart(input.sessionName as string, input.command as string);
+    case "tmux_output":
+      return tmuxOutput(
+        input.sessionName as string,
+        input.lines as number | undefined
+      );
+    case "tmux_stop":
+      return tmuxStop(input.sessionName as string);
+    case "tmux_list":
+      return tmuxList();
+    case "tmux_send":
+      return tmuxSend(input.sessionName as string, input.input as string);
+    case "preview_file_edit":
+      return previewFileEdit(input.path as string, input.content as string);
+    case "apply_file_edit":
+      return applyFileEdit(input.backupId as string);
+    case "rollback_file_edit":
+      return rollbackFileEdit(input.backupId as string);
+    case "discard_file_edit":
+      return discardFileEdit(input.backupId as string);
+    case "list_pending_edits":
+      return listPendingEdits();
+    case "start_debug_session":
+      return startDebugSession(input.hypothesis as string);
+    case "debug_snapshot":
+      return debugSnapshot(
+        input.label as string,
+        input.state as Record<string, unknown>
+      );
+    case "debug_log_output":
+      return debugLogOutput(input.output as string);
+    case "debug_log_error":
+      return debugLogError(input.error as string);
+    case "debug_attempt":
+      return debugAttempt(
+        input.description as string,
+        input.result as "success" | "failure",
+        input.error as string | undefined
+      );
+    case "debug_summary":
+      return debugSummary();
+    case "end_debug_session":
+      return endDebugSession(input.conclusion as string);
+    case "get_debug_snapshot":
+      return getDebugSnapshot(input.snapshotId as string);
     default:
       return `Unknown tool: ${name}`;
   }

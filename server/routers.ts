@@ -14,6 +14,12 @@ import {
   type ToolResult,
 } from "./services/jarvis/orchestrator";
 import { executeTool } from "./services/jarvis/tools";
+import {
+  getPreTaskContext,
+  learnFromTask,
+  type TaskContext,
+  type TaskOutcome,
+} from "./services/jarvis/memoryIntegration";
 import * as ssh from "./ssh";
 
 // ============================================================================
@@ -688,6 +694,24 @@ export const appRouter = router({
           content: input.task,
         });
 
+        // Get memory context for this task
+        let memoryPromptAddition = "";
+        try {
+          const { promptAddition } = await getPreTaskContext(
+            input.task,
+            ctx.user.id
+          );
+          memoryPromptAddition = promptAddition;
+          if (memoryPromptAddition) {
+            console.info(
+              `[JARVIS] Retrieved memory context (${memoryPromptAddition.length} chars)`
+            );
+          }
+        } catch (error) {
+          console.error("[JARVIS] Failed to retrieve memory context:", error);
+        }
+
+        const toolsUsed: string[] = [];
         const steps: Array<{
           type:
             | "thinking"
@@ -717,6 +741,7 @@ export const appRouter = router({
               },
               onToolCall: (toolCall: ToolCall) => {
                 steps.push({ type: "tool_use", toolCall });
+                toolsUsed.push(toolCall.name);
                 iterationCount++;
               },
               onToolResult: (result: ToolResult) => {
@@ -732,7 +757,6 @@ export const appRouter = router({
               },
             },
             async (toolName, toolInput) => {
-              // Log tool call to database
               const toolCallRecord = await db.createAgentToolCall({
                 taskId: taskId!,
                 toolName,
@@ -742,13 +766,11 @@ export const appRouter = router({
 
               const toolStartTime = Date.now();
               try {
-                // Add userId to input for SSH tools
                 const enrichedInput = {
                   ...toolInput,
                   userId: ctx.user.id,
                 };
                 const result = await executeTool(toolName, enrichedInput);
-                // Track API call
                 await db.incrementUsage(ctx.user.id, today, "totalApiCalls");
                 await db.updateAgentToolCall(toolCallRecord.id, {
                   output: result,
@@ -766,7 +788,8 @@ export const appRouter = router({
                 });
                 throw error;
               }
-            }
+            },
+            { memoryContext: memoryPromptAddition }
           );
         } catch (error) {
           hasError = true;
@@ -802,6 +825,30 @@ export const appRouter = router({
               status: "completed" as const,
             })),
         });
+
+        try {
+          const taskContext: TaskContext = {
+            taskId: taskId!,
+            userId: ctx.user.id,
+            query: input.task,
+          };
+          const outcome: TaskOutcome = {
+            success: !hasError,
+            result: finalResult,
+            error: hasError
+              ? steps.find(s => s.type === "error")?.content
+              : undefined,
+            toolsUsed: Array.from(new Set(toolsUsed)),
+            duration: durationMs,
+            iterations: iterationCount,
+          };
+          await learnFromTask(taskContext, outcome);
+          console.info(
+            `[JARVIS] Learned from task ${taskId} (success: ${!hasError})`
+          );
+        } catch (error) {
+          console.error("[JARVIS] Failed to learn from task:", error);
+        }
 
         return { taskId, steps };
       }),
@@ -2046,7 +2093,7 @@ export const appRouter = router({
         const { webhookHandler } = await import("./services/events");
         // Get the webhook endpoint
         const endpoints = await webhookHandler.getUserEndpoints(ctx.user.id);
-        const endpoint = endpoints.find((e) => e.id === input.webhookId);
+        const endpoint = endpoints.find(e => e.id === input.webhookId);
         if (!endpoint) {
           throw new Error("Webhook endpoint not found");
         }

@@ -2274,7 +2274,6 @@ export const eventCronJobs = mysqlTable("eventCronJobs", {
 export type EventCronJob = typeof eventCronJobs.$inferSelect;
 export type InsertEventCronJob = typeof eventCronJobs.$inferInsert;
 
-
 // ============================================================================
 // WEB APP DEVELOPMENT SYSTEM
 // ============================================================================
@@ -2458,3 +2457,40 @@ export const codeGenerationHistory = mysqlTable("codeGenerationHistory", {
 export type CodeGenerationHistory = typeof codeGenerationHistory.$inferSelect;
 export type InsertCodeGenerationHistory =
   typeof codeGenerationHistory.$inferInsert;
+
+/**
+ * Knowledge Cache - Cache search results and web data for faster retrieval
+ */
+export const knowledgeCache = mysqlTable("knowledgeCache", {
+  id: int("id").autoincrement().primaryKey(),
+
+  userId: int("userId"),
+
+  cacheKey: varchar("cacheKey", { length: 255 }).notNull(),
+
+  query: text("query").notNull(),
+
+  source: mysqlEnum("source", [
+    "web_search",
+    "searxng",
+    "browse",
+    "api",
+    "documentation",
+  ]).notNull(),
+
+  content: text("content").notNull(),
+
+  metadata: json("metadata").$type<Record<string, unknown>>(),
+
+  embedding: json("embedding").$type<number[]>(),
+
+  hitCount: int("hitCount").notNull().default(0),
+
+  expiresAt: timestamp("expiresAt"),
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  lastAccessedAt: timestamp("lastAccessedAt").defaultNow().notNull(),
+});
+
+export type KnowledgeCache = typeof knowledgeCache.$inferSelect;
+export type InsertKnowledgeCache = typeof knowledgeCache.$inferInsert;

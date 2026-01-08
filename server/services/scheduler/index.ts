@@ -154,7 +154,7 @@ export async function executeScheduledTask(
         toolResults.push({ name, output: result });
         return result;
       },
-      10 // Max iterations for scheduled tasks
+      { maxIterations: 10 }
     );
 
     const durationMs = Date.now() - startTime;
