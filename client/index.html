@@ -14,7 +14,7 @@
       content="Query multiple frontier AI models simultaneously. Get consensus-driven answers or deeply synthesized insights from GPT-5, Claude 4.5, Gemini 3, Grok 4, and more."
     />
     <meta name="theme-color" content="#00ffff" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta
       name="apple-mobile-web-app-status-bar-style"
       content="black-translucent"
@@ -42,10 +42,16 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script
-      defer
-      src="%VITE_ANALYTICS_ENDPOINT%/umami"
-      data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"
-    ></script>
+    <script type="module">
+      const endpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT;
+      const websiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID;
+      if (endpoint && websiteId && !endpoint.includes("%")) {
+        const script = document.createElement("script");
+        script.defer = true;
+        script.src = `${endpoint}/umami`;
+        script.dataset.websiteId = websiteId;
+        document.head.appendChild(script);
+      }
+    </script>
   </body>
 </html>

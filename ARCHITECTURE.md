@@ -1018,6 +1018,7 @@ RASPUTIN is a comprehensive AI orchestration platform with the following key com
 | **RAG Pipeline**           | Codebase indexing and semantic search for code understanding           |
 | **Event System**           | Webhooks and cron triggers for automated task execution                |
 
+
 The system is built on:
 
 - **Frontend**: React 19 + Tailwind 4 + Vite
