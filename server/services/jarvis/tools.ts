@@ -15,6 +15,10 @@ import { eq, and } from "drizzle-orm";
 import { getCachedResult, setCachedResult } from "../knowledgeCache";
 import * as crypto from "crypto";
 import { scaffoldProject, type ScaffoldConfig } from "../webApp/scaffolder";
+import {
+  getSelfEvolutionTools,
+  executeSelfEvolutionTool,
+} from "../selfEvolution/tools";
 
 const execAsync = promisify(exec);
 
@@ -3130,6 +3134,9 @@ export async function executeTool(
         input.packageManager as string | undefined
       );
     default:
+      if (name.startsWith("self_")) {
+        return executeSelfEvolutionTool(name, input, input.userId as number);
+      }
       return `Unknown tool: ${name}`;
   }
 }
@@ -3609,5 +3616,6 @@ export function getAvailableTools(): Array<{
         },
       },
     },
+    ...getSelfEvolutionTools(),
   ];
 }
