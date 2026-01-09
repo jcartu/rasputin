@@ -22,6 +22,11 @@ import {
 import { runAgentTeam, type TeamCallback } from "./agentTeams";
 import { webhookHandler } from "../events/webhookHandler";
 import { eventExecutor } from "../events/eventExecutor";
+import {
+  createProcedureFromTask,
+  findMatchingProcedure,
+} from "./memoryIntegration";
+import { getMemoryService } from "../memory";
 
 const execAsync = promisify(exec);
 
@@ -3757,6 +3762,124 @@ Action: Will run JARVIS with prompt: "${actionPrompt.slice(0, 100)}..."`;
   }
 }
 
+export async function defineMacro(
+  userId: number,
+  name: string,
+  description: string,
+  triggerPatterns: string[],
+  steps: Array<{ action: string; tool: string; description?: string }>
+): Promise<string> {
+  try {
+    const memoryService = getMemoryService();
+
+    const procedureId = await memoryService.createProceduralMemory({
+      userId,
+      name,
+      description,
+      triggerConditions: triggerPatterns,
+      prerequisites: [],
+      steps: steps.map((s, i) => ({
+        order: i + 1,
+        action: s.action,
+        description: s.description || s.action,
+        toolName: s.tool,
+      })),
+      postConditions: [],
+      errorHandlers: [],
+      successRate: 100,
+      executionCount: 0,
+      successCount: 0,
+      avgExecutionTimeMs: 0,
+      isActive: true,
+    });
+
+    return `Macro "${name}" created successfully!
+ID: ${procedureId}
+Description: ${description}
+Triggers: ${triggerPatterns.join(", ")}
+Steps: ${steps.length}
+${steps.map((s, i) => `  ${i + 1}. ${s.action} (${s.tool})`).join("\n")}
+
+This macro will be suggested when tasks match the trigger patterns.`;
+  } catch (error) {
+    return `Failed to create macro: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function executeMacro(
+  userId: number,
+  macroNameOrId: string
+): Promise<string> {
+  try {
+    const memoryService = getMemoryService();
+    let procedure = await findMatchingProcedure(macroNameOrId, userId);
+
+    if (!procedure) {
+      const searchResults = await memoryService.searchProceduralMemories(
+        macroNameOrId,
+        { userId }
+      );
+      procedure = searchResults[0]?.memory || null;
+    }
+
+    if (!procedure) {
+      return `Macro "${macroNameOrId}" not found. Use list_macros to see available macros.`;
+    }
+
+    const results: string[] = [];
+    results.push(`Executing macro: ${procedure.name}`);
+
+    for (const step of procedure.steps || []) {
+      if (!step.toolName) continue;
+
+      try {
+        const result = await executeTool(step.toolName, { userId });
+        results.push(`Step ${step.order}: ${step.action} - SUCCESS`);
+        results.push(`  Output: ${result.slice(0, 200)}...`);
+      } catch (error) {
+        results.push(`Step ${step.order}: ${step.action} - FAILED`);
+        results.push(
+          `  Error: ${error instanceof Error ? error.message : String(error)}`
+        );
+        break;
+      }
+    }
+
+    if (procedure.id) {
+      await memoryService.recordProcedureExecution(procedure.id, true, 0);
+    }
+
+    return results.join("\n");
+  } catch (error) {
+    return `Failed to execute macro: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function listMacros(userId: number): Promise<string> {
+  try {
+    const memoryService = getMemoryService();
+    const searchResults = await memoryService.searchProceduralMemories("", {
+      userId,
+      limit: 50,
+    });
+
+    if (searchResults.length === 0) {
+      return "No macros defined. Use define_macro to create one.";
+    }
+
+    const formatted = searchResults
+      .map(r => {
+        const p = r.memory;
+        return `- ${p.name} (${p.successRate}% success, ${p.executionCount} runs)\n  ${p.description}\n  Triggers: ${(p.triggerConditions || []).join(", ")}`;
+      })
+      .join("\n\n");
+
+    return `Available Macros (${searchResults.length}):\n\n${formatted}`;
+  } catch (error) {
+    return `Failed to list macros: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 export async function listEventTriggers(userId: number): Promise<string> {
   try {
     const endpoints = await webhookHandler.getUserEndpoints(userId);
@@ -3942,6 +4065,25 @@ export async function executeTool(
       );
     case "list_event_triggers":
       return listEventTriggers(input.userId as number);
+    case "define_macro":
+      return defineMacro(
+        input.userId as number,
+        input.name as string,
+        input.description as string,
+        input.triggerPatterns as string[],
+        input.steps as Array<{
+          action: string;
+          tool: string;
+          description?: string;
+        }>
+      );
+    case "execute_macro":
+      return executeMacro(
+        input.userId as number,
+        input.macroNameOrId as string
+      );
+    case "list_macros":
+      return listMacros(input.userId as number);
     case "web_search":
       return webSearch(input.query as string);
     case "searxng_search":
@@ -5200,6 +5342,50 @@ export function getAvailableTools(): Array<{
     {
       name: "list_event_triggers",
       description: "List all configured event triggers for the current user.",
+      parameters: {},
+    },
+    {
+      name: "define_macro",
+      description:
+        "Define a reusable macro (tool chain) that can be executed later. Useful for common multi-step workflows like deploy, backup, or health checks.",
+      parameters: {
+        name: {
+          type: "string",
+          description: "Name for this macro",
+          required: true,
+        },
+        description: {
+          type: "string",
+          description: "Description of what this macro does",
+          required: true,
+        },
+        triggerPatterns: {
+          type: "array",
+          description: "Phrases that should trigger this macro",
+          required: true,
+        },
+        steps: {
+          type: "array",
+          description:
+            "Array of steps, each with action (string), tool (string), and optional description",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "execute_macro",
+      description: "Execute a previously defined macro by name or ID.",
+      parameters: {
+        macroNameOrId: {
+          type: "string",
+          description: "Name or ID of the macro to execute",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "list_macros",
+      description: "List all defined macros available for execution.",
       parameters: {},
     },
     ...getSelfEvolutionTools(),
