@@ -15,6 +15,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   AlertTriangle,
   CheckCircle2,
   XCircle,
@@ -25,6 +30,8 @@ import {
   Loader2,
   Bell,
   History,
+  Check,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -495,22 +502,156 @@ export function ApprovalWorkflow({
 }
 
 export function ApprovalBadge() {
-  const { data: pendingApprovals = [] } = trpc.ssh.getPendingApprovals.useQuery(
-    undefined,
-    {
-      refetchInterval: 10000,
-    }
-  );
+  const [open, setOpen] = useState(false);
+  const utils = trpc.useUtils();
+
+  const { data: pendingApprovals = [], refetch } =
+    trpc.ssh.getPendingApprovals.useQuery(undefined, {
+      refetchInterval: 30000,
+    });
+
+  const approveMutation = trpc.ssh.approveCommand.useMutation({
+    onSuccess: () => {
+      toast.success("Command approved");
+      refetch();
+      utils.ssh.getPendingApprovals.invalidate();
+    },
+    onError: err => {
+      toast.error("Failed to approve: " + err.message);
+    },
+  });
+
+  const rejectMutation = trpc.ssh.rejectCommand.useMutation({
+    onSuccess: () => {
+      toast.info("Command rejected");
+      refetch();
+      utils.ssh.getPendingApprovals.invalidate();
+    },
+    onError: err => {
+      toast.error("Failed to reject: " + err.message);
+    },
+  });
+
+  useWebSocket({
+    onApprovalNew: () => {
+      refetch();
+      toast.info("New SSH command requires approval", {
+        action: {
+          label: "View",
+          onClick: () => setOpen(true),
+        },
+      });
+    },
+    onApprovalResolved: () => {
+      refetch();
+    },
+  });
 
   if (pendingApprovals.length === 0) return null;
 
+  const getRiskColor = (risk: string) => {
+    switch (risk) {
+      case "critical":
+        return "text-red-500";
+      case "high":
+        return "text-orange-500";
+      case "medium":
+        return "text-yellow-500";
+      default:
+        return "text-green-500";
+    }
+  };
+
   return (
-    <Badge
-      variant="outline"
-      className="text-yellow-500 border-yellow-500/30 bg-yellow-500/10 animate-pulse"
-    >
-      <Bell className="h-3 w-3 mr-1" />
-      {pendingApprovals.length} Pending
-    </Badge>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="relative h-8 gap-1 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10"
+        >
+          <Bell className="h-4 w-4" />
+          <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-yellow-500 text-[10px] text-black font-bold">
+            {pendingApprovals.length}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-0" align="end">
+        <div className="p-3 border-b border-border">
+          <h4 className="font-semibold text-sm">Pending Approvals</h4>
+          <p className="text-xs text-muted-foreground">
+            {pendingApprovals.length} command
+            {pendingApprovals.length !== 1 ? "s" : ""} awaiting approval
+          </p>
+        </div>
+        <ScrollArea className="max-h-64">
+          <div className="p-2 space-y-2">
+            {pendingApprovals.map(approval => (
+              <div
+                key={approval.id}
+                className="p-2 rounded-md bg-muted/50 space-y-2"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <code className="text-xs bg-black/30 px-1.5 py-0.5 rounded block truncate">
+                      {approval.command}
+                    </code>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] h-4",
+                          getRiskColor(approval.riskLevel)
+                        )}
+                      >
+                        {approval.riskLevel}
+                      </Badge>
+                      {approval.expiresAt && (
+                        <span className="text-[10px] text-muted-foreground flex items-center">
+                          <Clock className="h-3 w-3 mr-0.5" />
+                          {Math.max(
+                            0,
+                            Math.round(
+                              (new Date(approval.expiresAt).getTime() -
+                                Date.now()) /
+                                60000
+                            )
+                          )}
+                          m
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 text-green-500 hover:text-green-400 hover:bg-green-500/10"
+                      onClick={() =>
+                        approveMutation.mutate({ approvalId: approval.id })
+                      }
+                      disabled={approveMutation.isPending}
+                    >
+                      <Check className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                      onClick={() =>
+                        rejectMutation.mutate({ approvalId: approval.id })
+                      }
+                      disabled={rejectMutation.isPending}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      </PopoverContent>
+    </Popover>
   );
 }
