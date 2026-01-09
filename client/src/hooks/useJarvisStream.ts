@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getSocket,
   type JarvisThinkingEvent,
+  type JarvisThinkingChunkEvent,
   type JarvisToolStartEvent,
   type JarvisToolEndEvent,
   type JarvisIterationEvent,
@@ -111,6 +112,38 @@ export function useJarvisStream() {
       }));
     };
 
+    const handleThinkingChunk = (event: JarvisThinkingChunkEvent) => {
+      if (activeTaskIdRef.current === null) {
+        activeTaskIdRef.current = event.taskId;
+      }
+      if (event.taskId !== activeTaskIdRef.current) return;
+
+      setState(prev => {
+        const steps = [...prev.steps];
+        const lastStep = steps[steps.length - 1];
+
+        if (lastStep && lastStep.type === "thinking") {
+          steps[steps.length - 1] = {
+            ...lastStep,
+            content: (lastStep.content || "") + event.chunk,
+          };
+        } else {
+          steps.push({
+            id: crypto.randomUUID(),
+            type: "thinking",
+            content: event.chunk,
+            timestamp: event.timestamp,
+          });
+        }
+
+        return {
+          ...prev,
+          taskId: event.taskId,
+          steps,
+        };
+      });
+    };
+
     const handleToolStart = (event: JarvisToolStartEvent) => {
       console.info("[JARVIS] tool_start:", event.toolName, event.taskId);
       if (event.taskId !== activeTaskIdRef.current) return;
@@ -216,6 +249,7 @@ export function useJarvisStream() {
     };
 
     socket.on("jarvis:thinking", handleThinking);
+    socket.on("jarvis:thinking_chunk", handleThinkingChunk);
     socket.on("jarvis:tool_start", handleToolStart);
     socket.on("jarvis:tool_end", handleToolEnd);
     socket.on("jarvis:iteration", handleIteration);
@@ -224,6 +258,7 @@ export function useJarvisStream() {
 
     return () => {
       socket.off("jarvis:thinking", handleThinking);
+      socket.off("jarvis:thinking_chunk", handleThinkingChunk);
       socket.off("jarvis:tool_start", handleToolStart);
       socket.off("jarvis:tool_end", handleToolEnd);
       socket.off("jarvis:iteration", handleIteration);

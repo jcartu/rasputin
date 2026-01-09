@@ -88,6 +88,11 @@ interface ServerToClientEvents {
     content: string;
     timestamp: number;
   }) => void;
+  "jarvis:thinking_chunk": (data: {
+    taskId: number;
+    chunk: string;
+    timestamp: number;
+  }) => void;
   "jarvis:tool_start": (data: {
     taskId: number;
     toolName: string;
@@ -509,6 +514,14 @@ async function handleJarvisTask(
           socket.emit("jarvis:thinking", {
             taskId,
             content: thought,
+            timestamp: Date.now(),
+          });
+        },
+        onThinkingChunk: (chunk: string) => {
+          if (activeQueries.get(queryKey)?.cancelled) return;
+          socket.emit("jarvis:thinking_chunk", {
+            taskId,
+            chunk,
             timestamp: Date.now(),
           });
         },

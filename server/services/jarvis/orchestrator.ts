@@ -1627,6 +1627,7 @@ export interface OrchestratorStep {
 
 export interface OrchestratorCallbacks {
   onThinking: (thought: string) => void;
+  onThinkingChunk?: (chunk: string) => void;
   onToolCall: (toolCall: ToolCall) => void;
   onToolResult: (result: ToolResult) => void;
   onComplete: (summary: string, artifacts?: unknown[]) => void;
@@ -1823,10 +1824,11 @@ function toAnthropicTools(
   }));
 }
 
-// Call Anthropic Claude API directly
+// Call Anthropic Claude API directly with streaming support
 async function callAnthropic(
   messages: OpenRouterMessage[],
-  systemPrompt: string
+  systemPrompt: string,
+  onChunk?: (chunk: string) => void
 ): Promise<OpenRouterResponse> {
   const anthropicMessages = toAnthropicMessages(messages);
   const anthropicTools = toAnthropicTools(JARVIS_TOOLS);
@@ -1844,6 +1846,7 @@ async function callAnthropic(
       system: systemPrompt,
       messages: anthropicMessages,
       tools: anthropicTools,
+      stream: !!onChunk,
     }),
   });
 
@@ -1852,9 +1855,107 @@ async function callAnthropic(
     throw new Error(`Anthropic API error: ${response.status} ${error}`);
   }
 
+  if (onChunk && response.body) {
+    const toolCalls: OpenRouterToolCall[] = [];
+    let textContent = "";
+    let responseId = "";
+    let stopReason = "stop";
+    const toolInputBuffers: Map<number, string> = new Map();
+    const toolBlocks: Map<number, { id: string; name: string; input: string }> =
+      new Map();
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6);
+        if (data === "[DONE]") continue;
+
+        try {
+          const event = JSON.parse(data);
+
+          switch (event.type) {
+            case "message_start":
+              responseId = event.message?.id || "";
+              break;
+            case "content_block_start":
+              if (event.content_block?.type === "tool_use") {
+                toolBlocks.set(event.index, {
+                  id: event.content_block.id,
+                  name: event.content_block.name,
+                  input: "",
+                });
+                toolInputBuffers.set(event.index, "");
+              }
+              break;
+            case "content_block_delta":
+              if (event.delta?.type === "text_delta" && event.delta.text) {
+                textContent += event.delta.text;
+                onChunk(event.delta.text);
+              } else if (
+                event.delta?.type === "input_json_delta" &&
+                event.delta.partial_json
+              ) {
+                const existing = toolInputBuffers.get(event.index) || "";
+                toolInputBuffers.set(
+                  event.index,
+                  existing + event.delta.partial_json
+                );
+              }
+              break;
+            case "content_block_stop":
+              const toolBlock = toolBlocks.get(event.index);
+              if (toolBlock) {
+                const inputJson = toolInputBuffers.get(event.index) || "{}";
+                toolCalls.push({
+                  id: toolBlock.id,
+                  type: "function",
+                  function: {
+                    name: toolBlock.name,
+                    arguments: inputJson,
+                  },
+                });
+              }
+              break;
+            case "message_delta":
+              if (event.delta?.stop_reason) {
+                stopReason = event.delta.stop_reason;
+              }
+              break;
+          }
+        } catch {
+          // Ignore parse errors for malformed chunks
+        }
+      }
+    }
+
+    return {
+      id: responseId,
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: textContent || null,
+            tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+          },
+          finish_reason: stopReason,
+        },
+      ],
+    };
+  }
+
   const data = await response.json();
 
-  // Convert Anthropic response to OpenRouter format
   const toolCalls: OpenRouterToolCall[] = [];
   let textContent = "";
 
@@ -1891,7 +1992,8 @@ async function callAnthropic(
 // Call Cerebras API (OpenAI-compatible)
 async function callCerebras(
   messages: OpenRouterMessage[],
-  systemPrompt: string
+  systemPrompt: string,
+  _onChunk?: (chunk: string) => void
 ): Promise<OpenRouterResponse> {
   const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
     method: "POST",
@@ -1919,7 +2021,8 @@ async function callCerebras(
 // Call Gemini API
 async function callGemini(
   messages: OpenRouterMessage[],
-  systemPrompt: string
+  systemPrompt: string,
+  _onChunk?: (chunk: string) => void
 ): Promise<OpenRouterResponse> {
   // Convert to Gemini format
   const geminiContents = messages.map(msg => ({
@@ -1999,7 +2102,8 @@ async function callGemini(
 // Call Grok (xAI) API - OpenAI-compatible
 async function callGrok(
   messages: OpenRouterMessage[],
-  systemPrompt: string
+  systemPrompt: string,
+  _onChunk?: (chunk: string) => void
 ): Promise<OpenRouterResponse> {
   const response = await fetch("https://api.x.ai/v1/chat/completions", {
     method: "POST",
@@ -2027,38 +2131,63 @@ async function callGrok(
 // Main LLM call function with provider selection and fallback
 async function callLLM(
   messages: OpenRouterMessage[],
-  systemPrompt: string
+  systemPrompt: string,
+  onChunk?: (chunk: string) => void
 ): Promise<OpenRouterResponse> {
   const providers: Array<{
     name: InferenceProvider;
-    fn: typeof callAnthropic;
+    fn: (
+      m: OpenRouterMessage[],
+      s: string,
+      c?: (chunk: string) => void
+    ) => Promise<OpenRouterResponse>;
     hasKey: boolean;
+    supportsStreaming: boolean;
   }> = [
-    { name: "anthropic", fn: callAnthropic, hasKey: !!ANTHROPIC_API_KEY },
-    { name: "cerebras", fn: callCerebras, hasKey: !!CEREBRAS_API_KEY },
-    { name: "gemini", fn: callGemini, hasKey: !!GEMINI_API_KEY },
-    { name: "grok", fn: callGrok, hasKey: !!XAI_API_KEY },
+    {
+      name: "anthropic",
+      fn: callAnthropic,
+      hasKey: !!ANTHROPIC_API_KEY,
+      supportsStreaming: true,
+    },
+    {
+      name: "cerebras",
+      fn: callCerebras,
+      hasKey: !!CEREBRAS_API_KEY,
+      supportsStreaming: false,
+    },
+    {
+      name: "gemini",
+      fn: callGemini,
+      hasKey: !!GEMINI_API_KEY,
+      supportsStreaming: false,
+    },
+    {
+      name: "grok",
+      fn: callGrok,
+      hasKey: !!XAI_API_KEY,
+      supportsStreaming: false,
+    },
   ];
 
-  // Try current provider first
   const currentIdx = providers.findIndex(p => p.name === currentProvider);
   if (currentIdx > 0) {
     const [current] = providers.splice(currentIdx, 1);
     providers.unshift(current);
   }
 
-  // Try each provider in order
   for (const provider of providers) {
     if (!provider.hasKey) continue;
 
     try {
-      console.log(`[JARVIS] Calling ${provider.name} API...`);
-      const result = await provider.fn(messages, systemPrompt);
-      console.log(`[JARVIS] ${provider.name} call successful`);
+      console.info(`[JARVIS] Calling ${provider.name} API...`);
+      const streamCallback =
+        onChunk && provider.supportsStreaming ? onChunk : undefined;
+      const result = await provider.fn(messages, systemPrompt, streamCallback);
+      console.info(`[JARVIS] ${provider.name} call successful`);
       return result;
     } catch (error) {
       console.error(`[JARVIS] ${provider.name} failed:`, error);
-      // Continue to next provider
     }
   }
 
@@ -2102,7 +2231,11 @@ export async function runOrchestrator(
     }
 
     try {
-      const response = await callLLM(messages, systemPrompt);
+      const response = await callLLM(
+        messages,
+        systemPrompt,
+        callbacks.onThinkingChunk
+      );
 
       const choice = response.choices[0];
       if (!choice) {
@@ -2112,7 +2245,7 @@ export async function runOrchestrator(
       const assistantMessage = choice.message;
       const toolCalls: ToolCall[] = [];
 
-      if (assistantMessage.content) {
+      if (assistantMessage.content && !callbacks.onThinkingChunk) {
         callbacks.onThinking(assistantMessage.content);
       }
 

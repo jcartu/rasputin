@@ -6,6 +6,12 @@ export interface JarvisThinkingEvent {
   timestamp: number;
 }
 
+export interface JarvisThinkingChunkEvent {
+  taskId: number;
+  chunk: string;
+  timestamp: number;
+}
+
 export interface JarvisToolStartEvent {
   taskId: number;
   toolName: string;
