@@ -19,6 +19,7 @@ import {
   getSelfEvolutionTools,
   executeSelfEvolutionTool,
 } from "../selfEvolution/tools";
+import { runAgentTeam, type TeamCallback } from "./agentTeams";
 
 const execAsync = promisify(exec);
 
@@ -3706,11 +3707,160 @@ Error: ${error instanceof Error ? error.message : String(error)}`;
   }
 }
 
+export async function spawnAgentTeam(
+  query: string,
+  onProgress?: (message: string) => void
+): Promise<string> {
+  try {
+    const callbacks: TeamCallback = {
+      onPlanCreated: subtasks => {
+        onProgress?.(
+          `Plan created: ${subtasks.length} subtasks\n${subtasks.map(s => `  - ${s.assignedAgent}: ${s.description}`).join("\n")}`
+        );
+      },
+      onAgentStart: (agent, subtask) => {
+        onProgress?.(`${agent} starting: ${subtask.description}`);
+      },
+      onAgentProgress: (agent, message) => {
+        onProgress?.(`${agent}: ${message}`);
+      },
+      onAgentComplete: (agent, _subtask, result) => {
+        onProgress?.(`${agent} complete: ${result.substring(0, 100)}...`);
+      },
+      onAgentError: (agent, _subtask, error) => {
+        onProgress?.(`${agent} error: ${error}`);
+      },
+      onTeamMessage: message => {
+        onProgress?.(`${message.from} -> ${message.to}: ${message.content}`);
+      },
+      onSynthesisStart: () => {
+        onProgress?.(`Synthesizing results from all agents...`);
+      },
+      onComplete: result => {
+        onProgress?.(`Team task complete! Result length: ${result.length}`);
+      },
+      onError: error => {
+        onProgress?.(`Team error: ${error}`);
+      },
+    };
+
+    const result = await runAgentTeam(query, callbacks);
+    return `Agent Team Result:\n\n${result}`;
+  } catch (error) {
+    return `Agent team error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function databaseQuery(
+  querySql: string,
+  _params?: unknown[]
+): Promise<string> {
+  try {
+    const normalizedSql = querySql.trim().toLowerCase();
+    if (
+      !normalizedSql.startsWith("select") &&
+      !normalizedSql.startsWith("show") &&
+      !normalizedSql.startsWith("describe") &&
+      !normalizedSql.startsWith("explain")
+    ) {
+      return "Error: Only SELECT, SHOW, DESCRIBE, and EXPLAIN queries are allowed for safety.";
+    }
+
+    const dangerousPatterns = [
+      /;\s*(drop|delete|update|insert|alter|create|truncate)/i,
+      /into\s+outfile/i,
+      /load_file/i,
+    ];
+    for (const pattern of dangerousPatterns) {
+      if (pattern.test(querySql)) {
+        return "Error: Query contains potentially dangerous patterns.";
+      }
+    }
+
+    const db = await getDb();
+    if (!db) {
+      return "Error: Database not available.";
+    }
+    const result = await db.execute(querySql);
+    const rows = (result as unknown[])[0] as unknown[];
+
+    if (!rows || rows.length === 0) {
+      return "Query executed successfully. No rows returned.";
+    }
+
+    const limitedRows = rows.slice(0, 100);
+    const jsonResult = JSON.stringify(limitedRows, null, 2);
+
+    if (jsonResult.length > 10000) {
+      return `Query returned ${rows.length} rows. First 100 rows (truncated):\n${jsonResult.substring(0, 10000)}...`;
+    }
+
+    return `Query returned ${rows.length} rows:\n${jsonResult}`;
+  } catch (error) {
+    return `Database query error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function analyzeScreenshot(
+  imagePathOrUrl: string,
+  question: string
+): Promise<string> {
+  try {
+    const { invokeLLM } = await import("../../_core/llm");
+
+    let imageContent: { type: "image_url"; image_url: { url: string } };
+
+    if (imagePathOrUrl.startsWith("http")) {
+      imageContent = {
+        type: "image_url",
+        image_url: { url: imagePathOrUrl },
+      };
+    } else {
+      const imageBuffer = await fs.readFile(imagePathOrUrl);
+      const base64 = imageBuffer.toString("base64");
+      const ext = path.extname(imagePathOrUrl).slice(1) || "png";
+      const mimeType = ext === "jpg" ? "image/jpeg" : `image/${ext}`;
+      imageContent = {
+        type: "image_url",
+        image_url: { url: `data:${mimeType};base64,${base64}` },
+      };
+    }
+
+    const response = await invokeLLM({
+      messages: [
+        {
+          role: "user",
+          content: [imageContent, { type: "text", text: question }],
+        },
+      ],
+    });
+
+    const content = response.choices[0]?.message?.content;
+    return typeof content === "string"
+      ? content
+      : "Failed to analyze screenshot";
+  } catch (error) {
+    return `Screenshot analysis error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 export async function executeTool(
   name: string,
   input: Record<string, unknown>
 ): Promise<string> {
   switch (name) {
+    case "spawn_agent_team":
+      return spawnAgentTeam(input.query as string);
+    case "database_query":
+      return databaseQuery(
+        input.sql as string,
+        input.params as unknown[] | undefined
+      );
+    case "analyze_screenshot":
+      return analyzeScreenshot(
+        input.imagePathOrUrl as string,
+        input.question as string
+      );
     case "web_search":
       return webSearch(input.query as string);
     case "searxng_search":
@@ -4891,6 +5041,49 @@ export function getAvailableTools(): Array<{
           type: "number",
           description: "Expected HTTP status code (default: 200)",
           required: false,
+        },
+      },
+    },
+    {
+      name: "spawn_agent_team",
+      description:
+        "Spawn a team of specialized agents (researcher, analyst, coder, writer) to collaboratively solve complex multi-faceted tasks. Use for tasks that require multiple types of expertise working together.",
+      parameters: {
+        query: {
+          type: "string",
+          description: "The complex task or query for the agent team to solve",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "database_query",
+      description:
+        "Execute read-only SQL queries against the RASPUTIN database. Only SELECT, SHOW, DESCRIBE, and EXPLAIN queries are allowed for safety.",
+      parameters: {
+        sql: {
+          type: "string",
+          description:
+            "The SQL query to execute (must be SELECT/SHOW/DESCRIBE/EXPLAIN)",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "analyze_screenshot",
+      description:
+        "Analyze an image or screenshot using vision AI. Can describe content, answer questions about what's shown, extract text, or verify UI elements.",
+      parameters: {
+        imagePathOrUrl: {
+          type: "string",
+          description: "Path to local image file or URL of image to analyze",
+          required: true,
+        },
+        question: {
+          type: "string",
+          description:
+            "Question to answer about the image (e.g., 'What does this screenshot show?', 'Is the login button visible?')",
+          required: true,
         },
       },
     },
