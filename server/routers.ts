@@ -817,7 +817,10 @@ export const appRouter = router({
                 throw error;
               }
             },
-            { memoryContext: memoryPromptAddition }
+            {
+              memoryContext: memoryPromptAddition,
+              conversationHistory: input.conversationHistory,
+            }
           );
         } catch (error) {
           if (

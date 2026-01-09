@@ -2334,6 +2334,7 @@ async function callLLM(
 export interface OrchestratorOptions {
   maxIterations?: number;
   memoryContext?: string;
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
 }
 
 export async function runOrchestrator(
@@ -2345,8 +2346,16 @@ export async function runOrchestrator(
   ) => Promise<string>,
   options: OrchestratorOptions = {}
 ): Promise<void> {
-  const { maxIterations = 15, memoryContext = "" } = options;
+  const {
+    maxIterations = 15,
+    memoryContext = "",
+    conversationHistory = [],
+  } = options;
   const messages: OpenRouterMessage[] = [];
+
+  for (const msg of conversationHistory) {
+    messages.push({ role: msg.role, content: msg.content });
+  }
 
   messages.push({ role: "user", content: task });
 
