@@ -2183,6 +2183,9 @@ async function callLLM(
       console.info(`[JARVIS] Calling ${provider.name} API...`);
       const streamCallback =
         onChunk && provider.supportsStreaming ? onChunk : undefined;
+      console.info(
+        `[JARVIS] Streaming enabled: ${!!streamCallback}, provider supports: ${provider.supportsStreaming}`
+      );
       const result = await provider.fn(messages, systemPrompt, streamCallback);
       console.info(`[JARVIS] ${provider.name} call successful`);
       return result;

@@ -519,6 +519,7 @@ async function handleJarvisTask(
         },
         onThinkingChunk: (chunk: string) => {
           if (activeQueries.get(queryKey)?.cancelled) return;
+          console.info("[JARVIS WS] Streaming chunk:", chunk.slice(0, 50));
           socket.emit("jarvis:thinking_chunk", {
             taskId,
             chunk,
