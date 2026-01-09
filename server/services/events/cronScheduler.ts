@@ -59,38 +59,42 @@ export class CronScheduler {
    * Check for due jobs and execute them
    */
   private async checkAndExecute(): Promise<void> {
-    const db = await getDb();
-    if (!db) return;
+    try {
+      const db = await getDb();
+      if (!db) return;
 
-    const now = new Date();
+      const now = new Date();
 
-    // Get all active schedule triggers
-    const triggers = await db
-      .select()
-      .from(eventTriggers)
-      .where(
-        and(
-          eq(eventTriggers.triggerType, "schedule"),
-          eq(eventTriggers.isEnabled, 1)
-        )
-      );
+      // Get all active schedule triggers
+      const triggers = await db
+        .select()
+        .from(eventTriggers)
+        .where(
+          and(
+            eq(eventTriggers.triggerType, "schedule"),
+            eq(eventTriggers.isEnabled, 1)
+          )
+        );
 
-    for (const trigger of triggers) {
-      if (!trigger.cronExpression) continue;
+      for (const trigger of triggers) {
+        if (!trigger.cronExpression) continue;
 
-      const lastRun = lastRunTimes.get(trigger.id);
+        const lastRun = lastRunTimes.get(trigger.id);
 
-      // Check if this trigger should run now
-      const shouldRun = this.shouldRunNow(
-        trigger.cronExpression,
-        lastRun,
-        "UTC"
-      );
+        // Check if this trigger should run now
+        const shouldRun = this.shouldRunNow(
+          trigger.cronExpression,
+          lastRun,
+          "UTC"
+        );
 
-      if (shouldRun) {
-        await this.executeTrigger(trigger, now);
-        lastRunTimes.set(trigger.id, now);
+        if (shouldRun) {
+          await this.executeTrigger(trigger, now);
+          lastRunTimes.set(trigger.id, now);
+        }
       }
+    } catch (error) {
+      console.error("[CronScheduler] Error checking scheduled tasks:", error);
     }
   }
 

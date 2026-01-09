@@ -9,6 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { initializeWebSocket } from "../services/websocket";
+import { cronScheduler } from "../services/events/cronScheduler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -66,6 +67,10 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+
+    // Start the cron scheduler for scheduled JARVIS tasks
+    cronScheduler.start();
+    console.log("Cron scheduler started for scheduled tasks");
   });
 }
 

@@ -4381,6 +4381,13 @@ export async function analyzeScreenshot(
   imagePathOrUrl: string,
   question: string
 ): Promise<string> {
+  return analyzeImage(imagePathOrUrl, question);
+}
+
+export async function analyzeImage(
+  imagePathOrUrl: string,
+  question: string
+): Promise<string> {
   try {
     const { invokeLLM } = await import("../../_core/llm");
 
@@ -4412,11 +4419,465 @@ export async function analyzeScreenshot(
     });
 
     const content = response.choices[0]?.message?.content;
-    return typeof content === "string"
-      ? content
-      : "Failed to analyze screenshot";
+    return typeof content === "string" ? content : "Failed to analyze image";
   } catch (error) {
-    return `Screenshot analysis error: ${error instanceof Error ? error.message : String(error)}`;
+    return `Image analysis error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function compareImages(
+  image1: string,
+  image2: string,
+  focusArea?: string
+): Promise<string> {
+  try {
+    const { invokeLLM } = await import("../../_core/llm");
+
+    const loadImage = async (
+      imagePath: string
+    ): Promise<{ type: "image_url"; image_url: { url: string } }> => {
+      if (imagePath.startsWith("http")) {
+        return { type: "image_url", image_url: { url: imagePath } };
+      }
+      const imageBuffer = await fs.readFile(imagePath);
+      const base64 = imageBuffer.toString("base64");
+      const ext = path.extname(imagePath).slice(1) || "png";
+      const mimeType = ext === "jpg" ? "image/jpeg" : `image/${ext}`;
+      return {
+        type: "image_url",
+        image_url: { url: `data:${mimeType};base64,${base64}` },
+      };
+    };
+
+    const img1Content = await loadImage(image1);
+    const img2Content = await loadImage(image2);
+
+    const focusPrompt = focusArea
+      ? `Focus especially on ${focusArea} differences.`
+      : "";
+
+    const response = await invokeLLM({
+      messages: [
+        {
+          role: "user",
+          content: [
+            img1Content,
+            img2Content,
+            {
+              type: "text",
+              text: `Compare these two images and describe the differences between them. ${focusPrompt}
+
+Please provide:
+1. Overall similarity assessment
+2. Key differences found
+3. Elements that are the same
+4. Any potential issues or concerns`,
+            },
+          ],
+        },
+      ],
+    });
+
+    const content = response.choices[0]?.message?.content;
+    return typeof content === "string" ? content : "Failed to compare images";
+  } catch (error) {
+    return `Image comparison error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function extractTextFromImage(imagePath: string): Promise<string> {
+  return analyzeImage(
+    imagePath,
+    "Extract ALL text visible in this image. Return the text exactly as it appears, preserving layout where possible. Include all text from headers, buttons, labels, body text, captions, watermarks, etc."
+  );
+}
+
+export async function readPdf(
+  pdfPath: string,
+  pages?: string
+): Promise<string> {
+  await ensureSandbox();
+
+  const resolvedPath = pdfPath.startsWith("/")
+    ? pdfPath
+    : path.join(JARVIS_SANDBOX, pdfPath);
+
+  try {
+    const { execAsync } = await import("util").then(u => ({
+      execAsync: u.promisify(exec),
+    }));
+
+    let pageArg = "";
+    if (pages && pages !== "all") {
+      if (pages.includes("-")) {
+        const [start, end] = pages.split("-");
+        pageArg = `-f ${start} -l ${end}`;
+      } else if (pages.includes(",")) {
+        pageArg = `-f ${pages.split(",")[0]} -l ${pages.split(",").pop()}`;
+      } else {
+        pageArg = `-f ${pages} -l ${pages}`;
+      }
+    }
+
+    const { stdout, stderr } = await execAsync(
+      `pdftotext ${pageArg} "${resolvedPath}" - 2>&1 || cat "${resolvedPath}" | strings | head -500`,
+      { maxBuffer: 1024 * 1024 * 5, timeout: 60000 }
+    );
+
+    const output = stdout || stderr;
+
+    if (!output || output.trim().length === 0) {
+      return "Could not extract text from PDF. The PDF may be image-based. Try using analyze_document with a question instead.";
+    }
+
+    if (output.length > 50000) {
+      return (
+        output.substring(0, 50000) + "\n\n... [truncated - PDF text too long]"
+      );
+    }
+
+    return output;
+  } catch (error) {
+    return `PDF read error: ${error instanceof Error ? error.message : String(error)}. Note: pdftotext may not be installed. Install with: apt-get install poppler-utils`;
+  }
+}
+
+export async function analyzeDocument(
+  documentPath: string,
+  question: string
+): Promise<string> {
+  await ensureSandbox();
+
+  const resolvedPath = documentPath.startsWith("/")
+    ? documentPath
+    : path.join(JARVIS_SANDBOX, documentPath);
+
+  try {
+    const ext = path.extname(resolvedPath).toLowerCase();
+
+    if ([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"].includes(ext)) {
+      return analyzeImage(resolvedPath, question);
+    }
+
+    if (ext === ".pdf") {
+      const textContent = await readPdf(resolvedPath);
+
+      if (
+        textContent.includes("Could not extract") ||
+        textContent.trim().length < 100
+      ) {
+        return analyzeImage(
+          resolvedPath,
+          `This is a PDF document. ${question}`
+        );
+      }
+
+      const { invokeLLM } = await import("../../_core/llm");
+      const response = await invokeLLM({
+        messages: [
+          {
+            role: "user",
+            content: `Here is the content of a PDF document:\n\n${textContent.substring(0, 30000)}\n\n---\n\nQuestion: ${question}`,
+          },
+        ],
+      });
+
+      const content = response.choices[0]?.message?.content;
+      return typeof content === "string"
+        ? content
+        : "Failed to analyze document";
+    }
+
+    const textContent = await fs.readFile(resolvedPath, "utf-8");
+    const { invokeLLM } = await import("../../_core/llm");
+    const response = await invokeLLM({
+      messages: [
+        {
+          role: "user",
+          content: `Here is the content of a document:\n\n${textContent.substring(0, 30000)}\n\n---\n\nQuestion: ${question}`,
+        },
+      ],
+    });
+
+    const content = response.choices[0]?.message?.content;
+    return typeof content === "string" ? content : "Failed to analyze document";
+  } catch (error) {
+    return `Document analysis error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function convertDocument(
+  inputPath: string,
+  outputFormat: string,
+  outputPath?: string
+): Promise<string> {
+  await ensureSandbox();
+
+  const resolvedInput = inputPath.startsWith("/")
+    ? inputPath
+    : path.join(JARVIS_SANDBOX, inputPath);
+
+  try {
+    const ext = path.extname(resolvedInput).toLowerCase();
+    let content: string;
+
+    if (ext === ".pdf") {
+      content = await readPdf(resolvedInput);
+    } else {
+      content = await fs.readFile(resolvedInput, "utf-8");
+    }
+
+    let converted: string;
+    switch (outputFormat.toLowerCase()) {
+      case "text":
+      case "txt":
+        converted = content
+          .replace(/<[^>]+>/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        break;
+
+      case "markdown":
+      case "md":
+        converted = content;
+        if (ext === ".html" || ext === ".htm") {
+          converted = content
+            .replace(/<h1[^>]*>(.*?)<\/h1>/gi, "# $1\n\n")
+            .replace(/<h2[^>]*>(.*?)<\/h2>/gi, "## $1\n\n")
+            .replace(/<h3[^>]*>(.*?)<\/h3>/gi, "### $1\n\n")
+            .replace(/<p[^>]*>(.*?)<\/p>/gi, "$1\n\n")
+            .replace(/<strong[^>]*>(.*?)<\/strong>/gi, "**$1**")
+            .replace(/<b[^>]*>(.*?)<\/b>/gi, "**$1**")
+            .replace(/<em[^>]*>(.*?)<\/em>/gi, "*$1*")
+            .replace(/<i[^>]*>(.*?)<\/i>/gi, "*$1*")
+            .replace(/<a[^>]+href="([^"]+)"[^>]*>(.*?)<\/a>/gi, "[$2]($1)")
+            .replace(/<li[^>]*>(.*?)<\/li>/gi, "- $1\n")
+            .replace(/<[^>]+>/g, "")
+            .trim();
+        }
+        break;
+
+      case "html":
+        if (ext === ".md" || ext === ".markdown") {
+          converted = content
+            .replace(/^### (.*$)/gim, "<h3>$1</h3>")
+            .replace(/^## (.*$)/gim, "<h2>$1</h2>")
+            .replace(/^# (.*$)/gim, "<h1>$1</h1>")
+            .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+            .replace(/\*(.*?)\*/g, "<em>$1</em>")
+            .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2">$1</a>')
+            .replace(/^- (.*$)/gim, "<li>$1</li>")
+            .replace(/\n\n/g, "</p><p>")
+            .replace(/^/, "<p>")
+            .replace(/$/, "</p>");
+        } else {
+          converted = `<pre>${content
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")}</pre>`;
+        }
+        break;
+
+      case "json":
+        converted = JSON.stringify(
+          {
+            source: inputPath,
+            format: ext,
+            content: content,
+            wordCount: content.split(/\s+/).length,
+            charCount: content.length,
+          },
+          null,
+          2
+        );
+        break;
+
+      default:
+        return `Unsupported output format: ${outputFormat}. Supported: text, markdown, html, json`;
+    }
+
+    if (outputPath) {
+      const resolvedOutput = outputPath.startsWith("/")
+        ? outputPath
+        : path.join(JARVIS_SANDBOX, outputPath);
+      await fs.writeFile(resolvedOutput, converted, "utf-8");
+      return `Document converted and saved to: ${resolvedOutput}`;
+    }
+
+    if (converted.length > 10000) {
+      return converted.substring(0, 10000) + "\n\n... [truncated]";
+    }
+
+    return converted;
+  } catch (error) {
+    return `Document conversion error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function transcribeAudio(
+  audioPath: string,
+  language?: string
+): Promise<string> {
+  await ensureSandbox();
+
+  const resolvedPath = audioPath.startsWith("/")
+    ? audioPath
+    : path.join(JARVIS_SANDBOX, audioPath);
+
+  try {
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) {
+      return "Error: OPENAI_API_KEY not set. Audio transcription requires OpenAI Whisper API.";
+    }
+
+    const audioBuffer = await fs.readFile(resolvedPath);
+    const ext = path.extname(resolvedPath).slice(1) || "mp3";
+
+    const formData = new FormData();
+    const uint8Array = new Uint8Array(audioBuffer);
+    const blob = new Blob([uint8Array], { type: `audio/${ext}` });
+    formData.append("file", blob, path.basename(resolvedPath));
+    formData.append("model", "whisper-1");
+    if (language) {
+      formData.append("language", language);
+    }
+
+    const response = await fetch(
+      "https://api.openai.com/v1/audio/transcriptions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${openaiKey}`,
+        },
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return `Transcription API error: ${response.status} - ${errorText}`;
+    }
+
+    const result = await response.json();
+    return `Transcription:\n\n${result.text}`;
+  } catch (error) {
+    return `Audio transcription error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function extractAudioFromVideo(
+  videoPath: string,
+  outputPath?: string
+): Promise<string> {
+  await ensureSandbox();
+
+  const resolvedVideo = videoPath.startsWith("/")
+    ? videoPath
+    : path.join(JARVIS_SANDBOX, videoPath);
+
+  const baseName = path.basename(resolvedVideo, path.extname(resolvedVideo));
+  const resolvedOutput =
+    outputPath ||
+    path.join(JARVIS_SANDBOX, `${baseName}_audio_${Date.now()}.mp3`);
+
+  try {
+    const { stdout, stderr } = await execAsync(
+      `ffmpeg -i "${resolvedVideo}" -vn -acodec libmp3lame -q:a 2 "${resolvedOutput}" -y`,
+      { timeout: 300000 }
+    );
+
+    const exists = await verifyFileCreated(resolvedOutput);
+    if (!exists) {
+      return `Error: Audio extraction may have failed. ffmpeg output: ${stderr || stdout}`;
+    }
+
+    const stats = await fs.stat(resolvedOutput);
+    return `Audio extracted successfully!
+Output: ${resolvedOutput}
+Size: ${Math.round(stats.size / 1024)} KB
+
+Use transcribe_audio("${resolvedOutput}") to get the text transcription.`;
+  } catch (error) {
+    return `Audio extraction error: ${error instanceof Error ? error.message : String(error)}. Note: ffmpeg must be installed.`;
+  }
+}
+
+export async function generateSpeech(
+  text: string,
+  outputPath: string,
+  voice?: string
+): Promise<string> {
+  await ensureSandbox();
+
+  const resolvedOutput = outputPath.startsWith("/")
+    ? outputPath
+    : path.join(JARVIS_SANDBOX, outputPath);
+
+  try {
+    const elevenLabsKey = process.env.ELEVENLABS_API_KEY;
+    const openaiKey = process.env.OPENAI_API_KEY;
+
+    if (elevenLabsKey) {
+      const voiceId = voice || "21m00Tcm4TlvDq8ikWAM";
+      const response = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+        {
+          method: "POST",
+          headers: {
+            "xi-api-key": elevenLabsKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text,
+            model_id: "eleven_monolingual_v1",
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`ElevenLabs API error: ${response.status}`);
+      }
+
+      const audioBuffer = Buffer.from(await response.arrayBuffer());
+      await fs.writeFile(resolvedOutput, audioBuffer);
+
+      return `Speech generated and saved to: ${resolvedOutput}`;
+    }
+
+    if (openaiKey) {
+      const selectedVoice = voice || "alloy";
+      const validVoices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
+      if (!validVoices.includes(selectedVoice)) {
+        return `Invalid voice. Choose from: ${validVoices.join(", ")}`;
+      }
+
+      const response = await fetch("https://api.openai.com/v1/audio/speech", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${openaiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "tts-1",
+          input: text,
+          voice: selectedVoice,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return `OpenAI TTS error: ${response.status} - ${errorText}`;
+      }
+
+      const audioBuffer = Buffer.from(await response.arrayBuffer());
+      await fs.writeFile(resolvedOutput, audioBuffer);
+
+      return `Speech generated and saved to: ${resolvedOutput}`;
+    }
+
+    return "Error: No TTS API key configured. Set ELEVENLABS_API_KEY or OPENAI_API_KEY.";
+  } catch (error) {
+    return `Speech generation error: ${error instanceof Error ? error.message : String(error)}`;
   }
 }
 
@@ -4436,6 +4897,51 @@ export async function executeTool(
       return analyzeScreenshot(
         input.imagePathOrUrl as string,
         input.question as string
+      );
+    case "analyze_image":
+      return analyzeImage(
+        input.imagePathOrUrl as string,
+        input.question as string
+      );
+    case "compare_images":
+      return compareImages(
+        input.image1 as string,
+        input.image2 as string,
+        input.focusArea as string | undefined
+      );
+    case "extract_text_from_image":
+      return extractTextFromImage(input.imagePath as string);
+    case "read_pdf":
+      return readPdf(
+        input.pdfPath as string,
+        input.pages as string | undefined
+      );
+    case "analyze_document":
+      return analyzeDocument(
+        input.documentPath as string,
+        input.question as string
+      );
+    case "convert_document":
+      return convertDocument(
+        input.inputPath as string,
+        input.outputFormat as string,
+        input.outputPath as string | undefined
+      );
+    case "transcribe_audio":
+      return transcribeAudio(
+        input.audioPath as string,
+        input.language as string | undefined
+      );
+    case "extract_audio_from_video":
+      return extractAudioFromVideo(
+        input.videoPath as string,
+        input.outputPath as string | undefined
+      );
+    case "generate_speech":
+      return generateSpeech(
+        input.text as string,
+        input.outputPath as string,
+        input.voice as string | undefined
       );
     case "create_event_trigger":
       return createEventTrigger(
@@ -6237,6 +6743,179 @@ export function getAvailableTools(): Array<{
           type: "string",
           description: "Path to the project to analyze",
           required: true,
+        },
+      },
+    },
+    // === VISION/IMAGE ANALYSIS TOOLS ===
+    {
+      name: "analyze_image",
+      description:
+        "Analyze an image using AI vision capabilities. Can describe images, extract text (OCR), identify objects, analyze UI screenshots, read charts/graphs, and answer questions about visual content.",
+      parameters: {
+        imagePathOrUrl: {
+          type: "string",
+          description: "Path to local image file or URL of image to analyze",
+          required: true,
+        },
+        question: {
+          type: "string",
+          description:
+            "Question to ask about the image (e.g., 'What text is in this image?', 'Describe this UI', 'What are the values in this chart?')",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "compare_images",
+      description:
+        "Compare two images and describe the differences. Useful for visual regression testing, before/after comparisons, and change detection.",
+      parameters: {
+        image1: {
+          type: "string",
+          description: "Path or URL of the first image",
+          required: true,
+        },
+        image2: {
+          type: "string",
+          description: "Path or URL of the second image",
+          required: true,
+        },
+        focusArea: {
+          type: "string",
+          description:
+            "Specific aspect to focus on (e.g., 'layout', 'colors', 'text', 'overall')",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "extract_text_from_image",
+      description:
+        "Extract all text content from an image using OCR (Optical Character Recognition). Returns structured text found in the image.",
+      parameters: {
+        imagePath: {
+          type: "string",
+          description: "Path to the image file",
+          required: true,
+        },
+      },
+    },
+    // === PDF/DOCUMENT PROCESSING TOOLS ===
+    {
+      name: "read_pdf",
+      description:
+        "Extract text content from a PDF file. Can optionally extract from specific pages.",
+      parameters: {
+        pdfPath: {
+          type: "string",
+          description: "Path to the PDF file",
+          required: true,
+        },
+        pages: {
+          type: "string",
+          description:
+            "Page range to extract (e.g., '1-5', '1,3,5', 'all'). Default: all",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "analyze_document",
+      description:
+        "Analyze a document (PDF, image, or text file) and answer questions about its content. Uses vision for PDFs with images/charts.",
+      parameters: {
+        documentPath: {
+          type: "string",
+          description: "Path to the document",
+          required: true,
+        },
+        question: {
+          type: "string",
+          description: "Question to answer about the document",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "convert_document",
+      description:
+        "Convert a document between formats (PDF to text, Markdown to HTML, etc.).",
+      parameters: {
+        inputPath: {
+          type: "string",
+          description: "Path to the input document",
+          required: true,
+        },
+        outputFormat: {
+          type: "string",
+          description: "Output format: 'text', 'markdown', 'html', 'json'",
+          required: true,
+        },
+        outputPath: {
+          type: "string",
+          description:
+            "Path for the output file (optional, returns content if not provided)",
+          required: false,
+        },
+      },
+    },
+    // === AUDIO/VIDEO PROCESSING TOOLS ===
+    {
+      name: "transcribe_audio",
+      description:
+        "Transcribe audio from a file to text using speech-to-text. Supports common audio formats (mp3, wav, m4a, webm, ogg).",
+      parameters: {
+        audioPath: {
+          type: "string",
+          description: "Path to the audio file",
+          required: true,
+        },
+        language: {
+          type: "string",
+          description:
+            "Language code (e.g., 'en', 'es', 'ja'). Default: auto-detect",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "extract_audio_from_video",
+      description:
+        "Extract the audio track from a video file for transcription or processing.",
+      parameters: {
+        videoPath: {
+          type: "string",
+          description: "Path to the video file",
+          required: true,
+        },
+        outputPath: {
+          type: "string",
+          description:
+            "Path for the output audio file (default: same name with .mp3)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "generate_speech",
+      description:
+        "Convert text to speech audio using text-to-speech. Creates an audio file from text input.",
+      parameters: {
+        text: {
+          type: "string",
+          description: "Text to convert to speech",
+          required: true,
+        },
+        outputPath: {
+          type: "string",
+          description: "Path for the output audio file",
+          required: true,
+        },
+        voice: {
+          type: "string",
+          description:
+            "Voice to use (default: 'alloy'). Options: alloy, echo, fable, onyx, nova, shimmer",
+          required: false,
         },
       },
     },
