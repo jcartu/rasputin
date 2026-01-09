@@ -46,6 +46,46 @@ export function registerGoogleAuthRoutes(app: Express) {
     console.warn(
       "[Google Auth] Google OAuth not configured - GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET missing"
     );
+
+    // In development, provide a bypass login route
+    if (
+      process.env.NODE_ENV === "development" ||
+      process.env.DEV_BYPASS_AUTH === "true"
+    ) {
+      console.log(
+        "[Google Auth] Dev bypass enabled - registering /api/auth/google as dev login"
+      );
+
+      app.get("/api/auth/google", async (req: Request, res: Response) => {
+        const openId = "dev_user_local";
+
+        // Upsert dev user in database
+        await db.upsertUser({
+          openId: openId,
+          name: "Dev User",
+          email: "dev@localhost",
+          avatarUrl: null,
+          loginMethod: "dev-bypass",
+          lastSignedIn: new Date(),
+        });
+
+        // Create session token
+        const sessionToken = await sdk.createSessionToken(openId, {
+          name: "Dev User",
+          expiresInMs: ONE_YEAR_MS,
+        });
+
+        // Set session cookie
+        const cookieOptions = getSessionCookieOptions(req);
+        res.cookie(COOKIE_NAME, sessionToken, {
+          ...cookieOptions,
+          maxAge: ONE_YEAR_MS,
+        });
+
+        console.log("[Google Auth] Dev session created");
+        res.redirect("/chat");
+      });
+    }
     return;
   }
 
