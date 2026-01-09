@@ -2,17 +2,10 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Send,
-  Mic,
-  Loader2,
-  Zap,
-  Sparkles,
-  Plus,
-  // ChevronDown,
-} from "lucide-react";
+import { Send, Mic, Loader2, Zap, Sparkles, Plus } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { ModelSelector } from "./ModelSelector";
+import { ExportMenu, type ExportContent } from "./ExportMenu";
 import type { QueryMode, SpeedTier } from "../../../shared/rasputin";
 
 interface Message {
@@ -220,11 +213,8 @@ export function ChatMain({
                     <div className="prose prose-invert prose-sm max-w-none">
                       <Streamdown>{message.content}</Streamdown>
 
-                      {/* Stats for assistant messages */}
-                      {(message.agreementPercentage ||
-                        message.latencyMs ||
-                        message.tokenCount) && (
-                        <div className="mt-3 pt-3 border-t border-border flex flex-wrap gap-3 text-xs text-muted-foreground">
+                      <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
+                        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                           {message.agreementPercentage !== null &&
                             message.agreementPercentage !== undefined && (
                               <span className="flex items-center gap-1">
@@ -248,7 +238,28 @@ export function ChatMain({
                             <span>${parseFloat(message.cost).toFixed(4)}</span>
                           )}
                         </div>
-                      )}
+                        <ExportMenu
+                          content={
+                            {
+                              title: `RASPUTIN ${mode === "consensus" ? "Consensus" : "Synthesis"} Response`,
+                              content: message.content,
+                              metadata: {
+                                date: new Date(
+                                  message.createdAt
+                                ).toLocaleString(),
+                                mode:
+                                  mode === "consensus"
+                                    ? "Consensus"
+                                    : "Synthesis",
+                                duration: message.latencyMs
+                                  ? `${(message.latencyMs / 1000).toFixed(1)}s`
+                                  : undefined,
+                              },
+                            } as ExportContent
+                          }
+                          size="sm"
+                        />
+                      </div>
                     </div>
                   ) : (
                     <p className="whitespace-pre-wrap">{message.content}</p>

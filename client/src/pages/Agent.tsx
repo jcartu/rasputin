@@ -78,6 +78,7 @@ import { WorkspaceIDE } from "@/components/WorkspaceIDE";
 import { ToolOutputPreview } from "@/components/ToolOutputPreview";
 import { HostsManager } from "@/components/HostsManager";
 import { ApprovalBadge, ApprovalWorkflow } from "@/components/ApprovalWorkflow";
+import { ExportMenu } from "@/components/ExportMenu";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -913,6 +914,21 @@ function ScheduleTab() {
   );
 }
 
+// Extract unique tools used from task
+function extractToolsFromTask(task: AgentTask): string[] {
+  const tools = new Set<string>();
+  for (const msg of task.messages) {
+    if (msg.steps) {
+      for (const step of msg.steps) {
+        if ((step.type === "tool" || step.type === "tool_call") && step.tool) {
+          tools.add(step.tool);
+        }
+      }
+    }
+  }
+  return Array.from(tools);
+}
+
 // Export task as markdown
 function exportTaskAsMarkdown(task: AgentTask): string {
   let md = `# ${task.title}\n\n`;
@@ -1484,18 +1500,29 @@ export default function AgentPage() {
                       )}
                     </button>
                     <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                      {task.messages.length > 0 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={e => {
-                            e.stopPropagation();
-                            handleExportTask(task);
-                          }}
-                        >
-                          <Download className="h-3 w-3" />
-                        </Button>
+                      {(task.messages.length > 0 ||
+                        task.status === "completed" ||
+                        task.status === "failed") && (
+                        <div onClick={e => e.stopPropagation()}>
+                          <ExportMenu
+                            content={{
+                              title: task.title,
+                              content: exportTaskAsMarkdown(task as AgentTask),
+                              metadata: {
+                                date: new Date(task.createdAt).toLocaleString(),
+                                mode: "JARVIS Agent",
+                                duration:
+                                  "durationMs" in task && task.durationMs
+                                    ? `${(task.durationMs / 1000).toFixed(1)}s`
+                                    : undefined,
+                                toolsUsed: extractToolsFromTask(
+                                  task as AgentTask
+                                ),
+                              },
+                            }}
+                            size="sm"
+                          />
+                        </div>
                       )}
                       <Button
                         variant="ghost"
