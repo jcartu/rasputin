@@ -4032,6 +4032,211 @@ export async function createGitHubPR(
   }
 }
 
+interface OperationConfidence {
+  tool: string;
+  operation: string;
+  confidence: number;
+  factors: string[];
+  verificationRequired: boolean;
+  suggestedVerification?: string;
+}
+
+const HIGH_RISK_TOOLS = new Set([
+  "write_file",
+  "execute_shell",
+  "execute_python",
+  "ssh_execute",
+  "ssh_write_file",
+  "git_commit",
+  "git_push",
+  "deploy_vercel",
+  "deploy_railway",
+  "docker_push",
+  "send_email",
+  "create_github_pr",
+]);
+
+const VERIFICATION_MAP: Record<string, string> = {
+  write_file: "read_file",
+  git_commit: "git_status",
+  git_push: "git_log",
+  deploy_vercel: "check_deployment_health",
+  deploy_railway: "check_deployment_health",
+  ssh_write_file: "ssh_read_file",
+  create_github_issue: "github_api",
+  create_github_pr: "github_api",
+};
+
+export function assessOperationConfidence(
+  toolName: string,
+  input: Record<string, unknown>,
+  previousResults: string[]
+): OperationConfidence {
+  const factors: string[] = [];
+  let confidence = 80;
+
+  if (HIGH_RISK_TOOLS.has(toolName)) {
+    confidence -= 20;
+    factors.push("High-risk operation");
+  }
+
+  if (previousResults.some(r => r.toLowerCase().includes("error"))) {
+    confidence -= 15;
+    factors.push("Previous errors in session");
+  }
+
+  if (!input || Object.keys(input).length === 0) {
+    confidence -= 10;
+    factors.push("Missing input parameters");
+  }
+
+  if (toolName.startsWith("ssh_") || toolName.includes("remote")) {
+    confidence -= 10;
+    factors.push("Remote operation");
+  }
+
+  if (toolName.includes("delete") || toolName.includes("remove")) {
+    confidence -= 25;
+    factors.push("Destructive operation");
+  }
+
+  confidence = Math.max(0, Math.min(100, confidence));
+
+  return {
+    tool: toolName,
+    operation: `${toolName}(${JSON.stringify(input).slice(0, 50)}...)`,
+    confidence,
+    factors,
+    verificationRequired: confidence < 60 || HIGH_RISK_TOOLS.has(toolName),
+    suggestedVerification: VERIFICATION_MAP[toolName],
+  };
+}
+
+export async function selfVerify(
+  operation: string,
+  expectedOutcome: string,
+  actualResult: string
+): Promise<string> {
+  const checks: string[] = [];
+  let passed = 0;
+  let failed = 0;
+
+  if (actualResult.toLowerCase().includes("error")) {
+    checks.push("FAIL: Result contains error indicators");
+    failed++;
+  } else {
+    checks.push("PASS: No error indicators in result");
+    passed++;
+  }
+
+  if (
+    actualResult.toLowerCase().includes("success") ||
+    actualResult.toLowerCase().includes("completed") ||
+    actualResult.toLowerCase().includes("created")
+  ) {
+    checks.push("PASS: Success indicators present");
+    passed++;
+  }
+
+  if (actualResult.length < 10) {
+    checks.push("WARN: Very short response - may indicate failure");
+  }
+
+  const keywordsToCheck = expectedOutcome
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(w => w.length > 4);
+  const matchedKeywords = keywordsToCheck.filter(kw =>
+    actualResult.toLowerCase().includes(kw)
+  );
+  if (matchedKeywords.length > keywordsToCheck.length / 2) {
+    checks.push(
+      `PASS: Expected keywords found (${matchedKeywords.length}/${keywordsToCheck.length})`
+    );
+    passed++;
+  } else if (keywordsToCheck.length > 0) {
+    checks.push(
+      `WARN: Few expected keywords found (${matchedKeywords.length}/${keywordsToCheck.length})`
+    );
+  }
+
+  const overallStatus = failed === 0 ? "VERIFIED" : "VERIFICATION_FAILED";
+  const confidenceScore = Math.round((passed / (passed + failed + 0.01)) * 100);
+
+  return `Self-Verification Report for: ${operation}
+
+Status: ${overallStatus}
+Confidence: ${confidenceScore}%
+
+Checks:
+${checks.map(c => `  ${c}`).join("\n")}
+
+Expected: ${expectedOutcome.slice(0, 100)}...
+Actual: ${actualResult.slice(0, 200)}...`;
+}
+
+export async function assessTaskConfidence(
+  taskDescription: string,
+  toolsUsed: string[],
+  results: string[]
+): Promise<string> {
+  let totalConfidence = 100;
+  const factors: string[] = [];
+
+  const riskyToolsUsed = toolsUsed.filter(t => HIGH_RISK_TOOLS.has(t));
+  if (riskyToolsUsed.length > 0) {
+    totalConfidence -= riskyToolsUsed.length * 10;
+    factors.push(`${riskyToolsUsed.length} high-risk tools used`);
+  }
+
+  const errorCount = results.filter(r =>
+    r.toLowerCase().includes("error")
+  ).length;
+  if (errorCount > 0) {
+    totalConfidence -= errorCount * 15;
+    factors.push(`${errorCount} tool errors encountered`);
+  }
+
+  if (toolsUsed.length > 10) {
+    totalConfidence -= 10;
+    factors.push("Many tools used - complex operation");
+  }
+
+  const successIndicators = results.filter(
+    r =>
+      r.toLowerCase().includes("success") ||
+      r.toLowerCase().includes("completed")
+  ).length;
+
+  if (successIndicators > results.length / 2) {
+    totalConfidence += 10;
+    factors.push("High success indicator ratio");
+  }
+
+  totalConfidence = Math.max(0, Math.min(100, totalConfidence));
+
+  let recommendation = "";
+  if (totalConfidence >= 80) {
+    recommendation = "High confidence - task likely completed successfully";
+  } else if (totalConfidence >= 50) {
+    recommendation = "Moderate confidence - recommend manual verification";
+  } else {
+    recommendation = "Low confidence - task may have failed, review required";
+  }
+
+  return `Task Confidence Assessment
+
+Task: ${taskDescription.slice(0, 100)}...
+Overall Confidence: ${totalConfidence}%
+Recommendation: ${recommendation}
+
+Factors:
+${factors.map(f => `  - ${f}`).join("\n") || "  - No specific factors identified"}
+
+Tools Used: ${toolsUsed.join(", ")}
+Results Analyzed: ${results.length}`;
+}
+
 export async function listMacros(userId: number): Promise<string> {
   try {
     const memoryService = getMemoryService();
@@ -4300,6 +4505,18 @@ export async function executeTool(
         input.subject as string,
         input.body as string,
         { html: input.html as boolean | undefined }
+      );
+    case "self_verify":
+      return selfVerify(
+        input.operation as string,
+        input.expectedOutcome as string,
+        input.actualResult as string
+      );
+    case "assess_task_confidence":
+      return assessTaskConfidence(
+        input.taskDescription as string,
+        input.toolsUsed as string[],
+        input.results as string[]
       );
     case "web_search":
       return webSearch(input.query as string);
@@ -5106,617 +5323,6 @@ export function getAvailableTools(): Array<{
       },
     },
     {
-      name: "git_clone",
-      description: "Clone a Git repository to a local directory.",
-      parameters: {
-        repoUrl: {
-          type: "string",
-          description: "URL of the Git repository to clone",
-          required: true,
-        },
-        outputPath: {
-          type: "string",
-          description: "Local directory to clone into",
-          required: true,
-        },
-        branch: {
-          type: "string",
-          description: "Specific branch to clone",
-          required: false,
-        },
-        depth: {
-          type: "number",
-          description: "Create a shallow clone with specified depth",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "git_init",
-      description: "Initialize a new Git repository in a directory.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to initialize Git repository",
-          required: true,
-        },
-        initialBranch: {
-          type: "string",
-          description: "Name for the initial branch (default: main)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "git_create_pr",
-      description:
-        "Create a GitHub Pull Request using the GitHub CLI (gh). Requires gh to be installed and authenticated.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the Git repository",
-          required: true,
-        },
-        title: {
-          type: "string",
-          description: "PR title",
-          required: true,
-        },
-        body: {
-          type: "string",
-          description: "PR description/body",
-          required: true,
-        },
-        base: {
-          type: "string",
-          description: "Base branch (default: main)",
-          required: false,
-        },
-        head: {
-          type: "string",
-          description: "Head branch (default: current branch)",
-          required: false,
-        },
-        draft: {
-          type: "boolean",
-          description: "Create as draft PR",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "npm_audit",
-      description:
-        "Run npm/pnpm security audit on a project to find vulnerable dependencies. Returns severity breakdown and remediation steps.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project directory containing package.json",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "security_analysis",
-      description:
-        "Comprehensive security analysis of a project including dependency audit, outdated package check, and security recommendations.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project directory to analyze",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "scaffold_project",
-      description:
-        "Create a new web application project with proper structure, config files, and boilerplate. Supports React, Next.js, Vue, Svelte, Express, FastAPI, and Rails.",
-      parameters: {
-        projectName: {
-          type: "string",
-          description: "Name of the project (will be used as folder name)",
-          required: true,
-        },
-        projectType: {
-          type: "string",
-          description:
-            "Type of project: react, nextjs, vue, svelte, express, fastapi, or rails",
-          required: true,
-        },
-        outputPath: {
-          type: "string",
-          description:
-            "Directory where the project will be created (default: /tmp/jarvis-projects)",
-          required: false,
-        },
-        database: {
-          type: "string",
-          description: "Database type: postgresql, mysql, mongodb, or sqlite",
-          required: false,
-        },
-        authentication: {
-          type: "string",
-          description: "Auth type: jwt, oauth, or session",
-          required: false,
-        },
-        features: {
-          type: "array",
-          description: "List of features to include",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "start_dev_server",
-      description:
-        "Start a development server for a project in the background. Returns session info for monitoring.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project directory",
-          required: true,
-        },
-        command: {
-          type: "string",
-          description: "Custom dev command (default: npm run dev)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "stop_dev_server",
-      description: "Stop a running development server.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project directory",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "get_dev_server_output",
-      description: "Get recent output from a running development server.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project directory",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "list_dev_servers",
-      description:
-        "List all currently running development servers with their ports and URLs.",
-      parameters: {},
-    },
-    {
-      name: "install_dependencies",
-      description:
-        "Install project dependencies using npm, pnpm, yarn, or bun.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project directory",
-          required: true,
-        },
-        packageManager: {
-          type: "string",
-          description:
-            "Package manager to use: npm, pnpm, yarn, or bun (default: pnpm)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "deploy_vercel",
-      description:
-        "Deploy a project to Vercel. Requires Vercel CLI installed and authenticated.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project directory",
-          required: true,
-        },
-        prod: {
-          type: "boolean",
-          description: "Deploy to production (default: preview deployment)",
-          required: false,
-        },
-        name: {
-          type: "string",
-          description: "Custom project name on Vercel",
-          required: false,
-        },
-        env: {
-          type: "object",
-          description: "Environment variables to set during deployment",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "deploy_railway",
-      description:
-        "Deploy a project to Railway. Requires Railway CLI installed and authenticated.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project directory",
-          required: true,
-        },
-        service: {
-          type: "string",
-          description: "Railway service name",
-          required: false,
-        },
-        environment: {
-          type: "string",
-          description: "Target environment (e.g., production, staging)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "docker_build",
-      description:
-        "Build a Docker image for a project. Requires Docker installed.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project directory containing Dockerfile",
-          required: true,
-        },
-        tag: {
-          type: "string",
-          description: "Image tag (default: project-name:latest)",
-          required: false,
-        },
-        dockerfile: {
-          type: "string",
-          description: "Path to Dockerfile (default: ./Dockerfile)",
-          required: false,
-        },
-        buildArgs: {
-          type: "object",
-          description: "Build arguments as key-value pairs",
-          required: false,
-        },
-        platform: {
-          type: "string",
-          description: "Target platform (e.g., linux/amd64, linux/arm64)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "docker_push",
-      description: "Push a Docker image to a registry.",
-      parameters: {
-        imageName: {
-          type: "string",
-          description: "Name of the image to push",
-          required: true,
-        },
-        registry: {
-          type: "string",
-          description:
-            "Registry URL (e.g., ghcr.io/username, docker.io/username)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "generate_dockerfile",
-      description:
-        "Generate a Dockerfile for a project based on its type (Node.js, Python, or static).",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project directory",
-          required: true,
-        },
-        projectType: {
-          type: "string",
-          description:
-            "Project type: node, python, or static (auto-detected if not specified)",
-          required: false,
-        },
-        port: {
-          type: "number",
-          description: "Port to expose (default: 3000)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "docker_compose",
-      description: "Run Docker Compose commands (up, down, logs, ps, build).",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to directory containing docker-compose.yml",
-          required: true,
-        },
-        operation: {
-          type: "string",
-          description: "Operation: up, down, logs, ps, or build",
-          required: true,
-        },
-        detach: {
-          type: "boolean",
-          description: "Run in detached mode (for 'up' operation)",
-          required: false,
-        },
-        services: {
-          type: "array",
-          description: "Specific services to operate on",
-          required: false,
-        },
-        follow: {
-          type: "boolean",
-          description: "Follow log output (for 'logs' operation)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "check_deployment_health",
-      description:
-        "Check if a deployed application is healthy by making an HTTP request.",
-      parameters: {
-        url: {
-          type: "string",
-          description: "URL to check",
-          required: true,
-        },
-        timeout: {
-          type: "number",
-          description: "Request timeout in milliseconds (default: 10000)",
-          required: false,
-        },
-        expectedStatus: {
-          type: "number",
-          description: "Expected HTTP status code (default: 200)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "spawn_agent_team",
-      description:
-        "Spawn a team of specialized agents (researcher, analyst, coder, writer) to collaboratively solve complex multi-faceted tasks. Use for tasks that require multiple types of expertise working together.",
-      parameters: {
-        query: {
-          type: "string",
-          description: "The complex task or query for the agent team to solve",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "database_query",
-      description:
-        "Execute read-only SQL queries against the RASPUTIN database. Only SELECT, SHOW, DESCRIBE, and EXPLAIN queries are allowed for safety.",
-      parameters: {
-        sql: {
-          type: "string",
-          description:
-            "The SQL query to execute (must be SELECT/SHOW/DESCRIBE/EXPLAIN)",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "analyze_screenshot",
-      description:
-        "Analyze an image or screenshot using vision AI. Can describe content, answer questions about what's shown, extract text, or verify UI elements.",
-      parameters: {
-        imagePathOrUrl: {
-          type: "string",
-          description: "Path to local image file or URL of image to analyze",
-          required: true,
-        },
-        question: {
-          type: "string",
-          description:
-            "Question to answer about the image (e.g., 'What does this screenshot show?', 'Is the login button visible?')",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "create_event_trigger",
-      description:
-        "Create an event trigger that automatically runs JARVIS when an event occurs. Currently supports webhook triggers for GitHub/GitLab integrations.",
-      parameters: {
-        name: {
-          type: "string",
-          description: "Name for this trigger",
-          required: true,
-        },
-        triggerType: {
-          type: "string",
-          description: "Type of trigger: webhook, cron, or file_change",
-          required: true,
-        },
-        actionPrompt: {
-          type: "string",
-          description:
-            "The prompt JARVIS will execute when triggered. Use {{variable}} for payload interpolation.",
-          required: true,
-        },
-        eventTypes: {
-          type: "array",
-          description:
-            "Event types to trigger on (e.g., push, pull_request for GitHub)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "list_event_triggers",
-      description: "List all configured event triggers for the current user.",
-      parameters: {},
-    },
-    {
-      name: "define_macro",
-      description:
-        "Define a reusable macro (tool chain) that can be executed later. Useful for common multi-step workflows like deploy, backup, or health checks.",
-      parameters: {
-        name: {
-          type: "string",
-          description: "Name for this macro",
-          required: true,
-        },
-        description: {
-          type: "string",
-          description: "Description of what this macro does",
-          required: true,
-        },
-        triggerPatterns: {
-          type: "array",
-          description: "Phrases that should trigger this macro",
-          required: true,
-        },
-        steps: {
-          type: "array",
-          description:
-            "Array of steps, each with action (string), tool (string), and optional description",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "execute_macro",
-      description: "Execute a previously defined macro by name or ID.",
-      parameters: {
-        macroNameOrId: {
-          type: "string",
-          description: "Name or ID of the macro to execute",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "list_macros",
-      description: "List all defined macros available for execution.",
-      parameters: {},
-    },
-    {
-      name: "github_api",
-      description:
-        "Make GitHub API requests. Requires GITHUB_TOKEN env var. Useful for issues, PRs, repos, etc.",
-      parameters: {
-        endpoint: {
-          type: "string",
-          description: "API endpoint (e.g., /repos/owner/repo/issues)",
-          required: true,
-        },
-        method: {
-          type: "string",
-          description: "HTTP method (GET, POST, PUT, PATCH, DELETE)",
-          required: false,
-        },
-        body: {
-          type: "object",
-          description: "Request body for POST/PUT/PATCH",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "create_github_issue",
-      description: "Create a GitHub issue in a repository.",
-      parameters: {
-        repo: {
-          type: "string",
-          description: "Repository in format owner/repo",
-          required: true,
-        },
-        title: {
-          type: "string",
-          description: "Issue title",
-          required: true,
-        },
-        body: {
-          type: "string",
-          description: "Issue body/description",
-          required: true,
-        },
-        labels: {
-          type: "array",
-          description: "Labels to add to the issue",
-          required: false,
-        },
-        assignees: {
-          type: "array",
-          description: "GitHub usernames to assign",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "create_github_pr",
-      description: "Create a GitHub pull request.",
-      parameters: {
-        repo: {
-          type: "string",
-          description: "Repository in format owner/repo",
-          required: true,
-        },
-        title: {
-          type: "string",
-          description: "PR title",
-          required: true,
-        },
-        body: {
-          type: "string",
-          description: "PR description",
-          required: true,
-        },
-        head: {
-          type: "string",
-          description: "Branch with changes",
-          required: true,
-        },
-        base: {
-          type: "string",
-          description: "Target branch (default: main)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "send_slack_message",
-      description:
-        "Send a message to a Slack channel. Requires SLACK_WEBHOOK_URL env var.",
-      parameters: {
-        channel: {
-          type: "string",
-          description: "Slack channel name (with or without #)",
-          required: true,
-        },
-        message: {
-          type: "string",
-          description: "Message to send",
-          required: true,
-        },
-        username: {
-          type: "string",
-          description: "Bot username (default: JARVIS)",
-          required: false,
-        },
-        iconEmoji: {
-          type: "string",
-          description: "Emoji icon (default: :robot_face:)",
-          required: false,
-        },
-      },
-    },
-    {
       name: "send_email",
       description:
         "Send an email. Requires SENDGRID_API_KEY or SMTP_URL env var.",
@@ -5740,6 +5346,50 @@ export function getAvailableTools(): Array<{
           type: "boolean",
           description: "Send as HTML email",
           required: false,
+        },
+      },
+    },
+    {
+      name: "self_verify",
+      description:
+        "Verify that an operation completed successfully by comparing expected vs actual outcome.",
+      parameters: {
+        operation: {
+          type: "string",
+          description: "Description of the operation performed",
+          required: true,
+        },
+        expectedOutcome: {
+          type: "string",
+          description: "What was expected to happen",
+          required: true,
+        },
+        actualResult: {
+          type: "string",
+          description: "The actual result/output from the operation",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "assess_task_confidence",
+      description:
+        "Assess overall confidence in task completion based on tools used and results.",
+      parameters: {
+        taskDescription: {
+          type: "string",
+          description: "Description of the task",
+          required: true,
+        },
+        toolsUsed: {
+          type: "array",
+          description: "List of tool names used during the task",
+          required: true,
+        },
+        results: {
+          type: "array",
+          description: "List of results/outputs from each tool",
+          required: true,
         },
       },
     },
