@@ -4470,6 +4470,98 @@ export async function delegateToAgent(
   }
 }
 
+export async function selfReview(
+  originalTask: string,
+  proposedResponse: string,
+  toolsUsed: string[]
+): Promise<string> {
+  try {
+    const { invokeLLM } = await import("../../_core/llm");
+
+    const reviewPrompt = `Review this response before delivering to user.
+
+ORIGINAL TASK:
+${originalTask}
+
+PROPOSED RESPONSE:
+${proposedResponse}
+
+TOOLS USED: ${toolsUsed.join(", ") || "none"}
+
+Review criteria:
+1. Does it fully address the original task?
+2. Is the information accurate and complete?
+3. Are there any errors or inconsistencies?
+4. Is the response clear and well-organized?
+5. Are there any obvious improvements?
+
+Respond with JSON:
+{
+  "approved": true/false,
+  "confidence": 0-100,
+  "issues": ["list of issues if any"],
+  "suggestions": ["list of improvements if any"],
+  "revisedResponse": "only if major revision needed, otherwise null"
+}`;
+
+    const response = await invokeLLM({
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a quality assurance reviewer. Be critical but fair. Only reject if there are significant issues.",
+        },
+        { role: "user", content: reviewPrompt },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "self_review",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              approved: { type: "boolean" },
+              confidence: { type: "number" },
+              issues: { type: "array", items: { type: "string" } },
+              suggestions: { type: "array", items: { type: "string" } },
+              revisedResponse: { type: ["string", "null"] },
+            },
+            required: [
+              "approved",
+              "confidence",
+              "issues",
+              "suggestions",
+              "revisedResponse",
+            ],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content || typeof content !== "string") {
+      return `Review passed (unable to parse review response)`;
+    }
+
+    const review = JSON.parse(content);
+
+    if (review.approved) {
+      return `Self-review PASSED (${review.confidence}% confidence)
+${review.suggestions.length > 0 ? `\nSuggestions for future:\n${review.suggestions.map((s: string) => `- ${s}`).join("\n")}` : ""}`;
+    } else {
+      return `Self-review FLAGGED ISSUES:
+${review.issues.map((i: string) => `- ${i}`).join("\n")}
+
+Confidence: ${review.confidence}%
+${review.revisedResponse ? `\nRevised response:\n${review.revisedResponse}` : ""}`;
+    }
+  } catch (error) {
+    return `Self-review error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 export async function spawnAgentTeam(
   query: string,
   onProgress?: (message: string) => void
@@ -5205,6 +5297,12 @@ export async function executeTool(
         input.userId as number,
         input.agentType as AgentType,
         input.task as string
+      );
+    case "self_review":
+      return selfReview(
+        input.originalTask as string,
+        input.proposedResponse as string,
+        (input.toolsUsed as string[]) || []
       );
     case "github_api":
       return githubApi(
@@ -7104,6 +7202,28 @@ export function getAvailableTools(): Array<{
           type: "string",
           description: "The task to delegate",
           required: true,
+        },
+      },
+    },
+    {
+      name: "self_review",
+      description:
+        "Review your own response before delivering. Use for complex or important tasks to ensure quality.",
+      parameters: {
+        originalTask: {
+          type: "string",
+          description: "The original user task/question",
+          required: true,
+        },
+        proposedResponse: {
+          type: "string",
+          description: "Your proposed response to review",
+          required: true,
+        },
+        toolsUsed: {
+          type: "array",
+          description: "List of tools used in completing the task",
+          required: false,
         },
       },
     },
