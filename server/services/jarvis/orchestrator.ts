@@ -1929,7 +1929,10 @@ async function callAnthropic(
               break;
             case "message_delta":
               if (event.delta?.stop_reason) {
-                stopReason = event.delta.stop_reason;
+                stopReason =
+                  event.delta.stop_reason === "end_turn"
+                    ? "stop"
+                    : event.delta.stop_reason;
               }
               break;
           }
@@ -1983,7 +1986,8 @@ async function callAnthropic(
           content: textContent || null,
           tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
         },
-        finish_reason: data.stop_reason || "stop",
+        finish_reason:
+          data.stop_reason === "end_turn" ? "stop" : data.stop_reason || "stop",
       },
     ],
   };
