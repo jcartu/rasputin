@@ -3855,6 +3855,183 @@ export async function executeMacro(
   }
 }
 
+export async function githubApi(
+  endpoint: string,
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" = "GET",
+  body?: Record<string, unknown>
+): Promise<string> {
+  try {
+    const token = process.env.GITHUB_TOKEN;
+    if (!token) {
+      return "Error: GITHUB_TOKEN environment variable not set";
+    }
+
+    const url = endpoint.startsWith("https://")
+      ? endpoint
+      : `https://api.github.com${endpoint.startsWith("/") ? endpoint : "/" + endpoint}`;
+
+    const response = await fetch(url, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        ...(body && { "Content-Type": "application/json" }),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    const data = await response.text();
+    let parsed;
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      parsed = data;
+    }
+
+    if (!response.ok) {
+      return `GitHub API Error (${response.status}): ${JSON.stringify(parsed)}`;
+    }
+
+    return JSON.stringify(parsed, null, 2).slice(0, 5000);
+  } catch (error) {
+    return `GitHub API error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function sendSlackMessage(
+  channel: string,
+  message: string,
+  options?: { username?: string; iconEmoji?: string }
+): Promise<string> {
+  try {
+    const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+    if (!webhookUrl) {
+      return "Error: SLACK_WEBHOOK_URL environment variable not set";
+    }
+
+    const payload = {
+      channel: channel.startsWith("#") ? channel : `#${channel}`,
+      text: message,
+      username: options?.username || "JARVIS",
+      icon_emoji: options?.iconEmoji || ":robot_face:",
+    };
+
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      return `Slack error: ${text}`;
+    }
+
+    return `Message sent to ${channel} successfully`;
+  } catch (error) {
+    return `Slack error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function sendEmail(
+  to: string,
+  subject: string,
+  body: string,
+  options?: { html?: boolean }
+): Promise<string> {
+  try {
+    const smtpUrl = process.env.SMTP_URL;
+    const fromEmail = process.env.SMTP_FROM || "jarvis@rasputin.local";
+
+    if (!smtpUrl) {
+      const sendgridKey = process.env.SENDGRID_API_KEY;
+      if (sendgridKey) {
+        const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${sendgridKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            personalizations: [{ to: [{ email: to }] }],
+            from: { email: fromEmail },
+            subject,
+            content: [
+              {
+                type: options?.html ? "text/html" : "text/plain",
+                value: body,
+              },
+            ],
+          }),
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          return `SendGrid error: ${text}`;
+        }
+
+        return `Email sent to ${to} successfully via SendGrid`;
+      }
+
+      return "Error: No email provider configured. Set SMTP_URL or SENDGRID_API_KEY";
+    }
+
+    return `Email would be sent to ${to} (SMTP sending not yet implemented)`;
+  } catch (error) {
+    return `Email error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function createGitHubIssue(
+  repo: string,
+  title: string,
+  body: string,
+  options?: { labels?: string[]; assignees?: string[] }
+): Promise<string> {
+  try {
+    const result = await githubApi(`/repos/${repo}/issues`, "POST", {
+      title,
+      body,
+      labels: options?.labels,
+      assignees: options?.assignees,
+    });
+
+    const parsed = JSON.parse(result);
+    if (parsed.html_url) {
+      return `Issue created: ${parsed.html_url}`;
+    }
+    return result;
+  } catch (error) {
+    return `Failed to create issue: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function createGitHubPR(
+  repo: string,
+  title: string,
+  body: string,
+  head: string,
+  base: string = "main"
+): Promise<string> {
+  try {
+    const result = await githubApi(`/repos/${repo}/pulls`, "POST", {
+      title,
+      body,
+      head,
+      base,
+    });
+
+    const parsed = JSON.parse(result);
+    if (parsed.html_url) {
+      return `PR created: ${parsed.html_url}`;
+    }
+    return result;
+  } catch (error) {
+    return `Failed to create PR: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 export async function listMacros(userId: number): Promise<string> {
   try {
     const memoryService = getMemoryService();
@@ -4084,6 +4261,46 @@ export async function executeTool(
       );
     case "list_macros":
       return listMacros(input.userId as number);
+    case "github_api":
+      return githubApi(
+        input.endpoint as string,
+        (input.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE") || "GET",
+        input.body as Record<string, unknown> | undefined
+      );
+    case "create_github_issue":
+      return createGitHubIssue(
+        input.repo as string,
+        input.title as string,
+        input.body as string,
+        {
+          labels: input.labels as string[] | undefined,
+          assignees: input.assignees as string[] | undefined,
+        }
+      );
+    case "create_github_pr":
+      return createGitHubPR(
+        input.repo as string,
+        input.title as string,
+        input.body as string,
+        input.head as string,
+        (input.base as string) || "main"
+      );
+    case "send_slack_message":
+      return sendSlackMessage(
+        input.channel as string,
+        input.message as string,
+        {
+          username: input.username as string | undefined,
+          iconEmoji: input.iconEmoji as string | undefined,
+        }
+      );
+    case "send_email":
+      return sendEmail(
+        input.to as string,
+        input.subject as string,
+        input.body as string,
+        { html: input.html as boolean | undefined }
+      );
     case "web_search":
       return webSearch(input.query as string);
     case "searxng_search":
@@ -5387,6 +5604,144 @@ export function getAvailableTools(): Array<{
       name: "list_macros",
       description: "List all defined macros available for execution.",
       parameters: {},
+    },
+    {
+      name: "github_api",
+      description:
+        "Make GitHub API requests. Requires GITHUB_TOKEN env var. Useful for issues, PRs, repos, etc.",
+      parameters: {
+        endpoint: {
+          type: "string",
+          description: "API endpoint (e.g., /repos/owner/repo/issues)",
+          required: true,
+        },
+        method: {
+          type: "string",
+          description: "HTTP method (GET, POST, PUT, PATCH, DELETE)",
+          required: false,
+        },
+        body: {
+          type: "object",
+          description: "Request body for POST/PUT/PATCH",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "create_github_issue",
+      description: "Create a GitHub issue in a repository.",
+      parameters: {
+        repo: {
+          type: "string",
+          description: "Repository in format owner/repo",
+          required: true,
+        },
+        title: {
+          type: "string",
+          description: "Issue title",
+          required: true,
+        },
+        body: {
+          type: "string",
+          description: "Issue body/description",
+          required: true,
+        },
+        labels: {
+          type: "array",
+          description: "Labels to add to the issue",
+          required: false,
+        },
+        assignees: {
+          type: "array",
+          description: "GitHub usernames to assign",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "create_github_pr",
+      description: "Create a GitHub pull request.",
+      parameters: {
+        repo: {
+          type: "string",
+          description: "Repository in format owner/repo",
+          required: true,
+        },
+        title: {
+          type: "string",
+          description: "PR title",
+          required: true,
+        },
+        body: {
+          type: "string",
+          description: "PR description",
+          required: true,
+        },
+        head: {
+          type: "string",
+          description: "Branch with changes",
+          required: true,
+        },
+        base: {
+          type: "string",
+          description: "Target branch (default: main)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "send_slack_message",
+      description:
+        "Send a message to a Slack channel. Requires SLACK_WEBHOOK_URL env var.",
+      parameters: {
+        channel: {
+          type: "string",
+          description: "Slack channel name (with or without #)",
+          required: true,
+        },
+        message: {
+          type: "string",
+          description: "Message to send",
+          required: true,
+        },
+        username: {
+          type: "string",
+          description: "Bot username (default: JARVIS)",
+          required: false,
+        },
+        iconEmoji: {
+          type: "string",
+          description: "Emoji icon (default: :robot_face:)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "send_email",
+      description:
+        "Send an email. Requires SENDGRID_API_KEY or SMTP_URL env var.",
+      parameters: {
+        to: {
+          type: "string",
+          description: "Recipient email address",
+          required: true,
+        },
+        subject: {
+          type: "string",
+          description: "Email subject",
+          required: true,
+        },
+        body: {
+          type: "string",
+          description: "Email body",
+          required: true,
+        },
+        html: {
+          type: "boolean",
+          description: "Send as HTML email",
+          required: false,
+        },
+      },
     },
     ...getSelfEvolutionTools(),
   ];
