@@ -55,39 +55,25 @@ export class MemoryService {
   // EMBEDDING OPERATIONS
   // ============================================================================
 
-  /**
-   * Generate embedding for text using local model or API
-   */
   async generateEmbedding(text: string): Promise<number[]> {
-    // Check cache first
     const cacheKey = text.slice(0, 100);
     if (this.embeddingCache.has(cacheKey)) {
       return this.embeddingCache.get(cacheKey)!;
     }
 
     try {
-      // Try to use local LLM router for embeddings
-      const { getLocalLLMRouter } = await import("../localLLM/router");
-      const router = getLocalLLMRouter();
-      const response = await router.embed({ input: text });
-      const embedding = response.embeddings[0];
-
-      // Cache the result
+      const { generateEmbedding } = await import("../rag/embeddings");
+      const embedding = await generateEmbedding(text);
       this.embeddingCache.set(cacheKey, embedding);
-
       return embedding;
     } catch (error) {
-      console.warn("Local embedding failed, using fallback:", error);
-      // Return simple hash-based embedding as fallback
+      console.warn("Embedding generation failed, using fallback:", error);
       return this.simpleEmbedding(text);
     }
   }
 
-  /**
-   * Simple fallback embedding using text hashing
-   */
   private simpleEmbedding(text: string): number[] {
-    const dimensions = 384;
+    const dimensions = 1536;
     const embedding = new Array(dimensions).fill(0);
     const words = text.toLowerCase().split(/\s+/);
 
@@ -99,7 +85,6 @@ export class MemoryService {
       }
     }
 
-    // Normalize
     const norm = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
     if (norm > 0) {
       for (let i = 0; i < dimensions; i++) {

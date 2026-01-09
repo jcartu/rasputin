@@ -1,45 +1,88 @@
 /**
  * Embeddings Service
- * Generates vector embeddings for code chunks
+ * Generates vector embeddings for code chunks using OpenAI or fallback to pseudo-embeddings
  */
 
-import { invokeLLM } from "../../_core/llm";
-
-// Simple in-memory cache for embeddings
 const embeddingCache = new Map<string, number[]>();
 const MAX_CACHE_SIZE = 10000;
 
-/**
- * Generate embedding for text using the configured model
- */
+async function callOpenAIEmbedding(
+  text: string,
+  model: string
+): Promise<number[]> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY not configured");
+  }
+
+  const response = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      input: text.slice(0, 8000),
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenAI embedding failed: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.data[0].embedding;
+}
+
+async function callOllamaEmbedding(text: string): Promise<number[]> {
+  const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
+
+  const response = await fetch(`${ollamaUrl}/api/embeddings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "nomic-embed-text",
+      prompt: text.slice(0, 8000),
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Ollama embedding failed: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.embedding;
+}
+
 export async function generateEmbedding(
   text: string,
   model: string = "text-embedding-3-small"
 ): Promise<number[]> {
-  // Check cache first
   const cacheKey = `${model}:${hashText(text)}`;
   const cached = embeddingCache.get(cacheKey);
   if (cached) return cached;
 
+  let embedding: number[];
+
   try {
-    // For now, we'll use a simple hash-based pseudo-embedding
-    // In production, this would call an actual embedding API
-    const embedding = generatePseudoEmbedding(text);
-
-    // Cache the result
-    if (embeddingCache.size >= MAX_CACHE_SIZE) {
-      // Remove oldest entries
-      const keysToDelete = Array.from(embeddingCache.keys()).slice(0, 1000);
-      keysToDelete.forEach(k => embeddingCache.delete(k));
+    if (process.env.OPENAI_API_KEY) {
+      embedding = await callOpenAIEmbedding(text, model);
+    } else {
+      embedding = await callOllamaEmbedding(text);
     }
-    embeddingCache.set(cacheKey, embedding);
-
-    return embedding;
   } catch (error) {
-    console.error("[Embeddings] Failed to generate embedding:", error);
-    // Return a zero vector as fallback
-    return new Array(1536).fill(0);
+    console.warn("[Embeddings] API embedding failed, using fallback:", error);
+    embedding = generatePseudoEmbedding(text);
   }
+
+  if (embeddingCache.size >= MAX_CACHE_SIZE) {
+    const keysToDelete = Array.from(embeddingCache.keys()).slice(0, 1000);
+    keysToDelete.forEach(k => embeddingCache.delete(k));
+  }
+  embeddingCache.set(cacheKey, embedding);
+
+  return embedding;
 }
 
 /**

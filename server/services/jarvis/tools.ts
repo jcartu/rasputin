@@ -27,6 +27,14 @@ import {
   findMatchingProcedure,
 } from "./memoryIntegration";
 import { getMemoryService } from "../memory";
+import {
+  connectMCPServer,
+  callMCPTool,
+  listMCPTools,
+  listMCPServers,
+} from "../mcp/client";
+import { agentManager } from "../multiAgent/agentManager";
+import type { AgentType } from "../multiAgent/types";
 
 const execAsync = promisify(exec);
 
@@ -4283,6 +4291,185 @@ export async function listEventTriggers(userId: number): Promise<string> {
   }
 }
 
+export async function searchMemory(
+  userId: number,
+  query: string,
+  memoryTypes?: string[],
+  limit?: number
+): Promise<string> {
+  try {
+    const memoryService = getMemoryService();
+    const results = await memoryService.search({
+      query,
+      userId,
+      memoryTypes: memoryTypes as ("episodic" | "semantic" | "procedural")[],
+      limit: limit || 10,
+    });
+
+    if (results.length === 0) {
+      return `No memories found for query: "${query}"`;
+    }
+
+    const formatted = results.map(r => {
+      const mem = r.memory as any;
+      return `[${r.memoryType}] (${(r.relevanceScore * 100).toFixed(0)}% match)
+  ${mem.title || mem.name || mem.subject || "Untitled"}
+  ${mem.description || `${mem.predicate || ""} ${mem.object || ""}`}`;
+    });
+
+    return `Found ${results.length} memories:\n\n${formatted.join("\n\n")}`;
+  } catch (error) {
+    return `Memory search failed: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function storeMemory(
+  userId: number,
+  memoryType: "episodic" | "semantic" | "procedural",
+  content: Record<string, unknown>
+): Promise<string> {
+  try {
+    const memoryService = getMemoryService();
+
+    if (memoryType === "episodic") {
+      const id = await memoryService.createEpisodicMemory({
+        userId,
+        memoryType: (content.memoryType as any) || "interaction",
+        title: content.title as string,
+        description: content.description as string,
+        context: content.context as string,
+        importance: (content.importance as number) || 50,
+        tags: content.tags as string[],
+      });
+      return `Episodic memory stored with ID: ${id}`;
+    }
+
+    if (memoryType === "semantic") {
+      const id = await memoryService.createSemanticMemory({
+        userId,
+        category: (content.category as any) || "domain_knowledge",
+        subject: content.subject as string,
+        predicate: content.predicate as string,
+        object: content.object as string,
+        confidence: (content.confidence as number) || 80,
+        source: content.source as string,
+        isValid: true,
+      });
+      return `Semantic memory stored with ID: ${id}`;
+    }
+
+    if (memoryType === "procedural") {
+      const id = await memoryService.createProceduralMemory({
+        userId,
+        name: content.name as string,
+        description: content.description as string,
+        triggerConditions: content.triggerConditions as string[],
+        steps: content.steps as any[],
+        isActive: true,
+        successRate: 100,
+        executionCount: 0,
+        successCount: 0,
+        avgExecutionTimeMs: 0,
+      });
+      return `Procedural memory stored with ID: ${id}`;
+    }
+
+    return `Invalid memory type: ${memoryType}`;
+  } catch (error) {
+    return `Failed to store memory: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function getMemoryStats(userId: number): Promise<string> {
+  try {
+    const memoryService = getMemoryService();
+    const stats = await memoryService.getStats(userId);
+
+    return `Memory Statistics:
+- Episodic memories: ${stats.totalEpisodic}
+- Semantic memories: ${stats.totalSemantic}
+- Procedural memories: ${stats.totalProcedural}
+- Total embeddings: ${stats.totalEmbeddings}
+- Learning events: ${stats.totalLearningEvents}
+- Training data points: ${stats.totalTrainingData}`;
+  } catch (error) {
+    return `Failed to get memory stats: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function spawnSpecializedAgent(
+  userId: number,
+  agentType: AgentType,
+  name: string,
+  task: string
+): Promise<string> {
+  try {
+    const agent = await agentManager.spawnAgent(userId, {
+      type: agentType,
+      name,
+    });
+    const result = await agentManager.executeAgent(agent.id, task);
+
+    if (result.success) {
+      return `Agent "${name}" (${agentType}) completed task:
+
+${result.output}
+
+Execution time: ${result.executionTimeMs}ms
+Tokens used: ${result.tokensUsed}`;
+    } else {
+      return `Agent "${name}" failed: ${result.error}`;
+    }
+  } catch (error) {
+    return `Failed to spawn agent: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function listActiveAgents(userId: number): Promise<string> {
+  try {
+    const agents = await agentManager.listAgents(userId);
+
+    if (agents.length === 0) {
+      return "No active agents. Use spawn_agent to create one.";
+    }
+
+    const formatted = agents.map(
+      a =>
+        `- ${a.name} (${a.agentType}): ${a.status}
+    Messages: ${a.messagesProcessed} | Tools: ${a.toolCallsMade} | Tokens: ${a.tokensUsed}`
+    );
+
+    return `Active Agents (${agents.length}):\n\n${formatted.join("\n\n")}`;
+  } catch (error) {
+    return `Failed to list agents: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function delegateToAgent(
+  userId: number,
+  agentType: AgentType,
+  task: string
+): Promise<string> {
+  try {
+    const agent = await agentManager.spawnAgent(userId, {
+      type: agentType,
+      name: `${agentType}-${Date.now()}`,
+    });
+
+    const result = await agentManager.executeAgent(agent.id, task);
+
+    await agentManager.terminateAgent(agent.id);
+
+    if (result.success) {
+      return `${agentType} agent completed task:\n\n${result.output}`;
+    } else {
+      return `${agentType} agent failed: ${result.error}`;
+    }
+  } catch (error) {
+    return `Delegation failed: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 export async function spawnAgentTeam(
   query: string,
   onProgress?: (message: string) => void
@@ -4972,6 +5159,53 @@ export async function executeTool(
       );
     case "list_macros":
       return listMacros(input.userId as number);
+    case "search_memory":
+      return searchMemory(
+        input.userId as number,
+        input.query as string,
+        input.memoryTypes as string[] | undefined,
+        input.limit as number | undefined
+      );
+    case "store_memory":
+      return storeMemory(
+        input.userId as number,
+        input.memoryType as "episodic" | "semantic" | "procedural",
+        input.content as Record<string, unknown>
+      );
+    case "get_memory_stats":
+      return getMemoryStats(input.userId as number);
+    case "connect_mcp_server":
+      return connectMCPServer(
+        input.name as string,
+        input.command as string,
+        input.args as string[] | undefined,
+        input.env as Record<string, string> | undefined
+      );
+    case "call_mcp_tool":
+      return callMCPTool(
+        input.server as string,
+        input.tool as string,
+        input.arguments as Record<string, unknown>
+      );
+    case "list_mcp_tools":
+      return listMCPTools();
+    case "list_mcp_servers":
+      return listMCPServers();
+    case "spawn_agent":
+      return spawnSpecializedAgent(
+        input.userId as number,
+        input.agentType as AgentType,
+        input.name as string,
+        input.task as string
+      );
+    case "list_agents":
+      return listActiveAgents(input.userId as number);
+    case "delegate_to_agent":
+      return delegateToAgent(
+        input.userId as number,
+        input.agentType as AgentType,
+        input.task as string
+      );
     case "github_api":
       return githubApi(
         input.endpoint as string,
@@ -6720,6 +6954,158 @@ export function getAvailableTools(): Array<{
       name: "list_event_triggers",
       description: "List all event triggers for the current user.",
       parameters: {},
+    },
+    {
+      name: "search_memory",
+      description:
+        "Search your persistent memory for relevant experiences, knowledge, or procedures. Use this to recall past learnings.",
+      parameters: {
+        query: {
+          type: "string",
+          description: "What to search for in memory",
+          required: true,
+        },
+        memoryTypes: {
+          type: "array",
+          description:
+            "Types of memory to search: episodic (experiences), semantic (facts), procedural (how-to)",
+          required: false,
+        },
+        limit: {
+          type: "number",
+          description: "Maximum results to return (default: 10)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "store_memory",
+      description:
+        "Store important information in persistent memory for future recall. Use for learnings, facts, or procedures.",
+      parameters: {
+        memoryType: {
+          type: "string",
+          description:
+            "Type: episodic (experience), semantic (fact), procedural (how-to)",
+          required: true,
+        },
+        content: {
+          type: "object",
+          description:
+            "Memory content. For episodic: {title, description, context, importance}. For semantic: {subject, predicate, object}. For procedural: {name, description, steps}",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "get_memory_stats",
+      description: "Get statistics about your persistent memory system.",
+      parameters: {},
+    },
+    {
+      name: "connect_mcp_server",
+      description:
+        "Connect to an MCP (Model Context Protocol) server to access external tools like Slack, Jira, databases, etc.",
+      parameters: {
+        name: {
+          type: "string",
+          description: "Unique name for this server connection",
+          required: true,
+        },
+        command: {
+          type: "string",
+          description:
+            "Command to start the MCP server (e.g., npx, uvx, docker)",
+          required: true,
+        },
+        args: {
+          type: "array",
+          description: "Command arguments",
+          required: false,
+        },
+        env: {
+          type: "object",
+          description: "Environment variables for the server",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "call_mcp_tool",
+      description: "Call a tool from a connected MCP server.",
+      parameters: {
+        server: {
+          type: "string",
+          description: "Name of the connected MCP server",
+          required: true,
+        },
+        tool: {
+          type: "string",
+          description: "Name of the tool to call",
+          required: true,
+        },
+        arguments: {
+          type: "object",
+          description: "Arguments to pass to the tool",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "list_mcp_tools",
+      description: "List all available tools from connected MCP servers.",
+      parameters: {},
+    },
+    {
+      name: "list_mcp_servers",
+      description: "List all connected MCP servers and their status.",
+      parameters: {},
+    },
+    {
+      name: "spawn_agent",
+      description:
+        "Spawn a specialized agent to work on a specific task. Use for complex work requiring expertise.",
+      parameters: {
+        agentType: {
+          type: "string",
+          description:
+            "Type: code (programming), research (web research), sysadmin (servers), data (analysis), worker (general)",
+          required: true,
+        },
+        name: {
+          type: "string",
+          description: "Name for this agent instance",
+          required: true,
+        },
+        task: {
+          type: "string",
+          description: "The task for the agent to complete",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "list_agents",
+      description:
+        "List all active agents and their status for the current user.",
+      parameters: {},
+    },
+    {
+      name: "delegate_to_agent",
+      description:
+        "Quickly delegate a task to a specialized agent. The agent runs and terminates after completing.",
+      parameters: {
+        agentType: {
+          type: "string",
+          description: "Type: code, research, sysadmin, data, worker",
+          required: true,
+        },
+        task: {
+          type: "string",
+          description: "The task to delegate",
+          required: true,
+        },
+      },
     },
     // === SECURITY TOOLS ===
     {
