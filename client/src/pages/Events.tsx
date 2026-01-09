@@ -59,11 +59,20 @@ const samplePayloads = {
     name: "GitHub Push",
     payload: {
       action: "push",
-      repository: { full_name: "user/repo", clone_url: "https://github.com/user/repo.git" },
+      repository: {
+        full_name: "user/repo",
+        clone_url: "https://github.com/user/repo.git",
+      },
       sender: { login: "developer" },
       ref: "refs/heads/main",
-      commits: [{ id: "abc123", message: "Update README", author: { name: "Dev", email: "dev@example.com" } }]
-    }
+      commits: [
+        {
+          id: "abc123",
+          message: "Update README",
+          author: { name: "Dev", email: "dev@example.com" },
+        },
+      ],
+    },
   },
   alert: {
     name: "Alert",
@@ -72,17 +81,17 @@ const samplePayloads = {
       status: "firing",
       severity: "warning",
       labels: { instance: "server-1", job: "node" },
-      annotations: { summary: "CPU usage above 80%" }
-    }
+      annotations: { summary: "CPU usage above 80%" },
+    },
   },
   custom: {
     name: "Custom Event",
     payload: {
       event: "custom_event",
       data: { key: "value", timestamp: new Date().toISOString() },
-      source: "test"
-    }
-  }
+      source: "test",
+    },
+  },
 };
 
 // Main component
@@ -98,8 +107,14 @@ export default function Events() {
 
   // Webhook testing state
   const [selectedWebhookId, setSelectedWebhookId] = useState<string>("");
-  const [testPayload, setTestPayload] = useState(JSON.stringify(samplePayloads.custom.payload, null, 2));
-  const [testResult, setTestResult] = useState<{ success: boolean; response?: string; error?: string } | null>(null);
+  const [testPayload, setTestPayload] = useState(
+    JSON.stringify(samplePayloads.custom.payload, null, 2)
+  );
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    response?: string;
+    error?: string;
+  } | null>(null);
   const [isTesting, setIsTesting] = useState(false);
 
   const webhooksQuery = trpc.events.listWebhooks.useQuery();
@@ -133,12 +148,15 @@ export default function Events() {
   });
 
   const testWebhookMutation = trpc.events.testWebhook.useMutation({
-    onSuccess: (result) => {
-      setTestResult({ success: true, response: JSON.stringify(result, null, 2) });
+    onSuccess: result => {
+      setTestResult({
+        success: true,
+        response: JSON.stringify(result, null, 2),
+      });
       setIsTesting(false);
       toast.success("Webhook test successful");
     },
-    onError: (err) => {
+    onError: err => {
       setTestResult({ success: false, error: err.message });
       setIsTesting(false);
       toast.error(`Webhook test failed: ${err.message}`);
@@ -354,7 +372,10 @@ export default function Events() {
                       </SelectTrigger>
                       <SelectContent>
                         {webhooksQuery.data?.map(webhook => (
-                          <SelectItem key={webhook.id} value={webhook.id.toString()}>
+                          <SelectItem
+                            key={webhook.id}
+                            value={webhook.id.toString()}
+                          >
                             {webhook.name} ({webhook.path})
                           </SelectItem>
                         ))}
@@ -364,7 +385,9 @@ export default function Events() {
 
                   {/* Sample Payloads */}
                   <div>
-                    <Label className="text-xs text-muted-foreground">Sample Payloads</Label>
+                    <Label className="text-xs text-muted-foreground">
+                      Sample Payloads
+                    </Label>
                     <div className="flex flex-wrap gap-2 mt-2">
                       {Object.entries(samplePayloads).map(([key, { name }]) => (
                         <Button
@@ -372,7 +395,11 @@ export default function Events() {
                           variant="outline"
                           size="sm"
                           className="text-xs"
-                          onClick={() => loadSamplePayload(key as keyof typeof samplePayloads)}
+                          onClick={() =>
+                            loadSamplePayload(
+                              key as keyof typeof samplePayloads
+                            )
+                          }
                         >
                           {name}
                         </Button>
@@ -439,15 +466,25 @@ export default function Events() {
                         ) : (
                           <XCircle className="w-5 h-5 text-red-400" />
                         )}
-                        <span className={testResult.success ? "text-green-400" : "text-red-400"}>
-                          {testResult.success ? "Webhook Test Successful" : "Webhook Test Failed"}
+                        <span
+                          className={
+                            testResult.success
+                              ? "text-green-400"
+                              : "text-red-400"
+                          }
+                        >
+                          {testResult.success
+                            ? "Webhook Test Successful"
+                            : "Webhook Test Failed"}
                         </span>
                       </div>
 
                       {/* Response/Error */}
                       <ScrollArea className="h-[300px] rounded-md border border-border/50 p-4">
                         <pre className="text-sm whitespace-pre-wrap font-mono">
-                          {testResult.success ? testResult.response : testResult.error}
+                          {testResult.success
+                            ? testResult.response
+                            : testResult.error}
                         </pre>
                       </ScrollArea>
                     </div>
@@ -455,7 +492,9 @@ export default function Events() {
                     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                       <Zap className="w-8 h-8 mb-4 opacity-50" />
                       <p>No test results yet</p>
-                      <p className="text-xs mt-2">Send a test payload to see the response</p>
+                      <p className="text-xs mt-2">
+                        Send a test payload to see the response
+                      </p>
                     </div>
                   )}
                 </CardContent>

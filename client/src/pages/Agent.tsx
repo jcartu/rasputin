@@ -70,11 +70,13 @@ import {
   GitBranch,
   Webhook,
   StopCircle,
+  Shield,
 } from "lucide-react";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { WorkspaceIDE } from "@/components/WorkspaceIDE";
 import { ToolOutputPreview } from "@/components/ToolOutputPreview";
 import { HostsManager } from "@/components/HostsManager";
+import { ApprovalBadge, ApprovalWorkflow } from "@/components/ApprovalWorkflow";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -113,12 +115,13 @@ interface AgentTask {
   id: string | number;
   title: string;
   query?: string;
-  status: "idle" | "running" | "completed" | "failed";
+  status: "idle" | "running" | "completed" | "failed" | "waiting_approval";
   messages: AgentMessage[];
   createdAt: number;
   iterationCount?: number;
   durationMs?: number;
   errorMessage?: string;
+  pendingApprovalId?: number | null;
   errorType?:
     | "api_error"
     | "timeout"
@@ -989,9 +992,10 @@ export default function AgentPage() {
   const { data: dbTasks, refetch: refetchTasks } =
     trpc.jarvis.listTasks.useQuery({ limit: 50 }, { enabled: !!user });
 
-  // JARVIS orchestrator mutation
+  // JARVIS orchestrator mutations
   const jarvisExecute = trpc.jarvis.executeTask.useMutation();
   const deleteTaskMutation = trpc.jarvis.deleteTask.useMutation();
+  const resumeTaskMutation = trpc.jarvis.resumeTask.useMutation();
 
   // Fetch task messages when a DB task is selected
   const { data: selectedTaskMessages } = trpc.jarvis.getTaskMessages.useQuery(
@@ -1027,6 +1031,7 @@ export default function AgentPage() {
       createdAt: new Date(t.createdAt).getTime(),
       iterationCount: t.iterationCount,
       errorMessage: t.errorMessage || undefined,
+      pendingApprovalId: t.pendingApprovalId,
       errorType: undefined as AgentTask["errorType"],
     })) || []),
   ].sort((a, b) => b.createdAt - a.createdAt);
@@ -1075,7 +1080,6 @@ export default function AgentPage() {
     [currentTask, deleteTaskMutation, refetchTasks]
   );
 
-  // Export task
   const handleExportTask = useCallback((task: AgentTask) => {
     const markdown = exportTaskAsMarkdown(task);
     const blob = new Blob([markdown], { type: "text/markdown" });
@@ -1087,6 +1091,21 @@ export default function AgentPage() {
     URL.revokeObjectURL(url);
     toast.success("Task exported");
   }, []);
+
+  const handleResumeTask = useCallback(
+    async (taskId: number) => {
+      try {
+        await resumeTaskMutation.mutateAsync({ taskId });
+        refetchTasks();
+        toast.success("Task resumed. Re-execute the task to continue.");
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Failed to resume task"
+        );
+      }
+    },
+    [resumeTaskMutation, refetchTasks]
+  );
 
   // Use template
   const handleUseTemplate = useCallback((prompt: string) => {
@@ -1413,10 +1432,14 @@ export default function AgentPage() {
                             task.status === "running" &&
                               "text-cyan-400 border-cyan-400/30",
                             task.status === "failed" &&
-                              "text-red-400 border-red-400/30"
+                              "text-red-400 border-red-400/30",
+                            task.status === "waiting_approval" &&
+                              "text-amber-400 border-amber-400/30"
                           )}
                         >
-                          {task.status}
+                          {task.status === "waiting_approval"
+                            ? "awaiting approval"
+                            : task.status}
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
@@ -1432,6 +1455,30 @@ export default function AgentPage() {
                             )}
                             {task.errorMessage}
                           </p>
+                        </div>
+                      )}
+                      {task.status === "waiting_approval" && (
+                        <div className="mt-1 p-1.5 rounded bg-amber-500/10 border border-amber-500/20">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-amber-400 flex items-center gap-1">
+                              <Shield className="h-3 w-3" />
+                              SSH command needs approval
+                            </p>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 px-2 text-xs text-amber-400 hover:text-amber-300"
+                              onClick={e => {
+                                e.stopPropagation();
+                                if (typeof task.id === "number") {
+                                  handleResumeTask(task.id);
+                                }
+                              }}
+                            >
+                              <Play className="h-3 w-3 mr-1" />
+                              Resume
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </button>
@@ -1684,8 +1731,29 @@ export default function AgentPage() {
                   <Webhook className="h-4 w-4 mr-2" />
                   Events
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/hosts")}>
+                  <Server className="h-4 w-4 mr-2" />
+                  SSH Hosts
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            {/* Pending Approvals */}
+            <Dialog>
+              <DialogTrigger asChild>
+                <div className="cursor-pointer">
+                  <ApprovalBadge />
+                </div>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Pending Approvals</DialogTitle>
+                  <DialogDescription>
+                    Review and approve commands that JARVIS wants to execute
+                  </DialogDescription>
+                </DialogHeader>
+                <ApprovalWorkflow />
+              </DialogContent>
+            </Dialog>
             <Button
               variant="ghost"
               size="sm"

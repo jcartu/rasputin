@@ -49,14 +49,16 @@ export class AgentManager {
     // Use raw SQL to avoid Drizzle ORM issues with optional columns
     const agentName = config.name || `${config.type}-agent-${Date.now()}`;
     const systemPromptValue = finalConfig.systemPrompt || null;
-    const capabilitiesValue = finalConfig.capabilities ? JSON.stringify(finalConfig.capabilities) : null;
-    
+    const capabilitiesValue = finalConfig.capabilities
+      ? JSON.stringify(finalConfig.capabilities)
+      : null;
+
     // Build the raw SQL insert - only include columns that have values
     const result = await db.execute(sql`
       INSERT INTO agents (userId, name, agentType, status, systemPrompt, capabilities, messagesProcessed, toolCallsMade, tokensUsed)
       VALUES (${userId}, ${agentName}, ${config.type}, 'idle', ${systemPromptValue}, ${capabilitiesValue}, 0, 0, 0)
     `);
-    
+
     // Get the inserted ID from the result
     const insertedId = (result[0] as any).insertId;
     const inserted = { id: insertedId };

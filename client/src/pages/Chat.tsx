@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -26,6 +27,7 @@ import {
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
+import { ApprovalBadge, ApprovalWorkflow } from "@/components/ApprovalWorkflow";
 import {
   Loader2,
   PanelLeftClose,
@@ -703,9 +705,28 @@ export default function Chat() {
                   <Webhook className="h-4 w-4 mr-2" />
                   Events
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/hosts")}>
+                  <Server className="h-4 w-4 mr-2" />
+                  SSH Hosts
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            {/* PWA Install Button */}
+            <Dialog>
+              <DialogTrigger asChild>
+                <div className="cursor-pointer">
+                  <ApprovalBadge />
+                </div>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Pending Approvals</DialogTitle>
+                  <DialogDescription>
+                    Review and approve commands that JARVIS wants to execute
+                  </DialogDescription>
+                </DialogHeader>
+                <ApprovalWorkflow />
+              </DialogContent>
+            </Dialog>
             {!isInstalled && (
               <Button
                 variant="outline"

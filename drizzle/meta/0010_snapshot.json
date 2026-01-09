@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "ed1f6152-33f1-4b22-b1f4-df54ab992f93",
-  "prevId": "c60652ed-1d3e-442c-86e9-e746fa402a51",
+  "id": "83d9fa59-d561-4f1b-ab21-0d36b3c77dab",
+  "prevId": "ed1f6152-33f1-4b22-b1f4-df54ab992f93",
   "tables": {
     "agentFiles": {
       "name": "agentFiles",
@@ -464,11 +464,18 @@
         },
         "status": {
           "name": "status",
-          "type": "enum('idle','running','completed','failed','cancelled')",
+          "type": "enum('idle','running','completed','failed','cancelled','waiting_approval')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
           "default": "'idle'"
+        },
+        "pendingApprovalId": {
+          "name": "pendingApprovalId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "result": {
           "name": "result",

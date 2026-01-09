@@ -524,6 +524,7 @@ export async function updateAgentTask(
       | "totalCost"
       | "durationMs"
       | "completedAt"
+      | "pendingApprovalId"
     >
   >
 ): Promise<void> {

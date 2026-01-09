@@ -10,6 +10,7 @@
 ## Executive Summary
 
 RASPUTIN is an advanced AI research and automation platform that combines:
+
 1. **Multi-model consensus** - Query 5+ frontier AI models simultaneously
 2. **Deep synthesis** - Multi-stage research pipeline with web search integration
 3. **Autonomous agent (JARVIS)** - Execute complex multi-step tasks
@@ -22,6 +23,7 @@ RASPUTIN is an advanced AI research and automation platform that combines:
 ### 1. Research Mode
 
 #### Consensus Mode
+
 - Queries 5 frontier AI models in parallel: GPT-5, Claude Sonnet 4.5, Gemini 3 Flash, Grok 4.1, Sonar Pro
 - Calculates agreement percentage across models
 - Highlights disagreements and unique insights
@@ -30,6 +32,7 @@ RASPUTIN is an advanced AI research and automation platform that combines:
 - Speed tiers: Fast/Normal/Max
 
 #### Synthesis Mode
+
 - 5-stage pipeline:
   1. Web Search - Find relevant sources
   2. Proposer Models - Get initial responses from 4 models
@@ -42,6 +45,7 @@ RASPUTIN is an advanced AI research and automation platform that combines:
 ### 2. JARVIS Agent Mode
 
 #### Core Capabilities
+
 - Claude Opus orchestrator plans and executes multi-step tasks
 - 10 built-in tools:
   - `web_search` - Search the web
@@ -56,12 +60,14 @@ RASPUTIN is an advanced AI research and automation platform that combines:
   - `api_request` - Make HTTP requests
 
 #### Task Management
+
 - Real-time task viewer with expandable tool call details
 - Status badges (Running, Done, Error)
 - Task persistence in database
 - Rate limiting per user
 
 ### 3. Voice Features
+
 - Push-to-talk microphone button
 - Whisper transcription
 - Wake word detection ("Hey JARVIS")
@@ -70,23 +76,27 @@ RASPUTIN is an advanced AI research and automation platform that combines:
 ### 4. System Pages
 
 #### Infrastructure (`/infrastructure`)
+
 - SSH host management
 - Health metric collection (CPU, memory, disk, network)
 - Alert rules and incident tracking
 - Self-healing remediation (planned)
 
 #### Multi-Agent (`/multi-agent`)
+
 - Agent creation and management
 - 8 agent types: orchestrator, coordinator, specialist, worker, code, research, sysadmin, data, custom
 - Task Runner UI with quick templates
 - Real-time task execution results
 
 #### Codebase (`/codebase`)
+
 - Project indexing with semantic chunking
 - Code search with embeddings
 - Symbol extraction and relationships
 
 #### Events (`/events`)
+
 - Webhook endpoint creation
 - Webhook testing UI with sample payloads
 - Cron trigger management (UI exists, backend ready)
@@ -96,6 +106,7 @@ RASPUTIN is an advanced AI research and automation platform that combines:
 ## Architecture
 
 ### Tech Stack
+
 - **Frontend**: React 19 + Tailwind 4 + Vite
 - **Backend**: Express 4 + tRPC 11
 - **Database**: MySQL/TiDB (Drizzle ORM)
@@ -103,6 +114,7 @@ RASPUTIN is an advanced AI research and automation platform that combines:
 - **AI**: OpenRouter (multi-model), ElevenLabs (TTS), Whisper (STT)
 
 ### Key Files
+
 ```
 client/
   src/
@@ -116,7 +128,7 @@ client/
     components/
       TaskViewer.tsx    # Agent task progress display
       ToolOutputPreview.tsx # Tool result rendering
-      
+
 server/
   routers.ts            # All tRPC procedures
   services/
@@ -127,12 +139,13 @@ server/
     events/             # Webhooks and cron
     memory/             # Memory system (partial)
     webApp/             # Web app scaffolding (partial)
-    
+
 drizzle/
   schema.ts             # Database schema (2300+ lines)
 ```
 
 ### Database Tables (Key)
+
 - `users` - User accounts
 - `chats`, `messages` - Chat history
 - `agentTasks`, `agentToolCalls` - JARVIS task tracking
@@ -156,11 +169,14 @@ drizzle/
 ## In-Progress Implementation
 
 ### Self-Improvement System (Partially Implemented)
+
 Files created:
+
 - `/server/services/memory/memorySystem.ts` - Long-term memory with vector embeddings
 - `/server/services/memory/selfReflection.ts` - Post-task analysis and learning
 
 Features:
+
 - Episodic memory storage
 - Skill learning and tracking
 - Learning event recording
@@ -169,10 +185,13 @@ Features:
 - Self-reflection after task completion
 
 ### Web App Development System (Partially Implemented)
+
 Files created:
+
 - `/server/services/webApp/scaffolder.ts` - Project scaffolding for React, Next.js, Vue, Svelte, Express, FastAPI, Rails
 
 Database tables created:
+
 - `webAppProjects` - Track AI-generated web apps
 - `appIterations` - Track changes and deployments
 - `codeGenerationHistory` - Track code generation for analysis
@@ -182,6 +201,7 @@ Database tables created:
 ## What Still Needs Implementation
 
 ### Self-Improvement (Remaining)
+
 - [ ] Integration with JARVIS orchestrator (call reflection after each task)
 - [ ] UI to view memories and skills
 - [ ] Prompt optimization based on learnings
@@ -189,6 +209,7 @@ Database tables created:
 - [ ] Performance tracking dashboard
 
 ### Web App Development (Remaining)
+
 - [ ] Git integration tools (clone, commit, push)
 - [ ] Deployment automation (Vercel, Railway, Docker)
 - [ ] Browser preview with dev server management
@@ -197,6 +218,7 @@ Database tables created:
 - [ ] Connect scaffolder to JARVIS tools
 
 ### Other Planned Features
+
 - [ ] SSH credential storage UI
 - [ ] Agent task history view
 - [ ] Cron trigger creation UI
@@ -216,27 +238,32 @@ Database tables created:
 ## How to Continue Development
 
 ### Start the Dev Server
+
 ```bash
 cd /home/ubuntu/rasputin
 pnpm dev
 ```
 
 ### Run Tests
+
 ```bash
 pnpm test
 ```
 
 ### Check TypeScript
+
 ```bash
 pnpm check
 ```
 
 ### Push Database Changes
+
 ```bash
 pnpm db:push
 ```
 
 ### Key URLs
+
 - Dev Server: https://3000-ibmh7cqsp8ovkv7ttt8v4-6463ec18.us2.manus.computer
 - Chat: `/chat`
 - Agent: `/agent`
@@ -255,6 +282,7 @@ pnpm db:push
 ---
 
 ## Environment Variables (Auto-Injected)
+
 - `ANTHROPIC_API_KEY` - Claude API
 - `OPENROUTER_API_KEY` - Multi-model routing
 - `GEMINI_API_KEY` - Google Gemini
@@ -269,6 +297,7 @@ pnpm db:push
 ## Testing Checklist
 
 Before deploying, verify:
+
 - [ ] Consensus mode works with all 5 models
 - [ ] Synthesis mode completes all 5 stages
 - [ ] JARVIS can execute web search tasks
@@ -290,4 +319,4 @@ Before deploying, verify:
 
 ---
 
-*Generated: January 5, 2026*
+_Generated: January 5, 2026_

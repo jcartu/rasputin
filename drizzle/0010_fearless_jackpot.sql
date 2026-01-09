@@ -1,0 +1,2 @@
+ALTER TABLE `agentTasks` MODIFY COLUMN `status` enum('idle','running','completed','failed','cancelled','waiting_approval') NOT NULL DEFAULT 'idle';--> statement-breakpoint
+ALTER TABLE `agentTasks` ADD `pendingApprovalId` int;

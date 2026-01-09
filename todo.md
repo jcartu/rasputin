@@ -797,12 +797,13 @@
 
 ### 3. Host Management UI
 
-- [ ] Create Hosts page in Agent mode
-- [ ] Add host list with status indicators
-- [ ] Create "Add Host" dialog with form
-- [ ] Add host editing and deletion
-- [ ] Show connection test results
-- [ ] Display audit log per host
+- [x] Create Hosts page in Agent mode
+- [x] Add host list with status indicators
+- [x] Create "Add Host" dialog with form
+- [x] Add host editing and deletion
+- [x] Show connection test results
+- [x] Display audit log per host
+- [x] Add permissions editor per host
 
 ### 4. Approval Workflow
 
@@ -1283,6 +1284,7 @@
 - [x] Fix the issue and test end-to-end - VERIFIED: Both issues fixed and tested in browser
 
 ### Navigation Links for New Pages (Jan 5, 2026)
+
 - [x] Add links to Infrastructure page in navigation - Added System dropdown in Chat and Agent headers
 - [x] Add links to Multi-Agent page in navigation - Added System dropdown in Chat and Agent headers
 - [x] Add links to Codebase page in navigation - Added System dropdown in Chat and Agent headers
@@ -1292,6 +1294,7 @@
 ## System Pages Testing & Implementation (Jan 5, 2026)
 
 ### Phase 1: Test System Pages Functionality
+
 - [ ] Test ### Phase 1: Testing
 - [x] Test Infrastructure page - add host, view alerts, check incidents - VERIFIED
 - [x] Test Multi-Agent page - create agent, run task - VERIFIED (fixed agentType enum)
@@ -1299,12 +1302,14 @@
 - [x] Test Events page - create webhook, create cron trigger - VERIFIED
 
 ### Phase 2: Back to Chat Navigation
+
 - [x] Add "Back to Chat" button on Infrastructure page - Updated Link href to /chat
 - [x] Add "Back to Chat" button on Multi-Agent page - Updated Link href to /chat
 - [x] Add "Back to Chat" button on Codebase page - Updated Link href to /chat
 - [x] Add "Back to Chat" button on Events page - Updated Link href to /chat Events page
 
 ### Phase 3: Infrastructure Backend Implementation
+
 - [x] Real SSH connection handling - VERIFIED: SSHConnectionManager with encryption and audit logging
 - [x] Host health metric collection - VERIFIED: HealthCollector with parallel metric gathering
 - [x] Alert rule evaluation - VERIFIED: AlertEngine with incident creation
@@ -1312,6 +1317,7 @@
 - [x] Self-healing remediation execution - VERIFIED: Auto-remediation logic implemented
 
 ### Phase 4: Multi-Agent Backend Implementation
+
 - [x] Agent creation and management - VERIFIED: AgentManager with lifecycle management
 - [x] Task delegation to agents - VERIFIED: Task delegation with subtask creation
 - [x] Inter-agent communication - VERIFIED: Inter-agent messaging system
@@ -1319,6 +1325,7 @@
 - [x] Agent persona specialization - VERIFIED: 8 agent types with specialized configs
 
 ### Phase 5: Codebase Backend Implementation
+
 - [x] Code repository indexing - VERIFIED: CodebaseIndexer with semantic chunking
 - [x] Code chunk embedding generation - VERIFIED: Embedding generation with caching
 - [x] Semantic code search - VERIFIED: CodeSearch with vector similarity
@@ -1326,6 +1333,7 @@
 - [x] Project management - VERIFIED: Project creation and status tracking
 
 ### Phase 6: Events Backend Implementation
+
 - [x] Webhook endpoint registration - VERIFIED: WebhookHandler with unique paths
 - [x] Webhook signature verification - VERIFIED: HMAC-SHA256 signature verification
 - [x] Cron job scheduling - VERIFIED: CronScheduler with recurring task support
@@ -1333,6 +1341,7 @@
 - [x] Action execution on events - VERIFIED: EventExecutor with action chaining
 
 ### Phase 7: End-to-End Testing
+
 - [x] Test Infrastructure page functionality - VERIFIED: Added host, viewed alerts/incidents
 - [x] Test Multi-Agent page functionality - VERIFIED: Created agent, fixed enum issue
 - [x] Test Codebase page functionality - VERIFIED: Added project, indexing started
@@ -1343,6 +1352,7 @@
 ## Summary (Jan 5, 2026)
 
 **Completed:**
+
 1. Fixed JARVIS Agent bugs (task_complete status, image display)
 2. Added System dropdown navigation to Chat and Agent pages
 3. Tested all 4 system pages (Infrastructure, Multi-Agent, Codebase, Events)
@@ -1352,27 +1362,30 @@
 7. End-to-end testing passed
 
 **Backend Services Verified:**
+
 - Infrastructure: SSH monitoring, health metrics, alerts, incidents
 - Multi-Agent: Agent spawning, task delegation, orchestration
 - Codebase: Code indexing, semantic search, embeddings
 - Events: Webhooks, cron scheduling, event execution
 
-
 ## Agent Task Runner & Webhook Testing (Jan 5, 2026)
 
 ### Phase 1: Agent Task Runner UI
+
 - [x] Add task submission form on Multi-Agent page - Added Task Runner tab with templates
 - [x] Show real-time task execution with agent delegation - Added loading state and results display
 - [x] Display task results and agent communication - Added results card with execution stats
 - [x] Test task runner with sample tasks - Added 4 task templates
 
 ### Phase 2: Webhook Testing UI
+
 - [x] Add webhook test sender on Events page - Added Test Webhooks tab
 - [x] Allow custom payload input for webhook testing - Added JSON editor with sample payloads
 - [x] Show webhook response and execution logs - Added results card with response display
 - [x] Test webhook flow end-to-end - Added testWebhook procedure to backend
 
 ### Phase 3: Comprehensive End-to-End Testing
+
 - [ ] Test Research Mode - Consensus queries
 - [ ] Test Research Mode - Synthesis queries
 - [ ] Test JARVIS Agent Mode - various task types
@@ -1383,29 +1396,32 @@
 - [ ] Fix any issues found during testing
 - [ ] Re-run tests to verify fixes
 
-
 ## E2E Testing Results (Jan 5, 2026 - Round 2)
 
 ### Research Mode
+
 - [x] Consensus Mode - PASSED: 5 models, 75% agreement, 58.82s
 - [x] Synthesis Mode - PASSED: 5 stages, 171.5s, comprehensive report
 
 ### JARVIS Agent Mode
+
 - [x] Web Search - PASSED: Tokyo vs NYC population comparison
 - [x] Code Execution - PASSED: Python prime numbers script
 - [x] task_complete status fix - VERIFIED: Shows "Done" correctly
 
 ### System Pages
+
 - [x] Multi-Agent Task Runner - PASSED: Fixed raw SQL insert, task completed in 5.7s
 - [x] Webhook Testing - PASSED: Test payload sent and received successfully
 
 ### Issues Fixed
-- [x] Multi-Agent agent insert - Fixed with raw SQL to bypass Drizzle ORM column issues
 
+- [x] Multi-Agent agent insert - Fixed with raw SQL to bypass Drizzle ORM column issues
 
 ## Phase 1: Self-Improvement System (Jan 5-6, 2026)
 
 ### Long-Term Memory with Vector Database
+
 - [ ] Create memory_entries table in database schema
 - [ ] Integrate Pinecone or Weaviate for vector embeddings
 - [ ] Implement semantic memory storage (task outcomes, strategies, learnings)
@@ -1414,6 +1430,7 @@
 - [ ] Test memory recall accuracy
 
 ### Self-Reflection System
+
 - [ ] Add reflection step after each task completion
 - [ ] Implement outcome analysis (success/failure metrics)
 - [ ] Create learning extraction (what worked, what didn't)
@@ -1424,6 +1441,7 @@
 ## Phase 2: Web App Development System (Jan 6-7, 2026)
 
 ### Project Scaffolding
+
 - [ ] Create app templates (React, Next.js, Vue, Svelte)
 - [ ] Implement database schema generator
 - [ ] Create API endpoint generator (REST/GraphQL)
@@ -1432,6 +1450,7 @@
 - [ ] Test scaffolding with multiple app types
 
 ### Git Integration
+
 - [ ] Add git clone tool
 - [ ] Implement git commit/push/pull
 - [ ] Add branch management
@@ -1440,6 +1459,7 @@
 - [ ] Test git operations end-to-end
 
 ### Deployment Tools
+
 - [ ] Add Vercel deployment integration
 - [ ] Add Railway deployment integration
 - [ ] Implement Docker containerization
@@ -1448,6 +1468,7 @@
 - [ ] Test deployments to multiple platforms
 
 ### Browser Preview & Dev Server
+
 - [ ] Implement dev server management
 - [ ] Add live reload capability
 - [ ] Create iframe preview in JARVIS UI
@@ -1456,6 +1477,7 @@
 - [ ] Test preview on multiple frameworks
 
 ### Iterative Refinement
+
 - [ ] Create change request parser
 - [ ] Implement diff generation
 - [ ] Add targeted code modifications

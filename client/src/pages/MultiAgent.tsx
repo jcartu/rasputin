@@ -69,7 +69,10 @@ const agentTypeColors: Record<string, string> = {
 interface TaskResult {
   success: boolean;
   finalOutput: string;
-  subtaskResults: Map<number, { success: boolean; output: unknown; error?: string }>;
+  subtaskResults: Map<
+    number,
+    { success: boolean; output: unknown; error?: string }
+  >;
   totalTokensUsed: number;
   totalExecutionTimeMs: number;
 }
@@ -88,10 +91,26 @@ export default function MultiAgent() {
 
   // Sample task templates
   const taskTemplates = [
-    { name: "Research Task", prompt: "Research the latest developments in AI and summarize the key findings" },
-    { name: "Code Review", prompt: "Review the codebase for potential security vulnerabilities and suggest improvements" },
-    { name: "Data Analysis", prompt: "Analyze the system logs and identify any anomalies or performance issues" },
-    { name: "System Check", prompt: "Check the health of all connected servers and report their status" },
+    {
+      name: "Research Task",
+      prompt:
+        "Research the latest developments in AI and summarize the key findings",
+    },
+    {
+      name: "Code Review",
+      prompt:
+        "Review the codebase for potential security vulnerabilities and suggest improvements",
+    },
+    {
+      name: "Data Analysis",
+      prompt:
+        "Analyze the system logs and identify any anomalies or performance issues",
+    },
+    {
+      name: "System Check",
+      prompt:
+        "Check the health of all connected servers and report their status",
+    },
   ];
 
   // Use correct method names: list, create, runTask, getMessages
@@ -112,7 +131,7 @@ export default function MultiAgent() {
   });
 
   const runTaskMutation = trpc.agents.runTask.useMutation({
-    onSuccess: (result) => {
+    onSuccess: result => {
       toast.success("Task completed");
       setTaskResult(result as unknown as TaskResult);
       setIsRunningTask(false);
@@ -217,8 +236,12 @@ export default function MultiAgent() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="orchestrator">Orchestrator</SelectItem>
-                          <SelectItem value="coordinator">Coordinator</SelectItem>
+                          <SelectItem value="orchestrator">
+                            Orchestrator
+                          </SelectItem>
+                          <SelectItem value="coordinator">
+                            Coordinator
+                          </SelectItem>
                           <SelectItem value="specialist">Specialist</SelectItem>
                           <SelectItem value="worker">Worker</SelectItem>
                           <SelectItem value="code">Code</SelectItem>
@@ -330,13 +353,16 @@ export default function MultiAgent() {
                     Run Multi-Agent Task
                   </CardTitle>
                   <CardDescription>
-                    Describe a task for the multi-agent system to complete collaboratively
+                    Describe a task for the multi-agent system to complete
+                    collaboratively
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Task Templates */}
                   <div>
-                    <Label className="text-xs text-muted-foreground">Quick Templates</Label>
+                    <Label className="text-xs text-muted-foreground">
+                      Quick Templates
+                    </Label>
                     <div className="flex flex-wrap gap-2 mt-2">
                       {taskTemplates.map((template, idx) => (
                         <Button
@@ -401,7 +427,9 @@ export default function MultiAgent() {
                     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                       <Loader2 className="w-8 h-8 animate-spin mb-4 text-cyan-400" />
                       <p>Orchestrating agents...</p>
-                      <p className="text-xs mt-2">The orchestrator is planning and delegating subtasks</p>
+                      <p className="text-xs mt-2">
+                        The orchestrator is planning and delegating subtasks
+                      </p>
                     </div>
                   ) : taskResult ? (
                     <div className="space-y-4">
@@ -412,8 +440,16 @@ export default function MultiAgent() {
                         ) : (
                           <XCircle className="w-5 h-5 text-red-400" />
                         )}
-                        <span className={taskResult.success ? "text-green-400" : "text-red-400"}>
-                          {taskResult.success ? "Task Completed Successfully" : "Task Failed"}
+                        <span
+                          className={
+                            taskResult.success
+                              ? "text-green-400"
+                              : "text-red-400"
+                          }
+                        >
+                          {taskResult.success
+                            ? "Task Completed Successfully"
+                            : "Task Failed"}
                         </span>
                       </div>
 
@@ -439,7 +475,9 @@ export default function MultiAgent() {
                     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                       <MessageSquare className="w-8 h-8 mb-4 opacity-50" />
                       <p>No task results yet</p>
-                      <p className="text-xs mt-2">Run a task to see the output here</p>
+                      <p className="text-xs mt-2">
+                        Run a task to see the output here
+                      </p>
                     </div>
                   )}
                 </CardContent>

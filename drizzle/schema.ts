@@ -221,9 +221,13 @@ export const agentTasks = mysqlTable("agentTasks", {
     "completed",
     "failed",
     "cancelled",
+    "waiting_approval",
   ])
     .notNull()
     .default("idle"),
+
+  /** Pending approval ID (when status is waiting_approval) */
+  pendingApprovalId: int("pendingApprovalId"),
 
   /** Final result/summary */
   result: text("result"),

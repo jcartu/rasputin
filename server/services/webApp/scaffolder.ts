@@ -8,7 +8,14 @@ import * as path from "path";
 
 export interface ScaffoldConfig {
   projectName: string;
-  projectType: "react" | "nextjs" | "vue" | "svelte" | "express" | "fastapi" | "rails";
+  projectType:
+    | "react"
+    | "nextjs"
+    | "vue"
+    | "svelte"
+    | "express"
+    | "fastapi"
+    | "rails";
   database?: "postgresql" | "mysql" | "mongodb" | "sqlite";
   authentication?: "jwt" | "oauth" | "session";
   features?: string[];
@@ -25,7 +32,9 @@ export interface ScaffoldResult {
 /**
  * Generate a new web app project structure
  */
-export async function scaffoldProject(config: ScaffoldConfig): Promise<ScaffoldResult> {
+export async function scaffoldProject(
+  config: ScaffoldConfig
+): Promise<ScaffoldResult> {
   try {
     const projectPath = path.join(config.outputPath, config.projectName);
 
@@ -116,7 +125,7 @@ npm run dev
 
 ## Features
 
-${config.features?.map((f) => `- ${f}`).join("\n") || "- Basic setup"}
+${config.features?.map(f => `- ${f}`).join("\n") || "- Basic setup"}
 
 ## Tech Stack
 
@@ -153,8 +162,15 @@ async function generateReactFiles(
   const files: string[] = [];
 
   // Create directories
-  const dirs = ["src", "src/components", "src/pages", "src/hooks", "src/utils", "public"];
-  dirs.forEach((dir) => {
+  const dirs = [
+    "src",
+    "src/components",
+    "src/pages",
+    "src/hooks",
+    "src/utils",
+    "public",
+  ];
+  dirs.forEach(dir => {
     const fullPath = path.join(projectPath, dir);
     if (!fs.existsSync(fullPath)) {
       fs.mkdirSync(fullPath, { recursive: true });
@@ -182,7 +198,10 @@ async function generateReactFiles(
       vitest: "^1.0.0",
     },
   };
-  fs.writeFileSync(path.join(projectPath, "package.json"), JSON.stringify(packageJson, null, 2));
+  fs.writeFileSync(
+    path.join(projectPath, "package.json"),
+    JSON.stringify(packageJson, null, 2)
+  );
   files.push("package.json");
 
   // vite.config.ts
@@ -301,7 +320,10 @@ body {
     include: ["src"],
     references: [{ path: "./tsconfig.node.json" }],
   };
-  fs.writeFileSync(path.join(projectPath, "tsconfig.json"), JSON.stringify(tsconfig, null, 2));
+  fs.writeFileSync(
+    path.join(projectPath, "tsconfig.json"),
+    JSON.stringify(tsconfig, null, 2)
+  );
   files.push("tsconfig.json");
 
   return files;
@@ -318,7 +340,7 @@ async function generateNextjsFiles(
 
   // Create directories
   const dirs = ["app", "app/api", "components", "lib", "public"];
-  dirs.forEach((dir) => {
+  dirs.forEach(dir => {
     const fullPath = path.join(projectPath, dir);
     if (!fs.existsSync(fullPath)) {
       fs.mkdirSync(fullPath, { recursive: true });
@@ -347,7 +369,10 @@ async function generateNextjsFiles(
       typescript: "^5",
     },
   };
-  fs.writeFileSync(path.join(projectPath, "package.json"), JSON.stringify(packageJson, null, 2));
+  fs.writeFileSync(
+    path.join(projectPath, "package.json"),
+    JSON.stringify(packageJson, null, 2)
+  );
   files.push("package.json");
 
   // next.config.js
@@ -384,7 +409,10 @@ module.exports = nextConfig
     include: ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
     exclude: ["node_modules"],
   };
-  fs.writeFileSync(path.join(projectPath, "tsconfig.json"), JSON.stringify(tsconfig, null, 2));
+  fs.writeFileSync(
+    path.join(projectPath, "tsconfig.json"),
+    JSON.stringify(tsconfig, null, 2)
+  );
   files.push("tsconfig.json");
 
   // app/layout.tsx
@@ -434,7 +462,7 @@ async function generateVueFiles(
   const files: string[] = [];
 
   const dirs = ["src", "src/components", "src/views", "public"];
-  dirs.forEach((dir) => {
+  dirs.forEach(dir => {
     const fullPath = path.join(projectPath, dir);
     if (!fs.existsSync(fullPath)) {
       fs.mkdirSync(fullPath, { recursive: true });
@@ -460,7 +488,10 @@ async function generateVueFiles(
       typescript: "^5.0.0",
     },
   };
-  fs.writeFileSync(path.join(projectPath, "package.json"), JSON.stringify(packageJson, null, 2));
+  fs.writeFileSync(
+    path.join(projectPath, "package.json"),
+    JSON.stringify(packageJson, null, 2)
+  );
   files.push("package.json");
 
   // vite.config.ts
@@ -538,7 +569,7 @@ async function generateSvelteFiles(
   const files: string[] = [];
 
   const dirs = ["src", "src/components", "src/lib", "public"];
-  dirs.forEach((dir) => {
+  dirs.forEach(dir => {
     const fullPath = path.join(projectPath, dir);
     if (!fs.existsSync(fullPath)) {
       fs.mkdirSync(fullPath, { recursive: true });
@@ -564,7 +595,10 @@ async function generateSvelteFiles(
       svelte: "^4.0.0",
     },
   };
-  fs.writeFileSync(path.join(projectPath, "package.json"), JSON.stringify(packageJson, null, 2));
+  fs.writeFileSync(
+    path.join(projectPath, "package.json"),
+    JSON.stringify(packageJson, null, 2)
+  );
   files.push("package.json");
 
   // vite.config.ts
@@ -647,7 +681,7 @@ async function generateExpressFiles(
   const files: string[] = [];
 
   const dirs = ["src", "src/routes", "src/middleware", "src/controllers"];
-  dirs.forEach((dir) => {
+  dirs.forEach(dir => {
     const fullPath = path.join(projectPath, dir);
     if (!fs.existsSync(fullPath)) {
       fs.mkdirSync(fullPath, { recursive: true });
@@ -675,7 +709,10 @@ async function generateExpressFiles(
       tsx: "^4.0.0",
     },
   };
-  fs.writeFileSync(path.join(projectPath, "package.json"), JSON.stringify(packageJson, null, 2));
+  fs.writeFileSync(
+    path.join(projectPath, "package.json"),
+    JSON.stringify(packageJson, null, 2)
+  );
   files.push("package.json");
 
   // src/index.ts
@@ -719,7 +756,10 @@ app.listen(PORT, () => {
     include: ["src"],
     exclude: ["node_modules"],
   };
-  fs.writeFileSync(path.join(projectPath, "tsconfig.json"), JSON.stringify(tsconfig, null, 2));
+  fs.writeFileSync(
+    path.join(projectPath, "tsconfig.json"),
+    JSON.stringify(tsconfig, null, 2)
+  );
   files.push("tsconfig.json");
 
   return files;
@@ -735,7 +775,7 @@ async function generateFastAPIFiles(
   const files: string[] = [];
 
   const dirs = ["app", "app/api", "app/models", "tests"];
-  dirs.forEach((dir) => {
+  dirs.forEach(dir => {
     const fullPath = path.join(projectPath, dir);
     if (!fs.existsSync(fullPath)) {
       fs.mkdirSync(fullPath, { recursive: true });
