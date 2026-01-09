@@ -4473,6 +4473,7 @@ export async function executeTool(
         input.body as Record<string, unknown> | undefined
       );
     case "create_github_issue":
+    case "github_create_issue":
       return createGitHubIssue(
         input.repo as string,
         input.title as string,
@@ -4483,6 +4484,7 @@ export async function executeTool(
         }
       );
     case "create_github_pr":
+    case "github_create_pr":
       return createGitHubPR(
         input.repo as string,
         input.title as string,
@@ -4491,6 +4493,7 @@ export async function executeTool(
         (input.base as string) || "main"
       );
     case "send_slack_message":
+    case "slack_message":
       return sendSlackMessage(
         input.channel as string,
         input.message as string,
@@ -4663,6 +4666,7 @@ export async function executeTool(
         command: input.command as string | undefined,
       });
     case "run_type_check":
+    case "run_typecheck":
       return runTypeCheck(input.projectPath as string);
     case "run_lint":
       return runLint(input.projectPath as string);
@@ -5394,5 +5398,847 @@ export function getAvailableTools(): Array<{
       },
     },
     ...getSelfEvolutionTools(),
+    // === GIT TOOLS ===
+    {
+      name: "git_status",
+      description:
+        "Get the git status of a project, showing modified, staged, and untracked files.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the git repository",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "git_diff",
+      description:
+        "Show git diff for a project. Can compare staged, unstaged, or specific commits.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the git repository",
+          required: true,
+        },
+        staged: {
+          type: "boolean",
+          description: "Show staged changes only (default: false)",
+          required: false,
+        },
+        file: {
+          type: "string",
+          description: "Specific file to diff",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "git_branch",
+      description: "List, create, or switch git branches.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the git repository",
+          required: true,
+        },
+        action: {
+          type: "string",
+          description: "'list', 'create', 'checkout', or 'delete'",
+          required: true,
+        },
+        branchName: {
+          type: "string",
+          description: "Branch name (required for create/checkout/delete)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "git_commit",
+      description: "Create a git commit with all staged changes.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the git repository",
+          required: true,
+        },
+        message: {
+          type: "string",
+          description: "Commit message",
+          required: true,
+        },
+        addAll: {
+          type: "boolean",
+          description: "Stage all changes before committing (default: false)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "git_log",
+      description: "Show git commit history.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the git repository",
+          required: true,
+        },
+        limit: {
+          type: "number",
+          description: "Number of commits to show (default: 10)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "git_push",
+      description: "Push commits to a remote repository.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the git repository",
+          required: true,
+        },
+        remote: {
+          type: "string",
+          description: "Remote name (default: origin)",
+          required: false,
+        },
+        branch: {
+          type: "string",
+          description: "Branch to push (default: current branch)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "git_pull",
+      description: "Pull changes from a remote repository.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the git repository",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "git_stash",
+      description: "Stash or restore uncommitted changes.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the git repository",
+          required: true,
+        },
+        action: {
+          type: "string",
+          description: "'save', 'pop', 'list', or 'drop'",
+          required: true,
+        },
+        message: {
+          type: "string",
+          description: "Stash message (for save action)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "git_clone",
+      description: "Clone a git repository.",
+      parameters: {
+        repoUrl: {
+          type: "string",
+          description: "URL of the repository to clone",
+          required: true,
+        },
+        targetPath: {
+          type: "string",
+          description: "Local path to clone into",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "git_init",
+      description: "Initialize a new git repository.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to initialize as a git repository",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "git_create_pr",
+      description: "Create a GitHub pull request using the gh CLI.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the git repository",
+          required: true,
+        },
+        title: {
+          type: "string",
+          description: "PR title",
+          required: true,
+        },
+        body: {
+          type: "string",
+          description: "PR description",
+          required: true,
+        },
+        base: {
+          type: "string",
+          description: "Base branch (default: main)",
+          required: false,
+        },
+      },
+    },
+    // === DEPLOYMENT TOOLS ===
+    {
+      name: "deploy_vercel",
+      description: "Deploy a project to Vercel. Requires VERCEL_TOKEN env var.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project to deploy",
+          required: true,
+        },
+        prod: {
+          type: "boolean",
+          description:
+            "Deploy to production (default: false, deploys to preview)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "deploy_railway",
+      description:
+        "Deploy a project to Railway. Requires RAILWAY_TOKEN env var.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project to deploy",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "docker_build",
+      description: "Build a Docker image from a Dockerfile.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project with Dockerfile",
+          required: true,
+        },
+        imageName: {
+          type: "string",
+          description: "Name for the Docker image",
+          required: true,
+        },
+        tag: {
+          type: "string",
+          description: "Image tag (default: latest)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "docker_push",
+      description: "Push a Docker image to a registry.",
+      parameters: {
+        imageName: {
+          type: "string",
+          description:
+            "Full image name including registry (e.g., docker.io/user/app:tag)",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "docker_compose",
+      description: "Run docker-compose commands (up, down, logs, ps).",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project with docker-compose.yml",
+          required: true,
+        },
+        action: {
+          type: "string",
+          description: "'up', 'down', 'logs', 'ps', or 'restart'",
+          required: true,
+        },
+        detach: {
+          type: "boolean",
+          description: "Run in detached mode for 'up' (default: true)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "generate_dockerfile",
+      description:
+        "Generate a Dockerfile for a project based on its framework/language.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project",
+          required: true,
+        },
+        framework: {
+          type: "string",
+          description:
+            "Framework: 'node', 'python', 'react', 'nextjs', 'express', 'fastapi'",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "check_deployment_health",
+      description: "Check the health of a deployed application by URL.",
+      parameters: {
+        url: {
+          type: "string",
+          description: "URL of the deployed application",
+          required: true,
+        },
+        expectedStatus: {
+          type: "number",
+          description: "Expected HTTP status code (default: 200)",
+          required: false,
+        },
+      },
+    },
+    // === DEV TOOLS ===
+    {
+      name: "run_build",
+      description:
+        "Run the build command for a project (npm run build, pnpm build, etc.).",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "run_tests",
+      description: "Run tests for a project (npm test, pytest, etc.).",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project",
+          required: true,
+        },
+        testFile: {
+          type: "string",
+          description: "Specific test file to run",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "run_typecheck",
+      description: "Run TypeScript type checking on a project.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "run_lint",
+      description: "Run linting (ESLint, Prettier) on a project.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "start_dev_server",
+      description:
+        "Start a development server for a project in the background.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project",
+          required: true,
+        },
+        port: {
+          type: "number",
+          description: "Port to run on (default: auto-detect)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "check_dev_server",
+      description: "Check if a dev server is running on a port.",
+      parameters: {
+        port: {
+          type: "number",
+          description: "Port to check (default: 5173)",
+          required: false,
+        },
+      },
+    },
+    // === BROWSER AUTOMATION TOOLS ===
+    {
+      name: "browser_session_start",
+      description:
+        "Start a new browser automation session. Returns a session ID for subsequent operations.",
+      parameters: {
+        url: {
+          type: "string",
+          description: "Initial URL to navigate to",
+          required: true,
+        },
+        headless: {
+          type: "boolean",
+          description: "Run in headless mode (default: true)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "browser_click",
+      description: "Click an element in the browser session.",
+      parameters: {
+        sessionId: {
+          type: "string",
+          description: "Browser session ID",
+          required: true,
+        },
+        selector: {
+          type: "string",
+          description: "CSS selector or text content to click",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "browser_fill",
+      description: "Fill a form field in the browser session.",
+      parameters: {
+        sessionId: {
+          type: "string",
+          description: "Browser session ID",
+          required: true,
+        },
+        selector: {
+          type: "string",
+          description: "CSS selector for the input field",
+          required: true,
+        },
+        value: {
+          type: "string",
+          description: "Value to fill",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "browser_navigate",
+      description: "Navigate to a URL in the browser session.",
+      parameters: {
+        sessionId: {
+          type: "string",
+          description: "Browser session ID",
+          required: true,
+        },
+        url: {
+          type: "string",
+          description: "URL to navigate to",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "browser_screenshot",
+      description: "Take a screenshot of the current page.",
+      parameters: {
+        sessionId: {
+          type: "string",
+          description: "Browser session ID",
+          required: true,
+        },
+        fullPage: {
+          type: "boolean",
+          description: "Capture full page (default: false, viewport only)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "browser_get_content",
+      description: "Get the text content of the current page.",
+      parameters: {
+        sessionId: {
+          type: "string",
+          description: "Browser session ID",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "browser_wait_for",
+      description: "Wait for an element to appear on the page.",
+      parameters: {
+        sessionId: {
+          type: "string",
+          description: "Browser session ID",
+          required: true,
+        },
+        selector: {
+          type: "string",
+          description: "CSS selector to wait for",
+          required: true,
+        },
+        timeout: {
+          type: "number",
+          description: "Timeout in milliseconds (default: 30000)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "browser_session_end",
+      description: "End a browser automation session and clean up resources.",
+      parameters: {
+        sessionId: {
+          type: "string",
+          description: "Browser session ID to close",
+          required: true,
+        },
+      },
+    },
+    // === DATABASE TOOL ===
+    {
+      name: "database_query",
+      description:
+        "Execute a SQL query on the application database. Use with caution - prefer SELECT queries.",
+      parameters: {
+        query: {
+          type: "string",
+          description: "SQL query to execute",
+          required: true,
+        },
+        params: {
+          type: "array",
+          description: "Query parameters for prepared statements",
+          required: false,
+        },
+      },
+    },
+    // === INTEGRATION TOOLS ===
+    {
+      name: "slack_message",
+      description:
+        "Send a message to a Slack channel. Requires SLACK_WEBHOOK_URL env var.",
+      parameters: {
+        channel: {
+          type: "string",
+          description: "Slack channel name (e.g., #general)",
+          required: true,
+        },
+        message: {
+          type: "string",
+          description: "Message to send",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "github_create_issue",
+      description: "Create a GitHub issue. Requires GITHUB_TOKEN env var.",
+      parameters: {
+        repo: {
+          type: "string",
+          description: "Repository in format owner/repo",
+          required: true,
+        },
+        title: {
+          type: "string",
+          description: "Issue title",
+          required: true,
+        },
+        body: {
+          type: "string",
+          description: "Issue body/description",
+          required: true,
+        },
+        labels: {
+          type: "array",
+          description: "Labels to add to the issue",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "github_create_pr",
+      description:
+        "Create a GitHub pull request. Requires GITHUB_TOKEN env var.",
+      parameters: {
+        repo: {
+          type: "string",
+          description: "Repository in format owner/repo",
+          required: true,
+        },
+        title: {
+          type: "string",
+          description: "PR title",
+          required: true,
+        },
+        body: {
+          type: "string",
+          description: "PR description",
+          required: true,
+        },
+        head: {
+          type: "string",
+          description: "Branch containing changes",
+          required: true,
+        },
+        base: {
+          type: "string",
+          description: "Base branch to merge into (default: main)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "github_api",
+      description: "Make a GitHub API request. Requires GITHUB_TOKEN env var.",
+      parameters: {
+        endpoint: {
+          type: "string",
+          description: "API endpoint (e.g., /repos/owner/repo/issues)",
+          required: true,
+        },
+        method: {
+          type: "string",
+          description: "HTTP method (default: GET)",
+          required: false,
+        },
+        body: {
+          type: "object",
+          description: "Request body for POST/PUT/PATCH",
+          required: false,
+        },
+      },
+    },
+    // === BACKGROUND/TMUX TOOLS ===
+    {
+      name: "tmux_start",
+      description:
+        "Start a long-running process in a tmux session (e.g., dev servers, watchers).",
+      parameters: {
+        sessionName: {
+          type: "string",
+          description: "Name for the tmux session",
+          required: true,
+        },
+        command: {
+          type: "string",
+          description: "Command to run",
+          required: true,
+        },
+        workingDirectory: {
+          type: "string",
+          description: "Working directory for the command",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "tmux_output",
+      description: "Get the recent output from a tmux session.",
+      parameters: {
+        sessionName: {
+          type: "string",
+          description: "Name of the tmux session",
+          required: true,
+        },
+        lines: {
+          type: "number",
+          description: "Number of lines to retrieve (default: 50)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "tmux_send",
+      description: "Send input to a running tmux session.",
+      parameters: {
+        sessionName: {
+          type: "string",
+          description: "Name of the tmux session",
+          required: true,
+        },
+        input: {
+          type: "string",
+          description: "Input to send",
+          required: true,
+        },
+        pressEnter: {
+          type: "boolean",
+          description: "Press Enter after input (default: true)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "tmux_stop",
+      description: "Stop and kill a tmux session.",
+      parameters: {
+        sessionName: {
+          type: "string",
+          description: "Name of the tmux session to stop",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "tmux_list",
+      description: "List all active tmux sessions.",
+      parameters: {},
+    },
+    // === AGENT TEAMS ===
+    {
+      name: "spawn_agent_team",
+      description:
+        "Spawn a team of specialized AI agents to work on a complex task in parallel. Use for tasks that benefit from multiple perspectives or parallel execution.",
+      parameters: {
+        task: {
+          type: "string",
+          description: "The task to delegate to the agent team",
+          required: true,
+        },
+        teamSize: {
+          type: "number",
+          description: "Number of agents in the team (default: 3, max: 5)",
+          required: false,
+        },
+        agentTypes: {
+          type: "array",
+          description:
+            "Types of agents to include: 'code', 'research', 'sysadmin', 'data', 'reviewer'",
+          required: false,
+        },
+      },
+    },
+    // === EVENT/MACRO TOOLS ===
+    {
+      name: "create_event_trigger",
+      description:
+        "Create an event trigger that runs a JARVIS task when conditions are met.",
+      parameters: {
+        name: {
+          type: "string",
+          description: "Name of the trigger",
+          required: true,
+        },
+        triggerType: {
+          type: "string",
+          description: "'webhook', 'cron', or 'condition'",
+          required: true,
+        },
+        condition: {
+          type: "string",
+          description: "Cron expression or condition definition",
+          required: true,
+        },
+        taskPrompt: {
+          type: "string",
+          description: "The JARVIS task to run when triggered",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "define_macro",
+      description:
+        "Define a reusable macro (sequence of tool calls) that can be executed later.",
+      parameters: {
+        name: {
+          type: "string",
+          description: "Name of the macro",
+          required: true,
+        },
+        description: {
+          type: "string",
+          description: "What the macro does",
+          required: true,
+        },
+        steps: {
+          type: "array",
+          description: "Array of tool calls to execute in sequence",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "execute_macro",
+      description: "Execute a previously defined macro.",
+      parameters: {
+        name: {
+          type: "string",
+          description: "Name of the macro to execute",
+          required: true,
+        },
+        params: {
+          type: "object",
+          description: "Parameters to pass to the macro",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "list_macros",
+      description: "List all defined macros for the current user.",
+      parameters: {},
+    },
+    {
+      name: "list_event_triggers",
+      description: "List all event triggers for the current user.",
+      parameters: {},
+    },
+    // === SECURITY TOOLS ===
+    {
+      name: "npm_audit",
+      description:
+        "Run npm audit to check for security vulnerabilities in dependencies.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "security_analysis",
+      description:
+        "Run a security analysis on a project checking for common vulnerabilities.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project to analyze",
+          required: true,
+        },
+      },
+    },
   ];
 }
