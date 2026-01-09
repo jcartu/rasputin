@@ -25,7 +25,8 @@ type SshHost = typeof sshHosts.$inferSelect;
 type InsertSshHost = typeof sshHosts.$inferInsert;
 type SshPermission = typeof sshPermissions.$inferSelect;
 type InsertSshPermission = typeof sshPermissions.$inferInsert;
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
+import { emitApprovalNew, emitApprovalResolved } from "./services/websocket";
 
 // Encryption key derived from JWT_SECRET
 const ENCRYPTION_KEY = crypto
@@ -88,6 +89,7 @@ export class SSHConnectionManager {
       timeout?: number;
       taskId?: number;
       clientIp?: string;
+      skipApprovalCheck?: boolean;
     } = {}
   ): Promise<{
     success: boolean;
@@ -98,7 +100,13 @@ export class SSHConnectionManager {
     error?: string;
   }> {
     const startTime = Date.now();
-    const { workingDirectory, timeout = 300000, taskId, clientIp } = options;
+    const {
+      workingDirectory,
+      timeout = 300000,
+      taskId,
+      clientIp,
+      skipApprovalCheck,
+    } = options;
 
     const db = await getDb();
     if (!db) {
@@ -150,9 +158,11 @@ export class SSHConnectionManager {
       throw new Error(`Command blocked: ${permissionCheck.reason}`);
     }
 
-    // Check if approval is required
-    if (permissionCheck.requiresApproval) {
-      // Create pending approval
+    // Check if approval is required (skip for already-approved commands)
+    if (permissionCheck.requiresApproval && !skipApprovalCheck) {
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+      const riskLevel = permissionCheck.riskLevel || "medium";
+
       const [approval] = await db
         .insert(pendingApprovals)
         .values({
@@ -162,11 +172,20 @@ export class SSHConnectionManager {
           command,
           workingDirectory,
           reason: permissionCheck.approvalReason,
-          riskLevel: permissionCheck.riskLevel || "medium",
+          riskLevel,
           status: "pending",
-          expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minute expiry
+          expiresAt,
         })
         .$returningId();
+
+      emitApprovalNew({
+        id: approval.id,
+        hostId,
+        command,
+        riskLevel,
+        reason: permissionCheck.approvalReason || null,
+        expiresAt,
+      });
 
       // Log the pending approval
       await this.logAudit(db, {
@@ -1010,10 +1029,10 @@ export async function approvePendingCommand(
       .update(pendingApprovals)
       .set({ status: "expired", resolvedAt: new Date() })
       .where(eq(pendingApprovals.id, approvalId));
+    emitApprovalResolved(approvalId, "expired");
     return { success: false, error: "Approval has expired" };
   }
 
-  // Update approval status
   await db
     .update(pendingApprovals)
     .set({
@@ -1023,7 +1042,8 @@ export async function approvePendingCommand(
     })
     .where(eq(pendingApprovals.id, approvalId));
 
-  // Execute the command
+  emitApprovalResolved(approvalId, "approved");
+
   const commandToExecute = modifiedCommand || approval.command;
   const result = await sshManager.executeCommand(
     approval.hostId,
@@ -1032,6 +1052,7 @@ export async function approvePendingCommand(
     {
       workingDirectory: approval.workingDirectory || undefined,
       taskId: approval.taskId || undefined,
+      skipApprovalCheck: true,
     }
   );
 
@@ -1062,6 +1083,8 @@ export async function rejectPendingCommand(
         eq(pendingApprovals.userId, userId)
       )
     );
+
+  emitApprovalResolved(approvalId, "rejected");
 }
 
 /**
@@ -1085,9 +1108,46 @@ export async function getPendingApprovals(
     .orderBy(desc(pendingApprovals.createdAt));
 }
 
-/**
- * Verify host key and pin it
- */
+export async function getApprovalById(
+  approvalId: number,
+  userId: number
+): Promise<typeof pendingApprovals.$inferSelect | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const [approval] = await db
+    .select()
+    .from(pendingApprovals)
+    .where(
+      and(
+        eq(pendingApprovals.id, approvalId),
+        eq(pendingApprovals.userId, userId)
+      )
+    );
+
+  return approval || null;
+}
+
+export async function getApprovalHistory(
+  userId: number,
+  limit: number = 50
+): Promise<(typeof pendingApprovals.$inferSelect)[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select()
+    .from(pendingApprovals)
+    .where(
+      and(
+        eq(pendingApprovals.userId, userId),
+        inArray(pendingApprovals.status, ["approved", "rejected", "expired"])
+      )
+    )
+    .orderBy(desc(pendingApprovals.createdAt))
+    .limit(limit);
+}
+
 export async function verifyAndPinHostKey(
   hostId: number,
   userId: number

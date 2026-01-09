@@ -753,8 +753,7 @@ export async function sshExecute(
 
     if (!result.success) {
       if (result.error?.startsWith("APPROVAL_REQUIRED:")) {
-        const parts = result.error.split(":");
-        return `APPROVAL_REQUIRED: This command requires your approval before execution.\nApproval ID: ${parts[1]}\nReason: ${parts[2]}\n\nPlease approve this action in the Hosts tab or respond with 'approve' to continue.`;
+        return result.error;
       }
       return `SSH Error: ${result.error || result.stderr}`;
     }

@@ -2193,6 +2193,12 @@ export async function runOrchestrator(
               }
             }
           } catch (error) {
+            if (
+              error instanceof Error &&
+              error.name === "ApprovalRequiredError"
+            ) {
+              throw error;
+            }
             const errorMsg =
               error instanceof Error ? error.message : String(error);
             output = `Error: ${errorMsg}`;

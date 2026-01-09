@@ -57,6 +57,22 @@ export interface LogEntry {
   stage?: SynthesisStage;
 }
 
+interface ApprovalNewData {
+  id: number;
+  hostId: number;
+  command: string;
+  riskLevel: string;
+  reason: string | null;
+  expiresAt: Date | null;
+  timestamp: number;
+}
+
+interface ApprovalResolvedData {
+  id: number;
+  status: "approved" | "rejected" | "expired";
+  timestamp: number;
+}
+
 interface UseWebSocketOptions {
   onModelStatus?: (update: ModelStatusUpdate) => void;
   onModelStream?: (update: ModelStreamUpdate) => void;
@@ -64,6 +80,8 @@ interface UseWebSocketOptions {
   onConsensusStart?: () => void;
   onConsensusComplete?: (data: ConsensusCompleteData) => void;
   onSynthesisComplete?: (data: SynthesisCompleteData) => void;
+  onApprovalNew?: (data: ApprovalNewData) => void;
+  onApprovalResolved?: (data: ApprovalResolvedData) => void;
   onError?: (error: { message: string; code?: string }) => void;
 }
 
@@ -227,6 +245,16 @@ export function useWebSocket(
       setIsQuerying(false);
       addLog("error", `Error: ${data.message} (${data.code || "unknown"})`);
       optionsRef.current.onError?.(data);
+    });
+
+    socket.on("approval:new", (data: ApprovalNewData) => {
+      addLog("info", `New approval required: ${data.command.slice(0, 50)}...`);
+      optionsRef.current.onApprovalNew?.(data);
+    });
+
+    socket.on("approval:resolved", (data: ApprovalResolvedData) => {
+      addLog("info", `Approval ${data.id} ${data.status}`);
+      optionsRef.current.onApprovalResolved?.(data);
     });
 
     return () => {

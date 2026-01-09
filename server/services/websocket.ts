@@ -121,6 +121,20 @@ interface ServerToClientEvents {
     error: string;
     timestamp: number;
   }) => void;
+  "approval:new": (data: {
+    id: number;
+    hostId: number;
+    command: string;
+    riskLevel: string;
+    reason: string | null;
+    expiresAt: Date | null;
+    timestamp: number;
+  }) => void;
+  "approval:resolved": (data: {
+    id: number;
+    status: "approved" | "rejected" | "expired";
+    timestamp: number;
+  }) => void;
   error: (data: { message: string; code?: string }) => void;
 }
 
@@ -636,6 +650,39 @@ async function handleJarvisTask(
     durationMs,
     timestamp: Date.now(),
   });
+}
+
+// ============================================================================
+// Approval Event Emitters
+// ============================================================================
+
+export function emitApprovalNew(approval: {
+  id: number;
+  hostId: number;
+  command: string;
+  riskLevel: string;
+  reason: string | null;
+  expiresAt: Date | null;
+}): void {
+  if (io) {
+    io.emit("approval:new", {
+      ...approval,
+      timestamp: Date.now(),
+    });
+  }
+}
+
+export function emitApprovalResolved(
+  id: number,
+  status: "approved" | "rejected" | "expired"
+): void {
+  if (io) {
+    io.emit("approval:resolved", {
+      id,
+      status,
+      timestamp: Date.now(),
+    });
+  }
 }
 
 export { io };

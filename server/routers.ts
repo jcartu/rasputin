@@ -505,6 +505,7 @@ export const appRouter = router({
           title: task.title,
           query: task.query,
           status: task.status,
+          pendingApprovalId: task.pendingApprovalId,
           iterationCount: task.iterationCount,
           errorMessage: task.errorMessage,
           createdAt: task.createdAt,
@@ -773,6 +774,26 @@ export const appRouter = router({
                 };
                 const result = await executeTool(toolName, enrichedInput);
                 await db.incrementUsage(ctx.user.id, today, "totalApiCalls");
+
+                if (result.startsWith("APPROVAL_REQUIRED:")) {
+                  const parts = result.split(":");
+                  const approvalId = parseInt(parts[1], 10);
+                  await db.updateAgentToolCall(toolCallRecord.id, {
+                    output: result,
+                    status: "completed",
+                    durationMs: Date.now() - toolStartTime,
+                  });
+                  await db.updateAgentTask(taskId!, {
+                    status: "waiting_approval",
+                    pendingApprovalId: approvalId,
+                  });
+                  const pauseError = new Error(
+                    `TASK_PAUSED:APPROVAL_REQUIRED:${approvalId}`
+                  );
+                  pauseError.name = "ApprovalRequiredError";
+                  throw pauseError;
+                }
+
                 await db.updateAgentToolCall(toolCallRecord.id, {
                   output: result,
                   status: "completed",
@@ -782,6 +803,12 @@ export const appRouter = router({
               } catch (error) {
                 const errorMsg =
                   error instanceof Error ? error.message : String(error);
+                if (
+                  error instanceof Error &&
+                  error.name === "ApprovalRequiredError"
+                ) {
+                  throw error;
+                }
                 await db.updateAgentToolCall(toolCallRecord.id, {
                   status: "error",
                   errorMessage: errorMsg,
@@ -793,13 +820,30 @@ export const appRouter = router({
             { memoryContext: memoryPromptAddition }
           );
         } catch (error) {
+          if (
+            error instanceof Error &&
+            error.name === "ApprovalRequiredError"
+          ) {
+            const match = error.message.match(/APPROVAL_REQUIRED:(\d+)/);
+            const approvalId = match ? parseInt(match[1], 10) : null;
+            steps.push({
+              type: "waiting_approval" as "thinking",
+              content: `Task paused: SSH command requires approval. Approval ID: ${approvalId}`,
+            });
+            return {
+              success: true,
+              taskId,
+              status: "waiting_approval",
+              pendingApprovalId: approvalId,
+              steps,
+            };
+          }
           hasError = true;
           const errorMsg =
             error instanceof Error ? error.message : String(error);
           steps.push({ type: "error", content: errorMsg });
         }
 
-        // Update task with results
         const durationMs = Date.now() - startTime;
         await db.updateAgentTask(taskId, {
           status: hasError ? "failed" : "completed",
@@ -892,6 +936,64 @@ export const appRouter = router({
         }
 
         return { taskId, steps };
+      }),
+
+    resumeTask: protectedProcedure
+      .input(z.object({ taskId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const task = await db.getAgentTask(input.taskId, ctx.user.id);
+        if (!task) {
+          throw new Error("Task not found");
+        }
+        if (task.status !== "waiting_approval") {
+          throw new Error(
+            `Cannot resume task with status: ${task.status}. Task must be in waiting_approval status.`
+          );
+        }
+        if (!task.pendingApprovalId) {
+          throw new Error("No pending approval found for this task");
+        }
+
+        const approval = await ssh.getApprovalById(
+          task.pendingApprovalId,
+          ctx.user.id
+        );
+
+        if (!approval) {
+          await db.updateAgentTask(input.taskId, {
+            status: "failed",
+            errorMessage: "Approval not found",
+            pendingApprovalId: null,
+          });
+          throw new Error("Approval not found");
+        }
+
+        if (approval.status === "pending") {
+          throw new Error(
+            "Command has not been approved yet. Please approve the command first."
+          );
+        }
+
+        if (approval.status !== "approved") {
+          await db.updateAgentTask(input.taskId, {
+            status: "failed",
+            errorMessage: `Command was ${approval.status}`,
+            pendingApprovalId: null,
+          });
+          throw new Error(`Command was ${approval.status}`);
+        }
+
+        await db.updateAgentTask(input.taskId, {
+          status: "running",
+          pendingApprovalId: null,
+        });
+
+        return {
+          success: true,
+          taskId: input.taskId,
+          message:
+            "Task resumed. The approved command will be executed on next iteration.",
+        };
       }),
   }),
 
@@ -1738,10 +1840,15 @@ export const appRouter = router({
         return ssh.getHostAuditLog(input.hostId, ctx.user.id, input.limit);
       }),
 
-    // Get pending approvals
     getPendingApprovals: protectedProcedure.query(async ({ ctx }) => {
       return ssh.getPendingApprovals(ctx.user.id);
     }),
+
+    getApprovalHistory: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        return ssh.getApprovalHistory(ctx.user.id, input?.limit || 50);
+      }),
 
     // Approve pending command
     approveCommand: protectedProcedure
