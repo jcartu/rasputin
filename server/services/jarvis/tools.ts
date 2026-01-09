@@ -2831,6 +2831,485 @@ ${stderr ? `Warnings:\n${stderr}` : ""}`;
   }
 }
 
+// ============================================================================
+// DEPLOYMENT TOOLS
+// ============================================================================
+
+/**
+ * Deploy to Vercel using the Vercel CLI
+ */
+export async function deployVercel(
+  projectPath: string,
+  options?: {
+    prod?: boolean;
+    name?: string;
+    env?: Record<string, string>;
+  }
+): Promise<string> {
+  const absPath = path.resolve(projectPath);
+
+  try {
+    // Check if vercel CLI is available
+    const { stdout: vercelVersion } = await execAsync("vercel --version", {
+      timeout: 10000,
+    }).catch(() => ({ stdout: "" }));
+
+    if (!vercelVersion) {
+      return `Error: Vercel CLI not installed. Install with: npm i -g vercel`;
+    }
+
+    // Build the deploy command
+    let cmd = "vercel";
+    if (options?.prod) {
+      cmd += " --prod";
+    }
+    if (options?.name) {
+      cmd += ` --name ${options.name}`;
+    }
+    cmd += " --yes"; // Auto-confirm prompts
+
+    // Set environment variables if provided
+    const envVars: Record<string, string> = { ...process.env } as Record<
+      string,
+      string
+    >;
+    if (options?.env) {
+      for (const [key, value] of Object.entries(options.env)) {
+        envVars[key] = value;
+      }
+    }
+
+    const { stdout, stderr } = await execAsync(cmd, {
+      cwd: absPath,
+      timeout: 300000, // 5 minutes
+      env: envVars,
+    });
+
+    // Extract deployment URL from output
+    const urlMatch = stdout.match(/(https:\/\/[^\s]+\.vercel\.app)/);
+    const deployUrl = urlMatch ? urlMatch[1] : "URL not found in output";
+
+    return `Vercel deployment ${options?.prod ? "(production)" : "(preview)"} completed!
+
+Deployment URL: ${deployUrl}
+
+Output:
+${stdout}
+${stderr ? `\nWarnings:\n${stderr}` : ""}`;
+  } catch (error) {
+    const execError = error as { stdout?: string; stderr?: string };
+    return `Vercel deployment error: ${error instanceof Error ? error.message : String(error)}
+    
+${execError.stdout || ""}
+${execError.stderr || ""}`;
+  }
+}
+
+/**
+ * Deploy to Railway using the Railway CLI
+ */
+export async function deployRailway(
+  projectPath: string,
+  options?: {
+    service?: string;
+    environment?: string;
+  }
+): Promise<string> {
+  const absPath = path.resolve(projectPath);
+
+  try {
+    // Check if railway CLI is available
+    const { stdout: railwayVersion } = await execAsync("railway --version", {
+      timeout: 10000,
+    }).catch(() => ({ stdout: "" }));
+
+    if (!railwayVersion) {
+      return `Error: Railway CLI not installed. Install with: npm i -g @railway/cli`;
+    }
+
+    // Build the deploy command
+    let cmd = "railway up";
+    if (options?.service) {
+      cmd += ` --service ${options.service}`;
+    }
+    if (options?.environment) {
+      cmd += ` --environment ${options.environment}`;
+    }
+    cmd += " --detach"; // Don't wait for logs
+
+    const { stdout, stderr } = await execAsync(cmd, {
+      cwd: absPath,
+      timeout: 300000, // 5 minutes
+    });
+
+    return `Railway deployment initiated!
+
+${stdout}
+${stderr ? `\nInfo:\n${stderr}` : ""}
+
+Use 'railway logs' to monitor the deployment.`;
+  } catch (error) {
+    const execError = error as { stdout?: string; stderr?: string };
+    return `Railway deployment error: ${error instanceof Error ? error.message : String(error)}
+    
+${execError.stdout || ""}
+${execError.stderr || ""}`;
+  }
+}
+
+/**
+ * Build Docker image for a project
+ */
+export async function dockerBuild(
+  projectPath: string,
+  options?: {
+    tag?: string;
+    dockerfile?: string;
+    buildArgs?: Record<string, string>;
+    platform?: string;
+  }
+): Promise<string> {
+  const absPath = path.resolve(projectPath);
+
+  try {
+    // Check if docker is available
+    const { stdout: dockerVersion } = await execAsync("docker --version", {
+      timeout: 10000,
+    }).catch(() => ({ stdout: "" }));
+
+    if (!dockerVersion) {
+      return `Error: Docker not installed or not running.`;
+    }
+
+    // Build the docker build command
+    const projectName = path
+      .basename(absPath)
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-");
+    const tag = options?.tag || `${projectName}:latest`;
+    let cmd = `docker build -t ${tag}`;
+
+    if (options?.dockerfile) {
+      cmd += ` -f ${options.dockerfile}`;
+    }
+    if (options?.platform) {
+      cmd += ` --platform ${options.platform}`;
+    }
+    if (options?.buildArgs) {
+      for (const [key, value] of Object.entries(options.buildArgs)) {
+        cmd += ` --build-arg ${key}=${value}`;
+      }
+    }
+    cmd += ` ${absPath}`;
+
+    const { stdout, stderr } = await execAsync(cmd, {
+      timeout: 600000, // 10 minutes
+      maxBuffer: 1024 * 1024 * 10, // 10MB
+    });
+
+    return `Docker image built successfully!
+
+Image: ${tag}
+
+${stdout.slice(-3000)}
+${stderr ? `\nBuild output:\n${stderr.slice(-1000)}` : ""}
+
+Next steps:
+- Run locally: docker run -p 3000:3000 ${tag}
+- Push to registry: docker push ${tag}`;
+  } catch (error) {
+    const execError = error as { stdout?: string; stderr?: string };
+    return `Docker build error: ${error instanceof Error ? error.message : String(error)}
+    
+${(execError.stdout || "").slice(-2000)}
+${(execError.stderr || "").slice(-2000)}`;
+  }
+}
+
+/**
+ * Push Docker image to a registry
+ */
+export async function dockerPush(
+  imageName: string,
+  options?: {
+    registry?: string;
+  }
+): Promise<string> {
+  try {
+    let fullImageName = imageName;
+    if (options?.registry) {
+      const imageTag = imageName.includes(":")
+        ? imageName
+        : `${imageName}:latest`;
+      fullImageName = `${options.registry}/${imageTag}`;
+
+      // Tag the image for the registry
+      await execAsync(`docker tag ${imageName} ${fullImageName}`, {
+        timeout: 30000,
+      });
+    }
+
+    const { stdout, stderr } = await execAsync(`docker push ${fullImageName}`, {
+      timeout: 600000, // 10 minutes
+    });
+
+    return `Docker image pushed successfully!
+
+Image: ${fullImageName}
+
+${stdout}
+${stderr ? `\nInfo:\n${stderr}` : ""}`;
+  } catch (error) {
+    return `Docker push error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Generate a Dockerfile for a project based on its type
+ */
+export async function generateDockerfile(
+  projectPath: string,
+  options?: {
+    projectType?: "node" | "python" | "static";
+    port?: number;
+  }
+): Promise<string> {
+  const absPath = path.resolve(projectPath);
+
+  try {
+    // Detect project type if not specified
+    let projectType = options?.projectType;
+    if (!projectType) {
+      const packageJsonPath = path.join(absPath, "package.json");
+      const requirementsTxtPath = path.join(absPath, "requirements.txt");
+      const indexHtmlPath = path.join(absPath, "index.html");
+
+      try {
+        await fs.access(packageJsonPath);
+        projectType = "node";
+      } catch {
+        try {
+          await fs.access(requirementsTxtPath);
+          projectType = "python";
+        } catch {
+          try {
+            await fs.access(indexHtmlPath);
+            projectType = "static";
+          } catch {
+            projectType = "node"; // Default to node
+          }
+        }
+      }
+    }
+
+    const port = options?.port || 3000;
+    let dockerfileContent = "";
+
+    switch (projectType) {
+      case "node":
+        dockerfileContent = `# Node.js Dockerfile
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+COPY pnpm-lock.yaml* ./
+RUN npm install -g pnpm && pnpm install --frozen-lockfile
+
+# Copy source and build
+COPY . .
+RUN pnpm build
+
+# Production image
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Copy built assets
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./
+
+EXPOSE ${port}
+
+CMD ["node", "dist/index.js"]
+`;
+        break;
+
+      case "python":
+        dockerfileContent = `# Python Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application
+COPY . .
+
+EXPOSE ${port}
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${port}"]
+`;
+        break;
+
+      case "static":
+        dockerfileContent = `# Static site Dockerfile
+FROM nginx:alpine
+
+# Copy static files
+COPY . /usr/share/nginx/html
+
+# Copy nginx config if exists
+COPY nginx.conf /etc/nginx/conf.d/default.conf 2>/dev/null || true
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
+`;
+        break;
+    }
+
+    const dockerfilePath = path.join(absPath, "Dockerfile");
+    await fs.writeFile(dockerfilePath, dockerfileContent, "utf-8");
+
+    // Also generate .dockerignore
+    const dockerignoreContent = `node_modules
+.git
+.gitignore
+*.md
+.env*
+.vscode
+.idea
+dist
+build
+*.log
+`;
+    await fs.writeFile(
+      path.join(absPath, ".dockerignore"),
+      dockerignoreContent,
+      "utf-8"
+    );
+
+    return `Dockerfile generated for ${projectType} project!
+
+Files created:
+- Dockerfile
+- .dockerignore
+
+Detected project type: ${projectType}
+Configured port: ${port}
+
+Next steps:
+1. Review and customize the Dockerfile if needed
+2. Build: docker build -t your-app .
+3. Run: docker run -p ${port}:${port} your-app`;
+  } catch (error) {
+    return `Error generating Dockerfile: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Docker Compose operations
+ */
+export async function dockerCompose(
+  projectPath: string,
+  operation: "up" | "down" | "logs" | "ps" | "build",
+  options?: {
+    detach?: boolean;
+    services?: string[];
+    follow?: boolean;
+  }
+): Promise<string> {
+  const absPath = path.resolve(projectPath);
+
+  try {
+    let cmd = "docker compose";
+
+    switch (operation) {
+      case "up":
+        cmd += " up";
+        if (options?.detach !== false) cmd += " -d";
+        if (options?.services?.length) cmd += ` ${options.services.join(" ")}`;
+        break;
+      case "down":
+        cmd += " down";
+        break;
+      case "logs":
+        cmd += " logs";
+        if (options?.follow) cmd += " -f";
+        if (options?.services?.length) cmd += ` ${options.services.join(" ")}`;
+        break;
+      case "ps":
+        cmd += " ps";
+        break;
+      case "build":
+        cmd += " build";
+        if (options?.services?.length) cmd += ` ${options.services.join(" ")}`;
+        break;
+    }
+
+    const { stdout, stderr } = await execAsync(cmd, {
+      cwd: absPath,
+      timeout: 300000,
+      maxBuffer: 1024 * 1024 * 5,
+    });
+
+    return `Docker Compose ${operation} completed!
+
+${stdout}
+${stderr ? `\nInfo:\n${stderr}` : ""}`;
+  } catch (error) {
+    return `Docker Compose error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Check deployment status/health
+ */
+export async function checkDeploymentHealth(
+  url: string,
+  options?: {
+    timeout?: number;
+    expectedStatus?: number;
+  }
+): Promise<string> {
+  const timeout = options?.timeout || 10000;
+  const expectedStatus = options?.expectedStatus || 200;
+
+  try {
+    const startTime = Date.now();
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(timeout),
+    });
+    const duration = Date.now() - startTime;
+
+    const statusOk = response.status === expectedStatus;
+
+    return `Deployment Health Check: ${statusOk ? "HEALTHY" : "UNHEALTHY"}
+
+URL: ${url}
+Status: ${response.status} ${response.statusText}
+Expected: ${expectedStatus}
+Response time: ${duration}ms
+
+Headers:
+${Array.from(response.headers.entries())
+  .slice(0, 10)
+  .map(([k, v]) => `  ${k}: ${v}`)
+  .join("\n")}`;
+  } catch (error) {
+    return `Deployment Health Check: FAILED
+
+URL: ${url}
+Error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 export async function executeTool(
   name: string,
   input: Record<string, unknown>
@@ -3132,6 +3611,52 @@ export async function executeTool(
         input.projectPath as string,
         input.packageManager as string | undefined
       );
+    case "deploy_vercel":
+      return deployVercel(input.projectPath as string, {
+        prod: input.prod as boolean | undefined,
+        name: input.name as string | undefined,
+        env: input.env as Record<string, string> | undefined,
+      });
+    case "deploy_railway":
+      return deployRailway(input.projectPath as string, {
+        service: input.service as string | undefined,
+        environment: input.environment as string | undefined,
+      });
+    case "docker_build":
+      return dockerBuild(input.projectPath as string, {
+        tag: input.tag as string | undefined,
+        dockerfile: input.dockerfile as string | undefined,
+        buildArgs: input.buildArgs as Record<string, string> | undefined,
+        platform: input.platform as string | undefined,
+      });
+    case "docker_push":
+      return dockerPush(input.imageName as string, {
+        registry: input.registry as string | undefined,
+      });
+    case "generate_dockerfile":
+      return generateDockerfile(input.projectPath as string, {
+        projectType: input.projectType as
+          | "node"
+          | "python"
+          | "static"
+          | undefined,
+        port: input.port as number | undefined,
+      });
+    case "docker_compose":
+      return dockerCompose(
+        input.projectPath as string,
+        input.operation as "up" | "down" | "logs" | "ps" | "build",
+        {
+          detach: input.detach as boolean | undefined,
+          services: input.services as string[] | undefined,
+          follow: input.follow as boolean | undefined,
+        }
+      );
+    case "check_deployment_health":
+      return checkDeploymentHealth(input.url as string, {
+        timeout: input.timeout as number | undefined,
+        expectedStatus: input.expectedStatus as number | undefined,
+      });
     default:
       if (name.startsWith("self_")) {
         return executeSelfEvolutionTool(name, input, input.userId as number);
@@ -3611,6 +4136,180 @@ export function getAvailableTools(): Array<{
           type: "string",
           description:
             "Package manager to use: npm, pnpm, yarn, or bun (default: pnpm)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "deploy_vercel",
+      description:
+        "Deploy a project to Vercel. Requires Vercel CLI installed and authenticated.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project directory",
+          required: true,
+        },
+        prod: {
+          type: "boolean",
+          description: "Deploy to production (default: preview deployment)",
+          required: false,
+        },
+        name: {
+          type: "string",
+          description: "Custom project name on Vercel",
+          required: false,
+        },
+        env: {
+          type: "object",
+          description: "Environment variables to set during deployment",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "deploy_railway",
+      description:
+        "Deploy a project to Railway. Requires Railway CLI installed and authenticated.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project directory",
+          required: true,
+        },
+        service: {
+          type: "string",
+          description: "Railway service name",
+          required: false,
+        },
+        environment: {
+          type: "string",
+          description: "Target environment (e.g., production, staging)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "docker_build",
+      description:
+        "Build a Docker image for a project. Requires Docker installed.",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project directory containing Dockerfile",
+          required: true,
+        },
+        tag: {
+          type: "string",
+          description: "Image tag (default: project-name:latest)",
+          required: false,
+        },
+        dockerfile: {
+          type: "string",
+          description: "Path to Dockerfile (default: ./Dockerfile)",
+          required: false,
+        },
+        buildArgs: {
+          type: "object",
+          description: "Build arguments as key-value pairs",
+          required: false,
+        },
+        platform: {
+          type: "string",
+          description: "Target platform (e.g., linux/amd64, linux/arm64)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "docker_push",
+      description: "Push a Docker image to a registry.",
+      parameters: {
+        imageName: {
+          type: "string",
+          description: "Name of the image to push",
+          required: true,
+        },
+        registry: {
+          type: "string",
+          description:
+            "Registry URL (e.g., ghcr.io/username, docker.io/username)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "generate_dockerfile",
+      description:
+        "Generate a Dockerfile for a project based on its type (Node.js, Python, or static).",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to the project directory",
+          required: true,
+        },
+        projectType: {
+          type: "string",
+          description:
+            "Project type: node, python, or static (auto-detected if not specified)",
+          required: false,
+        },
+        port: {
+          type: "number",
+          description: "Port to expose (default: 3000)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "docker_compose",
+      description: "Run Docker Compose commands (up, down, logs, ps, build).",
+      parameters: {
+        projectPath: {
+          type: "string",
+          description: "Path to directory containing docker-compose.yml",
+          required: true,
+        },
+        operation: {
+          type: "string",
+          description: "Operation: up, down, logs, ps, or build",
+          required: true,
+        },
+        detach: {
+          type: "boolean",
+          description: "Run in detached mode (for 'up' operation)",
+          required: false,
+        },
+        services: {
+          type: "array",
+          description: "Specific services to operate on",
+          required: false,
+        },
+        follow: {
+          type: "boolean",
+          description: "Follow log output (for 'logs' operation)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "check_deployment_health",
+      description:
+        "Check if a deployed application is healthy by making an HTTP request.",
+      parameters: {
+        url: {
+          type: "string",
+          description: "URL to check",
+          required: true,
+        },
+        timeout: {
+          type: "number",
+          description: "Request timeout in milliseconds (default: 10000)",
+          required: false,
+        },
+        expectedStatus: {
+          type: "number",
+          description: "Expected HTTP status code (default: 200)",
           required: false,
         },
       },
