@@ -5,6 +5,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { useJarvisStream } from "@/hooks/useJarvisStream";
 import { JarvisStreamView } from "@/components/JarvisStreamView";
+import { JarvisThinkingPanel } from "@/components/JarvisThinkingPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -1772,15 +1773,22 @@ export default function AgentPage() {
             workspaceId={selectedWorkspaceId}
             onBack={() => setSelectedWorkspaceId(null)}
           />
-        ) : (
-          <ScrollArea className="flex-1 p-4">
-            {useStreamingMode &&
-            (jarvisStream.isStreaming || jarvisStream.steps.length > 0) ? (
-              <div className="max-w-4xl mx-auto">
+        ) : useStreamingMode &&
+          (jarvisStream.isStreaming || jarvisStream.steps.length > 0) ? (
+          <div className="flex-1 flex">
+            <ScrollArea className="flex-1 p-4">
+              <div className="max-w-3xl mx-auto">
                 <JarvisStreamView state={jarvisStream} />
                 <div ref={messagesEndRef} />
               </div>
-            ) : currentTask ? (
+            </ScrollArea>
+            <div className="w-96 border-l border-border">
+              <JarvisThinkingPanel state={jarvisStream} />
+            </div>
+          </div>
+        ) : (
+          <ScrollArea className="flex-1 p-4">
+            {currentTask ? (
               <div className="max-w-4xl mx-auto space-y-6">
                 {currentTask.messages.map((message, idx) => (
                   <AgentMessageView

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Brain,
@@ -16,7 +16,6 @@ import {
   XCircle,
   Loader2,
   Copy,
-  ChevronDown,
   ChevronRight,
   Sparkles,
 } from "lucide-react";
@@ -27,11 +26,9 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type {
-  StreamingStep,
   StreamingToolCall,
   StreamingState,
 } from "@/hooks/useJarvisStream";
-import { useState } from "react";
 import { ToolOutputPreview } from "./ToolOutputPreview";
 import { Streamdown } from "streamdown";
 
@@ -267,20 +264,30 @@ function ProgressIndicator({
   current,
   max,
   isStreaming,
+  success,
 }: {
   current: number;
   max: number;
   isStreaming: boolean;
+  success: boolean | null;
 }) {
-  const progress = max > 0 ? (current / max) * 100 : 0;
+  const progress = isStreaming ? (max > 0 ? (current / max) * 100 : 0) : 100;
 
-  if (!isStreaming && current === 0) return null;
+  if (!isStreaming && current === 0 && success === null) return null;
+
+  const isComplete = !isStreaming && success !== null;
+  const isSuccess = success === true;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border/50"
+      className={cn(
+        "flex items-center gap-3 p-3 rounded-lg border",
+        isComplete && isSuccess && "bg-green-500/10 border-green-500/30",
+        isComplete && !isSuccess && "bg-red-500/10 border-red-500/30",
+        !isComplete && "bg-muted/30 border-border/50"
+      )}
     >
       <div className="flex items-center gap-2">
         {isStreaming ? (
@@ -290,11 +297,13 @@ function ProgressIndicator({
           >
             <Sparkles className="h-5 w-5 text-purple-400" />
           </motion.div>
-        ) : (
+        ) : isSuccess ? (
           <CheckCircle2 className="h-5 w-5 text-green-400" />
+        ) : (
+          <XCircle className="h-5 w-5 text-red-400" />
         )}
         <span className="text-sm font-medium">
-          {isStreaming ? "Working..." : "Complete"}
+          {isStreaming ? "Working..." : isSuccess ? "Complete" : "Failed"}
         </span>
       </div>
       <div className="flex-1">
@@ -388,6 +397,7 @@ export function JarvisStreamView({ state }: JarvisStreamViewProps) {
         current={state.currentIteration}
         max={state.maxIterations}
         isStreaming={state.isStreaming}
+        success={state.success}
       />
 
       <div className="space-y-3">
