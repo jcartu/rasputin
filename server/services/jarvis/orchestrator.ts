@@ -1631,6 +1631,7 @@ export interface OrchestratorCallbacks {
   onToolResult: (result: ToolResult) => void;
   onComplete: (summary: string, artifacts?: unknown[]) => void;
   onError: (error: string) => void;
+  onIteration?: (iteration: number, maxIterations: number) => void;
 }
 
 const TOOL_ALTERNATIVES: Record<string, string[]> = {
@@ -2095,6 +2096,10 @@ export async function runOrchestrator(
 
   while (!isComplete && iterations < maxIterations) {
     iterations++;
+
+    if (callbacks.onIteration) {
+      callbacks.onIteration(iterations, maxIterations);
+    }
 
     try {
       const response = await callLLM(messages, systemPrompt);

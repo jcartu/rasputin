@@ -498,9 +498,18 @@ async function handleJarvisTask(
             timestamp: Date.now(),
           });
         },
+        onIteration: (iteration: number, maxIterations: number) => {
+          if (activeQueries.get(queryKey)?.cancelled) return;
+          iterationCount = iteration;
+          socket.emit("jarvis:iteration", {
+            taskId,
+            iteration,
+            maxIterations,
+            timestamp: Date.now(),
+          });
+        },
         onToolCall: (toolCall: ToolCall) => {
           if (activeQueries.get(queryKey)?.cancelled) return;
-          iterationCount++;
           toolsUsed.push(toolCall.name);
           toolStartTimes.set(toolCall.id, Date.now());
           toolCallNames.set(toolCall.id, toolCall.name);
@@ -509,12 +518,6 @@ async function handleJarvisTask(
             taskId,
             toolName: toolCall.name,
             input: toolCall.input,
-            timestamp: Date.now(),
-          });
-          socket.emit("jarvis:iteration", {
-            taskId,
-            iteration: iterationCount,
-            maxIterations: 15,
             timestamp: Date.now(),
           });
         },

@@ -90,6 +90,7 @@ export function useJarvisStream() {
     const socket = getSocket();
 
     const handleThinking = (event: JarvisThinkingEvent) => {
+      console.info("[JARVIS] thinking:", event.taskId);
       if (activeTaskIdRef.current === null) {
         activeTaskIdRef.current = event.taskId;
       }
@@ -111,6 +112,7 @@ export function useJarvisStream() {
     };
 
     const handleToolStart = (event: JarvisToolStartEvent) => {
+      console.info("[JARVIS] tool_start:", event.toolName, event.taskId);
       if (event.taskId !== activeTaskIdRef.current) return;
 
       const toolCall: StreamingToolCall = {
@@ -166,6 +168,12 @@ export function useJarvisStream() {
     };
 
     const handleIteration = (event: JarvisIterationEvent) => {
+      console.info(
+        "[JARVIS] iteration:",
+        event.iteration,
+        "/",
+        event.maxIterations
+      );
       if (event.taskId !== activeTaskIdRef.current) return;
 
       setState(prev => ({
@@ -176,6 +184,7 @@ export function useJarvisStream() {
     };
 
     const handleComplete = (event: JarvisCompleteEvent) => {
+      console.info("[JARVIS] complete:", event.success, event.taskId);
       if (event.taskId !== activeTaskIdRef.current) return;
 
       setState(prev => ({
@@ -190,11 +199,11 @@ export function useJarvisStream() {
     };
 
     const handleError = (event: JarvisErrorEvent) => {
-      // Handle errors - if taskId is present, check it matches, otherwise accept all errors during streaming
-      if (event.taskId && event.taskId !== activeTaskIdRef.current) return;
+      console.info("[JARVIS] error:", event.error, event.taskId);
+      if (!activeTaskIdRef.current) return;
+      if (event.taskId !== activeTaskIdRef.current) return;
 
       setState(prev => {
-        // Only update if we're currently streaming
         if (!prev.isStreaming) return prev;
         return {
           ...prev,
