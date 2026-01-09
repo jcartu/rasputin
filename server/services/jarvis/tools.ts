@@ -20,6 +20,8 @@ import {
   executeSelfEvolutionTool,
 } from "../selfEvolution/tools";
 import { runAgentTeam, type TeamCallback } from "./agentTeams";
+import { webhookHandler } from "../events/webhookHandler";
+import { eventExecutor } from "../events/eventExecutor";
 
 const execAsync = promisify(exec);
 
@@ -3707,6 +3709,75 @@ Error: ${error instanceof Error ? error.message : String(error)}`;
   }
 }
 
+export async function createEventTrigger(
+  userId: number,
+  name: string,
+  triggerType: "webhook" | "cron" | "file_change",
+  config: {
+    webhookPath?: string;
+    cronExpression?: string;
+    watchPath?: string;
+    eventTypes?: string[];
+  },
+  actionPrompt: string
+): Promise<string> {
+  try {
+    if (triggerType === "webhook") {
+      const endpoint = await webhookHandler.createEndpoint(userId, name, {
+        description: `JARVIS trigger: ${name}`,
+      });
+
+      const trigger = await webhookHandler.createWebhookTrigger(
+        userId,
+        endpoint.id,
+        name,
+        { description: `Trigger for: ${actionPrompt.slice(0, 50)}` }
+      );
+
+      await eventExecutor.createAction(
+        trigger.id,
+        `${name}_action`,
+        "jarvis_task",
+        {
+          prompt: actionPrompt,
+        }
+      );
+
+      return `Event trigger created successfully!
+Type: webhook
+Endpoint: /api/webhooks/${endpoint.path}
+Secret: ${endpoint.secret}
+Events: ${(config.eventTypes || ["push", "pull_request"]).join(", ")}
+Action: Will run JARVIS with prompt: "${actionPrompt.slice(0, 100)}..."`;
+    }
+
+    return `Trigger type "${triggerType}" creation not yet implemented. Use webhook for now.`;
+  } catch (error) {
+    return `Failed to create event trigger: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function listEventTriggers(userId: number): Promise<string> {
+  try {
+    const endpoints = await webhookHandler.getUserEndpoints(userId);
+
+    if (endpoints.length === 0) {
+      return "No event triggers configured. Use create_event_trigger to set one up.";
+    }
+
+    const formatted = endpoints
+      .map(
+        ep =>
+          `- ${ep.name} (${ep.isEnabled ? "enabled" : "disabled"})\n  Path: /api/webhooks/${ep.path}\n  Created: ${ep.createdAt}`
+      )
+      .join("\n\n");
+
+    return `Event Triggers (${endpoints.length}):\n\n${formatted}`;
+  } catch (error) {
+    return `Failed to list triggers: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 export async function spawnAgentTeam(
   query: string,
   onProgress?: (message: string) => void
@@ -3861,6 +3932,16 @@ export async function executeTool(
         input.imagePathOrUrl as string,
         input.question as string
       );
+    case "create_event_trigger":
+      return createEventTrigger(
+        input.userId as number,
+        input.name as string,
+        input.triggerType as "webhook" | "cron" | "file_change",
+        { eventTypes: input.eventTypes as string[] | undefined },
+        input.actionPrompt as string
+      );
+    case "list_event_triggers":
+      return listEventTriggers(input.userId as number);
     case "web_search":
       return webSearch(input.query as string);
     case "searxng_search":
@@ -5086,6 +5167,40 @@ export function getAvailableTools(): Array<{
           required: true,
         },
       },
+    },
+    {
+      name: "create_event_trigger",
+      description:
+        "Create an event trigger that automatically runs JARVIS when an event occurs. Currently supports webhook triggers for GitHub/GitLab integrations.",
+      parameters: {
+        name: {
+          type: "string",
+          description: "Name for this trigger",
+          required: true,
+        },
+        triggerType: {
+          type: "string",
+          description: "Type of trigger: webhook, cron, or file_change",
+          required: true,
+        },
+        actionPrompt: {
+          type: "string",
+          description:
+            "The prompt JARVIS will execute when triggered. Use {{variable}} for payload interpolation.",
+          required: true,
+        },
+        eventTypes: {
+          type: "array",
+          description:
+            "Event types to trigger on (e.g., push, pull_request for GitHub)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "list_event_triggers",
+      description: "List all configured event triggers for the current user.",
+      parameters: {},
     },
     ...getSelfEvolutionTools(),
   ];

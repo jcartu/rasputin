@@ -4,9 +4,11 @@
  */
 
 import { getDb } from "../../db";
-import { eventActions, eventLog } from "../../../drizzle/schema";
+import { eventActions, eventLog, agentTasks } from "../../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { notifyOwner } from "../../_core/notification";
+import { runOrchestrator } from "../jarvis/orchestrator";
+import { executeTool } from "../jarvis/tools";
 
 type ActionType =
   | "jarvis_task"
@@ -133,30 +135,86 @@ export class EventExecutor {
     return { success, result, error };
   }
 
-  /**
-   * Execute an agent task action
-   */
   private async executeAgentTask(
     config: ActionConfig,
     payload: Record<string, unknown>
-  ): Promise<{ message: string }> {
+  ): Promise<{ message: string; taskId?: number; result?: string }> {
     if (!config.prompt) {
       throw new Error("Agent prompt is required for jarvis_task action");
     }
 
-    // Interpolate payload into prompt
     const prompt = this.interpolateTemplate(config.prompt, payload);
+    const userId = (payload.userId as number) || 1;
 
-    // For now, we'll just log the task - actual integration with JARVIS
-    // would require importing the orchestrator
-    console.log("[EventExecutor] Agent task:", { prompt });
+    console.info("[EventExecutor] Starting JARVIS task:", prompt.slice(0, 100));
 
-    // TODO: Integrate with JARVIS orchestrator
-    // const result = await runOrchestrator(prompt, userId, config);
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
 
-    return {
-      message: "Agent task queued",
-    };
+    const [taskRecord] = await db
+      .insert(agentTasks)
+      .values({
+        userId,
+        status: "running",
+        query: prompt,
+        title: prompt.slice(0, 100),
+      })
+      .$returningId();
+
+    let finalResult = "";
+    let hasError = false;
+
+    try {
+      await runOrchestrator(
+        prompt,
+        {
+          onThinking: () => {},
+          onThinkingChunk: () => {},
+          onIteration: () => {},
+          onToolCall: () => {},
+          onToolResult: () => {},
+          onComplete: (summary: string) => {
+            finalResult = summary;
+          },
+          onError: (error: string) => {
+            hasError = true;
+            finalResult = error;
+          },
+        },
+        async (toolName, toolInput) => {
+          const enrichedInput = { ...toolInput, userId };
+          return executeTool(toolName, enrichedInput);
+        },
+        { maxIterations: 10 }
+      );
+
+      await db
+        .update(agentTasks)
+        .set({
+          status: hasError ? "failed" : "completed",
+          result: finalResult,
+          completedAt: new Date(),
+        })
+        .where(eq(agentTasks.id, taskRecord.id));
+
+      return {
+        message: hasError ? "Agent task failed" : "Agent task completed",
+        taskId: taskRecord.id,
+        result: finalResult,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      await db
+        .update(agentTasks)
+        .set({
+          status: "failed",
+          errorMessage: errorMsg,
+          completedAt: new Date(),
+        })
+        .where(eq(agentTasks.id, taskRecord.id));
+
+      throw error;
+    }
   }
 
   /**
