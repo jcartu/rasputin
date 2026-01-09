@@ -1071,6 +1071,322 @@ export function listPendingEdits(): string {
   return `Pending file edits:\n${edits}`;
 }
 
+export async function searchAndReplace(
+  filePath: string,
+  search: string,
+  replace: string,
+  options?: { regex?: boolean; all?: boolean; caseSensitive?: boolean }
+): Promise<string> {
+  await ensureSandbox();
+
+  const resolvedPath = filePath.startsWith("/")
+    ? filePath
+    : path.join(JARVIS_SANDBOX, filePath);
+
+  try {
+    const content = await fs.readFile(resolvedPath, "utf-8");
+
+    let searchPattern: RegExp;
+    if (options?.regex) {
+      const flags = options?.all ? "g" : "";
+      searchPattern = new RegExp(
+        search,
+        options?.caseSensitive ? flags : flags + "i"
+      );
+    } else {
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const flags = options?.all ? "g" : "";
+      searchPattern = new RegExp(
+        escapedSearch,
+        options?.caseSensitive ? flags : flags + "i"
+      );
+    }
+
+    const matches = content.match(
+      new RegExp(
+        searchPattern.source,
+        "g" + (options?.caseSensitive ? "" : "i")
+      )
+    );
+    const matchCount = matches?.length || 0;
+
+    if (matchCount === 0) {
+      return `No matches found for "${search}" in ${resolvedPath}`;
+    }
+
+    const newContent = options?.all
+      ? content.replace(
+          new RegExp(
+            searchPattern.source,
+            "g" + (options?.caseSensitive ? "" : "i")
+          ),
+          replace
+        )
+      : content.replace(searchPattern, replace);
+
+    const diff = generateUnifiedDiff(resolvedPath, content, newContent);
+    const backupId = crypto.randomBytes(8).toString("hex");
+
+    fileBackups.set(backupId, {
+      id: backupId,
+      filePath: resolvedPath,
+      originalContent: content,
+      newContent,
+      timestamp: new Date(),
+      diff,
+    });
+
+    const replacedCount = options?.all ? matchCount : 1;
+
+    return `SEARCH AND REPLACE PREVIEW (backup_id: ${backupId})
+File: ${resolvedPath}
+Found: ${matchCount} match(es)
+Replaced: ${replacedCount} occurrence(s)
+
+${diff}
+
+To apply these changes, use: apply_file_edit("${backupId}")
+To discard, use: discard_file_edit("${backupId}")`;
+  } catch (error) {
+    return `Error in search and replace: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function insertAtLine(
+  filePath: string,
+  lineNumber: number,
+  content: string,
+  position: "before" | "after" = "after"
+): Promise<string> {
+  await ensureSandbox();
+
+  const resolvedPath = filePath.startsWith("/")
+    ? filePath
+    : path.join(JARVIS_SANDBOX, filePath);
+
+  try {
+    const fileContent = await fs.readFile(resolvedPath, "utf-8");
+    const lines = fileContent.split("\n");
+
+    if (lineNumber < 1 || lineNumber > lines.length + 1) {
+      return `Error: Line number ${lineNumber} is out of range (file has ${lines.length} lines)`;
+    }
+
+    const insertIndex = position === "before" ? lineNumber - 1 : lineNumber;
+    lines.splice(insertIndex, 0, content);
+    const newContent = lines.join("\n");
+
+    const diff = generateUnifiedDiff(resolvedPath, fileContent, newContent);
+    const backupId = crypto.randomBytes(8).toString("hex");
+
+    fileBackups.set(backupId, {
+      id: backupId,
+      filePath: resolvedPath,
+      originalContent: fileContent,
+      newContent,
+      timestamp: new Date(),
+      diff,
+    });
+
+    return `INSERT PREVIEW (backup_id: ${backupId})
+File: ${resolvedPath}
+Insert ${position} line ${lineNumber}
+
+${diff}
+
+To apply these changes, use: apply_file_edit("${backupId}")
+To discard, use: discard_file_edit("${backupId}")`;
+  } catch (error) {
+    return `Error inserting at line: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function deleteLines(
+  filePath: string,
+  startLine: number,
+  endLine: number
+): Promise<string> {
+  await ensureSandbox();
+
+  const resolvedPath = filePath.startsWith("/")
+    ? filePath
+    : path.join(JARVIS_SANDBOX, filePath);
+
+  try {
+    const fileContent = await fs.readFile(resolvedPath, "utf-8");
+    const lines = fileContent.split("\n");
+
+    if (startLine < 1 || endLine > lines.length || startLine > endLine) {
+      return `Error: Invalid line range ${startLine}-${endLine} (file has ${lines.length} lines)`;
+    }
+
+    const deletedLines = lines.slice(startLine - 1, endLine);
+    lines.splice(startLine - 1, endLine - startLine + 1);
+    const newContent = lines.join("\n");
+
+    const diff = generateUnifiedDiff(resolvedPath, fileContent, newContent);
+    const backupId = crypto.randomBytes(8).toString("hex");
+
+    fileBackups.set(backupId, {
+      id: backupId,
+      filePath: resolvedPath,
+      originalContent: fileContent,
+      newContent,
+      timestamp: new Date(),
+      diff,
+    });
+
+    return `DELETE LINES PREVIEW (backup_id: ${backupId})
+File: ${resolvedPath}
+Deleting lines ${startLine}-${endLine} (${endLine - startLine + 1} lines)
+
+Deleted content:
+${deletedLines.map((l, i) => `${startLine + i}: ${l}`).join("\n")}
+
+${diff}
+
+To apply these changes, use: apply_file_edit("${backupId}")
+To discard, use: discard_file_edit("${backupId}")`;
+  } catch (error) {
+    return `Error deleting lines: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function replaceLines(
+  filePath: string,
+  startLine: number,
+  endLine: number,
+  newContent: string
+): Promise<string> {
+  await ensureSandbox();
+
+  const resolvedPath = filePath.startsWith("/")
+    ? filePath
+    : path.join(JARVIS_SANDBOX, filePath);
+
+  try {
+    const fileContent = await fs.readFile(resolvedPath, "utf-8");
+    const lines = fileContent.split("\n");
+
+    if (startLine < 1 || endLine > lines.length || startLine > endLine) {
+      return `Error: Invalid line range ${startLine}-${endLine} (file has ${lines.length} lines)`;
+    }
+
+    const oldLines = lines.slice(startLine - 1, endLine);
+    const newLines = newContent.split("\n");
+    lines.splice(startLine - 1, endLine - startLine + 1, ...newLines);
+    const updatedContent = lines.join("\n");
+
+    const diff = generateUnifiedDiff(resolvedPath, fileContent, updatedContent);
+    const backupId = crypto.randomBytes(8).toString("hex");
+
+    fileBackups.set(backupId, {
+      id: backupId,
+      filePath: resolvedPath,
+      originalContent: fileContent,
+      newContent: updatedContent,
+      timestamp: new Date(),
+      diff,
+    });
+
+    return `REPLACE LINES PREVIEW (backup_id: ${backupId})
+File: ${resolvedPath}
+Replacing lines ${startLine}-${endLine}
+
+Old content (${oldLines.length} lines):
+${oldLines.map((l, i) => `${startLine + i}: ${l}`).join("\n")}
+
+New content (${newLines.length} lines):
+${newLines.map((l, i) => `${startLine + i}: ${l}`).join("\n")}
+
+${diff}
+
+To apply these changes, use: apply_file_edit("${backupId}")
+To discard, use: discard_file_edit("${backupId}")`;
+  } catch (error) {
+    return `Error replacing lines: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function findInFile(
+  filePath: string,
+  pattern: string,
+  options?: { regex?: boolean; context?: number }
+): Promise<string> {
+  await ensureSandbox();
+
+  const resolvedPath = filePath.startsWith("/")
+    ? filePath
+    : path.join(JARVIS_SANDBOX, filePath);
+
+  try {
+    const content = await fs.readFile(resolvedPath, "utf-8");
+    const lines = content.split("\n");
+    const contextLines = options?.context ?? 2;
+
+    let searchRegex: RegExp;
+    if (options?.regex) {
+      searchRegex = new RegExp(pattern, "gi");
+    } else {
+      const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      searchRegex = new RegExp(escaped, "gi");
+    }
+
+    const matches: Array<{
+      lineNumber: number;
+      line: string;
+      before: string[];
+      after: string[];
+    }> = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      if (searchRegex.test(lines[i])) {
+        searchRegex.lastIndex = 0;
+        matches.push({
+          lineNumber: i + 1,
+          line: lines[i],
+          before: lines.slice(Math.max(0, i - contextLines), i),
+          after: lines.slice(
+            i + 1,
+            Math.min(lines.length, i + 1 + contextLines)
+          ),
+        });
+      }
+    }
+
+    if (matches.length === 0) {
+      return `No matches found for "${pattern}" in ${resolvedPath}`;
+    }
+
+    let result = `SEARCH RESULTS in ${resolvedPath}\n`;
+    result += `Found ${matches.length} match(es) for "${pattern}"\n\n`;
+
+    for (const match of matches.slice(0, 10)) {
+      result += `--- Line ${match.lineNumber} ---\n`;
+      if (match.before.length > 0) {
+        match.before.forEach((l, i) => {
+          result += `${match.lineNumber - match.before.length + i}: ${l}\n`;
+        });
+      }
+      result += `>>> ${match.lineNumber}: ${match.line}\n`;
+      if (match.after.length > 0) {
+        match.after.forEach((l, i) => {
+          result += `${match.lineNumber + 1 + i}: ${l}\n`;
+        });
+      }
+      result += "\n";
+    }
+
+    if (matches.length > 10) {
+      result += `... and ${matches.length - 10} more matches\n`;
+    }
+
+    return result;
+  } catch (error) {
+    return `Error searching file: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 export function startDebugSession(hypothesis: string): string {
   const sessionId = crypto.randomBytes(8).toString("hex");
 
@@ -3641,6 +3957,42 @@ export async function executeTool(
       return discardFileEdit(input.backupId as string);
     case "list_pending_edits":
       return listPendingEdits();
+    case "search_and_replace":
+      return searchAndReplace(
+        input.path as string,
+        input.search as string,
+        input.replace as string,
+        {
+          regex: input.regex as boolean | undefined,
+          all: input.all as boolean | undefined,
+          caseSensitive: input.caseSensitive as boolean | undefined,
+        }
+      );
+    case "insert_at_line":
+      return insertAtLine(
+        input.path as string,
+        input.lineNumber as number,
+        input.content as string,
+        (input.position as "before" | "after") || "after"
+      );
+    case "delete_lines":
+      return deleteLines(
+        input.path as string,
+        input.startLine as number,
+        input.endLine as number
+      );
+    case "replace_lines":
+      return replaceLines(
+        input.path as string,
+        input.startLine as number,
+        input.endLine as number,
+        input.newContent as string
+      );
+    case "find_in_file":
+      return findInFile(input.path as string, input.pattern as string, {
+        regex: input.regex as boolean | undefined,
+        context: input.context as number | undefined,
+      });
     case "start_debug_session":
       return startDebugSession(input.hypothesis as string);
     case "debug_snapshot":
@@ -3854,6 +4206,146 @@ export function getAvailableTools(): Array<{
           type: "string",
           description: "Directory path to list",
           required: true,
+        },
+      },
+    },
+    {
+      name: "search_and_replace",
+      description:
+        "Search for text or regex pattern in a file and replace with new content. Generates a preview diff that must be applied with apply_file_edit.",
+      parameters: {
+        path: {
+          type: "string",
+          description: "Path to the file",
+          required: true,
+        },
+        search: {
+          type: "string",
+          description: "Text or regex pattern to search for",
+          required: true,
+        },
+        replace: {
+          type: "string",
+          description: "Replacement text",
+          required: true,
+        },
+        regex: {
+          type: "boolean",
+          description: "Treat search as regex pattern (default: false)",
+          required: false,
+        },
+        all: {
+          type: "boolean",
+          description: "Replace all occurrences (default: false, first only)",
+          required: false,
+        },
+        caseSensitive: {
+          type: "boolean",
+          description: "Case-sensitive search (default: false)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "insert_at_line",
+      description:
+        "Insert content at a specific line number. Generates a preview diff that must be applied with apply_file_edit.",
+      parameters: {
+        path: {
+          type: "string",
+          description: "Path to the file",
+          required: true,
+        },
+        lineNumber: {
+          type: "number",
+          description: "Line number to insert at",
+          required: true,
+        },
+        content: {
+          type: "string",
+          description: "Content to insert",
+          required: true,
+        },
+        position: {
+          type: "string",
+          description: "Insert 'before' or 'after' the line (default: after)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "delete_lines",
+      description:
+        "Delete a range of lines from a file. Generates a preview diff that must be applied with apply_file_edit.",
+      parameters: {
+        path: {
+          type: "string",
+          description: "Path to the file",
+          required: true,
+        },
+        startLine: {
+          type: "number",
+          description: "First line to delete (1-indexed)",
+          required: true,
+        },
+        endLine: {
+          type: "number",
+          description: "Last line to delete (inclusive)",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "replace_lines",
+      description:
+        "Replace a range of lines with new content. Generates a preview diff that must be applied with apply_file_edit.",
+      parameters: {
+        path: {
+          type: "string",
+          description: "Path to the file",
+          required: true,
+        },
+        startLine: {
+          type: "number",
+          description: "First line to replace (1-indexed)",
+          required: true,
+        },
+        endLine: {
+          type: "number",
+          description: "Last line to replace (inclusive)",
+          required: true,
+        },
+        newContent: {
+          type: "string",
+          description: "New content to insert (can be multiple lines)",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "find_in_file",
+      description:
+        "Search for a pattern in a file and return matches with line numbers and context.",
+      parameters: {
+        path: {
+          type: "string",
+          description: "Path to the file",
+          required: true,
+        },
+        pattern: {
+          type: "string",
+          description: "Text or regex pattern to search for",
+          required: true,
+        },
+        regex: {
+          type: "boolean",
+          description: "Treat pattern as regex (default: false)",
+          required: false,
+        },
+        context: {
+          type: "number",
+          description: "Lines of context to show around matches (default: 2)",
+          required: false,
         },
       },
     },
