@@ -995,6 +995,37 @@ export const appRouter = router({
             "Task resumed. The approved command will be executed on next iteration.",
         };
       }),
+
+    // List running dev servers
+    listDevServers: protectedProcedure.query(async () => {
+      const { getAllDevServers } = await import("./services/jarvis/tools");
+      const servers = getAllDevServers();
+      return servers.map(s => ({
+        projectPath: s.projectPath,
+        port: s.port,
+        url: s.url,
+        status: s.status,
+        startedAt: s.startedAt,
+        sessionName: s.sessionName,
+      }));
+    }),
+
+    // Get dev server info for a specific project
+    getDevServerInfo: protectedProcedure
+      .input(z.object({ projectPath: z.string() }))
+      .query(async ({ input }) => {
+        const { getDevServerInfo } = await import("./services/jarvis/tools");
+        const info = getDevServerInfo(input.projectPath);
+        if (!info) return null;
+        return {
+          projectPath: info.projectPath,
+          port: info.port,
+          url: info.url,
+          status: info.status,
+          startedAt: info.startedAt,
+          sessionName: info.sessionName,
+        };
+      }),
   }),
 
   // ============================================================================

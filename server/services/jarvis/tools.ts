@@ -2664,7 +2664,64 @@ export async function securityAnalysis(projectPath: string): Promise<string> {
   return results.join("\n");
 }
 
-const devServers = new Map<string, { sessionName: string; port?: number }>();
+interface DevServerInfo {
+  sessionName: string;
+  port?: number;
+  projectPath: string;
+  startedAt: number;
+  status: "starting" | "running" | "stopped" | "error";
+  url?: string;
+}
+
+const devServers = new Map<string, DevServerInfo>();
+
+export function listDevServers(): string {
+  if (devServers.size === 0) {
+    return "No dev servers currently running.";
+  }
+
+  const servers = Array.from(devServers.entries()).map(([path, info]) => {
+    return `- ${path}
+    Port: ${info.port || "detecting..."}
+    URL: ${info.url || "N/A"}
+    Status: ${info.status}
+    Started: ${new Date(info.startedAt).toLocaleString()}`;
+  });
+
+  return `Running dev servers (${devServers.size}):\n\n${servers.join("\n\n")}`;
+}
+
+export function getDevServerInfo(projectPath: string): DevServerInfo | null {
+  const absPath = path.resolve(projectPath);
+  return devServers.get(absPath) || null;
+}
+
+export function getAllDevServers(): DevServerInfo[] {
+  return Array.from(devServers.values());
+}
+
+async function detectPortFromOutput(output: string): Promise<number | null> {
+  const portPatterns = [
+    /localhost:(\d+)/i,
+    /127\.0\.0\.1:(\d+)/i,
+    /0\.0\.0\.0:(\d+)/i,
+    /port\s*:?\s*(\d+)/i,
+    /running\s+on\s+.*:(\d+)/i,
+    /listening\s+on\s+.*:(\d+)/i,
+    /http:\/\/[^:]+:(\d+)/i,
+  ];
+
+  for (const pattern of portPatterns) {
+    const match = output.match(pattern);
+    if (match) {
+      const port = parseInt(match[1], 10);
+      if (port >= 1024 && port <= 65535) {
+        return port;
+      }
+    }
+  }
+  return null;
+}
 
 async function scaffoldProjectTool(
   projectName: string,
@@ -2724,7 +2781,11 @@ async function startDevServerTool(
 
   if (devServers.has(absPath)) {
     const existing = devServers.get(absPath)!;
-    return `Dev server already running for this project. Session: ${existing.sessionName}`;
+    return `Dev server already running for this project.
+Session: ${existing.sessionName}
+Port: ${existing.port || "detecting..."}
+URL: ${existing.url || "N/A"}
+Status: ${existing.status}`;
   }
 
   const sessionName = `jarvis-dev-${Date.now()}`;
@@ -2738,7 +2799,13 @@ async function startDevServerTool(
       }
     );
 
-    devServers.set(absPath, { sessionName });
+    const serverInfo: DevServerInfo = {
+      sessionName,
+      projectPath: absPath,
+      startedAt: Date.now(),
+      status: "starting",
+    };
+    devServers.set(absPath, serverInfo);
 
     await new Promise(resolve => setTimeout(resolve, 3000));
 
@@ -2747,16 +2814,29 @@ async function startDevServerTool(
       { timeout: 5000 }
     ).catch(() => ({ stdout: "" }));
 
+    const detectedPort = await detectPortFromOutput(output);
+    if (detectedPort) {
+      serverInfo.port = detectedPort;
+      serverInfo.url = `http://localhost:${detectedPort}`;
+      serverInfo.status = "running";
+    } else {
+      serverInfo.status = output ? "running" : "starting";
+    }
+
     return `Dev server started!
 
 Session: ${sessionName}
 Project: ${absPath}
 Command: ${devCommand}
+Port: ${serverInfo.port || "detecting..."}
+URL: ${serverInfo.url || "Check output for URL"}
+Status: ${serverInfo.status}
 
 Initial output:
 ${output.slice(-1000) || "(starting...)"}
 
 Use get_dev_server_output to check status.
+Use list_dev_servers to see all running servers.
 Use stop_dev_server to stop when done.`;
   } catch (error) {
     return `Error starting dev server: ${error instanceof Error ? error.message : String(error)}`;
@@ -3606,6 +3686,8 @@ export async function executeTool(
       return stopDevServerTool(input.projectPath as string);
     case "get_dev_server_output":
       return getDevServerOutputTool(input.projectPath as string);
+    case "list_dev_servers":
+      return listDevServers();
     case "install_dependencies":
       return installDependenciesTool(
         input.projectPath as string,
@@ -4121,6 +4203,12 @@ export function getAvailableTools(): Array<{
           required: true,
         },
       },
+    },
+    {
+      name: "list_dev_servers",
+      description:
+        "List all currently running development servers with their ports and URLs.",
+      parameters: {},
     },
     {
       name: "install_dependencies",
