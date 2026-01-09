@@ -995,6 +995,7 @@ export default function AgentPage() {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, _setIsSpeaking] = useState(false);
   const [voiceMuted, setVoiceMuted] = useState(false);
+  const [autoSpeak, setAutoSpeak] = useState(false);
   const [_audioLevel, _setAudioLevel] = useState(0);
   const _mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const _audioChunksRef = useRef<Blob[]>([]);
@@ -1674,6 +1675,29 @@ export default function AgentPage() {
                   </Badge>
                 </div>
                 <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    Auto-Speak Results
+                  </span>
+                  <Button
+                    variant={autoSpeak ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setAutoSpeak(!autoSpeak);
+                      toast.success(
+                        autoSpeak
+                          ? "Auto-speak disabled"
+                          : "JARVIS will speak results automatically"
+                      );
+                    }}
+                    className={cn(
+                      "h-6 px-2 text-xs",
+                      autoSpeak && "bg-purple-500 hover:bg-purple-600"
+                    )}
+                  >
+                    {autoSpeak ? "On" : "Off"}
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Wake Word</span>
                   <Badge variant="outline">"Hey JARVIS"</Badge>
                 </div>
@@ -1805,7 +1829,7 @@ export default function AgentPage() {
           <div className="flex-1 flex">
             <ScrollArea className="flex-1 p-4">
               <div className="max-w-3xl mx-auto">
-                <JarvisStreamView state={jarvisStream} />
+                <JarvisStreamView state={jarvisStream} autoSpeak={autoSpeak} />
                 <div ref={messagesEndRef} />
               </div>
             </ScrollArea>

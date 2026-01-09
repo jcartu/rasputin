@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Brain,
@@ -18,7 +18,20 @@ import {
   Copy,
   ChevronRight,
   Sparkles,
+  Volume2,
+  VolumeX,
+  Download,
+  FileDown,
+  FileJson,
+  Printer,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -320,16 +333,102 @@ function CompletionCard({
   summary,
   success,
   durationMs,
+  artifacts,
 }: {
   summary: string | null;
   success: boolean;
   durationMs: number | null;
+  artifacts?: Array<{ type: string; url?: string; content?: string }>;
 }) {
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(
+    null
+  );
+  const ttsMutation = trpc.voice.textToSpeech.useMutation();
+
+  const handleSpeak = useCallback(async () => {
+    if (!summary) return;
+
+    if (isSpeaking && audioElement) {
+      audioElement.pause();
+      setAudioElement(null);
+      setIsSpeaking(false);
+      return;
+    }
+
+    try {
+      setIsSpeaking(true);
+      const result = await ttsMutation.mutateAsync({
+        text: summary.slice(0, 4000),
+      });
+      const audio = new Audio(`data:${result.mimeType};base64,${result.audio}`);
+      setAudioElement(audio);
+      audio.onended = () => {
+        setIsSpeaking(false);
+        setAudioElement(null);
+      };
+      await audio.play();
+    } catch {
+      toast.error("Failed to generate speech");
+      setIsSpeaking(false);
+    }
+  }, [summary, isSpeaking, audioElement, ttsMutation]);
+
+  const handleExport = useCallback(
+    (format: "markdown" | "html" | "pdf" | "json") => {
+      if (!summary) return;
+
+      const timestamp = new Date().toISOString().split("T")[0];
+      const filename = `jarvis-report-${timestamp}`;
+
+      if (format === "markdown") {
+        const content = `# JARVIS Task Report\n\n**Date:** ${new Date().toLocaleString()}\n**Status:** ${success ? "Completed" : "Failed"}\n**Duration:** ${durationMs ? (durationMs / 1000).toFixed(1) + "s" : "N/A"}\n\n## Summary\n\n${summary}`;
+        const blob = new Blob([content], { type: "text/markdown" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${filename}.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success("Exported as Markdown");
+      } else if (format === "html") {
+        const content = `<!DOCTYPE html><html><head><title>JARVIS Report</title><style>body{font-family:system-ui;max-width:800px;margin:40px auto;padding:20px;background:#0a0a0a;color:#e5e5e5}h1{color:#22d3ee}pre{background:#1a1a1a;padding:15px;border-radius:8px;overflow-x:auto}.meta{color:#888;margin-bottom:20px}</style></head><body><h1>JARVIS Task Report</h1><div class="meta"><p>Date: ${new Date().toLocaleString()}</p><p>Status: ${success ? "✅ Completed" : "❌ Failed"}</p><p>Duration: ${durationMs ? (durationMs / 1000).toFixed(1) + "s" : "N/A"}</p></div><div>${summary.replace(/\n/g, "<br>")}</div></body></html>`;
+        const blob = new Blob([content], { type: "text/html" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${filename}.html`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success("Exported as HTML");
+      } else if (format === "pdf") {
+        window.print();
+        toast.success("Print dialog opened for PDF");
+      } else if (format === "json") {
+        const content = JSON.stringify(
+          { summary, success, durationMs, artifacts, exportedAt: new Date() },
+          null,
+          2
+        );
+        const blob = new Blob([content], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${filename}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success("Exported as JSON");
+      }
+    },
+    [summary, success, durationMs, artifacts]
+  );
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.4, ease: "easeOut" }}
+      className="print:bg-white print:text-black"
     >
       <Card
         className={cn(
@@ -341,7 +440,7 @@ function CompletionCard({
           <div className="flex items-start gap-3">
             <div
               className={cn(
-                "p-2 rounded-full",
+                "p-2 rounded-full print:hidden",
                 success ? "bg-green-500/20" : "bg-red-500/20"
               )}
             >
@@ -356,15 +455,107 @@ function CompletionCard({
                 <h3 className="font-semibold">
                   {success ? "Task Completed" : "Task Failed"}
                 </h3>
-                {durationMs && (
-                  <Badge variant="outline" className="text-xs">
-                    {(durationMs / 1000).toFixed(1)}s
-                  </Badge>
-                )}
+                <div className="flex items-center gap-2">
+                  {durationMs && (
+                    <Badge variant="outline" className="text-xs print:hidden">
+                      {(durationMs / 1000).toFixed(1)}s
+                    </Badge>
+                  )}
+                  {summary && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 print:hidden"
+                        onClick={handleSpeak}
+                        title={isSpeaking ? "Stop speaking" : "Read aloud"}
+                      >
+                        {isSpeaking ? (
+                          <VolumeX className="h-4 w-4 text-purple-400" />
+                        ) : (
+                          <Volume2 className="h-4 w-4" />
+                        )}
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 print:hidden"
+                            title="Export"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => handleExport("markdown")}
+                          >
+                            <FileDown className="h-4 w-4 mr-2" />
+                            Export as Markdown
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleExport("html")}
+                          >
+                            <Globe className="h-4 w-4 mr-2" />
+                            Export as HTML
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleExport("json")}
+                          >
+                            <FileJson className="h-4 w-4 mr-2" />
+                            Export as JSON
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleExport("pdf")}>
+                            <Printer className="h-4 w-4 mr-2" />
+                            Print / Save as PDF
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </>
+                  )}
+                </div>
               </div>
               {summary && (
-                <div className="prose prose-invert prose-sm max-w-none">
+                <div className="prose prose-invert prose-sm max-w-none print:prose-neutral">
                   <Streamdown>{summary}</Streamdown>
+                </div>
+              )}
+              {artifacts && artifacts.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  <h4 className="text-sm font-medium text-muted-foreground">
+                    Artifacts
+                  </h4>
+                  <div className="grid gap-3">
+                    {artifacts.map((artifact, idx) => (
+                      <div
+                        key={idx}
+                        className="p-3 rounded-lg bg-muted/30 border border-border/50"
+                      >
+                        {artifact.type === "image" && artifact.url && (
+                          <img
+                            src={artifact.url}
+                            alt="Generated artifact"
+                            className="max-w-full rounded-lg"
+                          />
+                        )}
+                        {artifact.type === "html" && artifact.content && (
+                          <iframe
+                            srcDoc={artifact.content}
+                            className="w-full h-96 rounded-lg border-0"
+                            sandbox="allow-scripts"
+                          />
+                        )}
+                        {artifact.type === "video" && artifact.url && (
+                          <video
+                            src={artifact.url}
+                            controls
+                            className="max-w-full rounded-lg"
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -377,10 +568,16 @@ function CompletionCard({
 
 interface JarvisStreamViewProps {
   state: StreamingState;
+  autoSpeak?: boolean;
 }
 
-export function JarvisStreamView({ state }: JarvisStreamViewProps) {
+export function JarvisStreamView({
+  state,
+  autoSpeak = false,
+}: JarvisStreamViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [hasAutoSpoken, setHasAutoSpoken] = useState(false);
+  const ttsMutation = trpc.voice.textToSpeech.useMutation();
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -390,6 +587,70 @@ export function JarvisStreamView({ state }: JarvisStreamViewProps) {
 
   const isComplete = state.success !== null && !state.isStreaming;
   const lastStepIndex = state.steps.length - 1;
+
+  useEffect(() => {
+    if (
+      autoSpeak &&
+      isComplete &&
+      state.summary &&
+      !hasAutoSpoken &&
+      state.success
+    ) {
+      setHasAutoSpoken(true);
+      ttsMutation
+        .mutateAsync({ text: state.summary.slice(0, 4000) })
+        .then(result => {
+          const audio = new Audio(
+            `data:${result.mimeType};base64,${result.audio}`
+          );
+          audio.play();
+        })
+        .catch(() => {});
+    }
+  }, [autoSpeak, isComplete, state.summary, hasAutoSpoken, state.success]);
+
+  useEffect(() => {
+    if (state.isStreaming) {
+      setHasAutoSpoken(false);
+    }
+  }, [state.isStreaming]);
+
+  const artifacts = state.steps
+    .filter(s => s.type === "tool" && s.tool)
+    .map(s => s.tool!)
+    .filter(
+      t =>
+        t.status === "completed" &&
+        (t.name === "generate_image" ||
+          t.name === "write_file" ||
+          t.name === "screenshot")
+    )
+    .map(t => {
+      if (t.name === "generate_image" && t.output) {
+        const urlMatch = t.output.match(
+          /https?:\/\/[^\s]+\.(png|jpg|jpeg|gif|webp)/i
+        );
+        if (urlMatch) return { type: "image", url: urlMatch[0] };
+      }
+      if (t.name === "screenshot" && t.output) {
+        const urlMatch = t.output.match(/https?:\/\/[^\s]+/);
+        if (urlMatch) return { type: "image", url: urlMatch[0] };
+      }
+      if (
+        t.name === "write_file" &&
+        t.input &&
+        typeof t.input === "object" &&
+        "path" in t.input
+      ) {
+        const path = String((t.input as Record<string, unknown>).path);
+        if (path.endsWith(".html")) {
+          const content = (t.input as Record<string, unknown>).content;
+          if (typeof content === "string") return { type: "html", content };
+        }
+      }
+      return null;
+    })
+    .filter((a): a is NonNullable<typeof a> => a !== null);
 
   return (
     <div className="space-y-4">
@@ -449,6 +710,7 @@ export function JarvisStreamView({ state }: JarvisStreamViewProps) {
           summary={state.summary}
           success={state.success ?? false}
           durationMs={state.durationMs}
+          artifacts={artifacts}
         />
       )}
 
