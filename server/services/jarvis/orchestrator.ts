@@ -1712,6 +1712,136 @@ function suggestVerificationTool(
   }
 }
 
+const PARALLELIZABLE_TOOLS = new Set([
+  "web_search",
+  "searxng_search",
+  "browse_url",
+  "read_file",
+  "list_files",
+  "calculate",
+  "http_request",
+  "get_datetime",
+  "json_tool",
+  "text_process",
+  "ssh_read_file",
+  "ssh_list_files",
+  "screenshot",
+  "playwright_browse",
+  "git_status",
+  "git_diff",
+  "git_log",
+  "database_query",
+  "analyze_screenshot",
+]);
+
+function canRunInParallel(toolName: string): boolean {
+  return PARALLELIZABLE_TOOLS.has(toolName);
+}
+
+async function executeToolsInParallel(
+  toolCalls: ToolCall[],
+  executeToolFn: (
+    name: string,
+    input: Record<string, unknown>
+  ) => Promise<string>,
+  executionContext: ToolExecutionContext,
+  callbacks: OrchestratorCallbacks
+): Promise<Array<{ tc: ToolCall; output: string; isError: boolean }>> {
+  const parallelizable = toolCalls.filter(tc => canRunInParallel(tc.name));
+  const sequential = toolCalls.filter(tc => !canRunInParallel(tc.name));
+
+  const results: Array<{ tc: ToolCall; output: string; isError: boolean }> = [];
+
+  if (parallelizable.length > 1) {
+    const parallelResults = await Promise.all(
+      parallelizable.map(async tc => {
+        try {
+          const output = await executeToolFn(tc.name, tc.input);
+          const isError = isToolResultError(output);
+          if (isError) {
+            const failCount =
+              (executionContext.failedTools.get(tc.name) || 0) + 1;
+            executionContext.failedTools.set(tc.name, failCount);
+          } else {
+            executionContext.lastToolOutputs.set(tc.name, output);
+          }
+          return { tc, output, isError };
+        } catch (error) {
+          const errorMsg =
+            error instanceof Error ? error.message : String(error);
+          const failCount =
+            (executionContext.failedTools.get(tc.name) || 0) + 1;
+          executionContext.failedTools.set(tc.name, failCount);
+          return { tc, output: `Error: ${errorMsg}`, isError: true };
+        }
+      })
+    );
+    results.push(...parallelResults);
+  } else {
+    for (const tc of parallelizable) {
+      const result = await executeSingleTool(
+        tc,
+        executeToolFn,
+        executionContext
+      );
+      results.push(result);
+    }
+  }
+
+  for (const tc of sequential) {
+    const result = await executeSingleTool(tc, executeToolFn, executionContext);
+    results.push(result);
+  }
+
+  return results;
+}
+
+async function executeSingleTool(
+  tc: ToolCall,
+  executeToolFn: (
+    name: string,
+    input: Record<string, unknown>
+  ) => Promise<string>,
+  executionContext: ToolExecutionContext
+): Promise<{ tc: ToolCall; output: string; isError: boolean }> {
+  let output: string;
+  let isError = false;
+
+  try {
+    output = await executeToolFn(tc.name, tc.input);
+
+    if (isToolResultError(output)) {
+      isError = true;
+      const failCount = (executionContext.failedTools.get(tc.name) || 0) + 1;
+      executionContext.failedTools.set(tc.name, failCount);
+
+      const altTool = getAlternativeTool(tc.name, executionContext);
+      if (altTool && failCount <= 2) {
+        output += `\n\n[JARVIS] Tool "${tc.name}" failed. Suggesting alternative: "${altTool}"`;
+      }
+    } else {
+      executionContext.lastToolOutputs.set(tc.name, output);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.name === "ApprovalRequiredError") {
+      throw error;
+    }
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    output = `Error: ${errorMsg}`;
+    isError = true;
+
+    const failCount = (executionContext.failedTools.get(tc.name) || 0) + 1;
+    executionContext.failedTools.set(tc.name, failCount);
+
+    const altTool = getAlternativeTool(tc.name, executionContext);
+    if (altTool) {
+      output += `\n\n[JARVIS] Consider using "${altTool}" as an alternative.`;
+    }
+  }
+
+  return { tc, output, isError };
+}
+
 // Export provider control functions
 export function setInferenceProvider(provider: InferenceProvider): void {
   currentProvider = provider;
@@ -2278,94 +2408,44 @@ export async function runOrchestrator(
       });
 
       if (toolCalls.length > 0) {
-        for (const tc of toolCalls) {
-          if (tc.name === "task_complete") {
-            const input = tc.input as {
-              summary: string;
-              artifacts?: unknown[];
-            };
-            // Emit tool result for task_complete so UI can show completed status
-            const result: ToolResult = {
-              toolCallId: tc.id,
-              output: input.summary,
-              isError: false,
-            };
-            callbacks.onToolResult(result);
-            callbacks.onComplete(input.summary, input.artifacts);
-            isComplete = true;
-            break;
-          }
-
-          let output: string;
-          let isError = false;
-
-          try {
-            output = await executeToolFn(tc.name, tc.input);
-
-            if (isToolResultError(output)) {
-              isError = true;
-              const failCount =
-                (executionContext.failedTools.get(tc.name) || 0) + 1;
-              executionContext.failedTools.set(tc.name, failCount);
-
-              const altTool = getAlternativeTool(tc.name, executionContext);
-              if (altTool && failCount <= 2) {
-                output += `\n\n[JARVIS] Tool "${tc.name}" failed. Suggesting alternative: "${altTool}"`;
-              }
-            } else {
-              executionContext.lastToolOutputs.set(tc.name, output);
-
-              const verification = suggestVerificationTool(tc.name, tc.input);
-              if (verification) {
-                try {
-                  const verifyOutput = await executeToolFn(
-                    verification.tool,
-                    verification.input
-                  );
-                  if (!isToolResultError(verifyOutput)) {
-                    output += `\n\n[VERIFIED] ${verification.tool}: Success`;
-                  } else {
-                    output += `\n\n[VERIFICATION WARNING] ${verification.tool}: ${verifyOutput.substring(0, 200)}`;
-                  }
-                } catch {
-                  output += `\n\n[VERIFICATION SKIPPED] Could not run ${verification.tool}`;
-                }
-              }
-            }
-          } catch (error) {
-            if (
-              error instanceof Error &&
-              error.name === "ApprovalRequiredError"
-            ) {
-              throw error;
-            }
-            const errorMsg =
-              error instanceof Error ? error.message : String(error);
-            output = `Error: ${errorMsg}`;
-            isError = true;
-
-            const failCount =
-              (executionContext.failedTools.get(tc.name) || 0) + 1;
-            executionContext.failedTools.set(tc.name, failCount);
-
-            const altTool = getAlternativeTool(tc.name, executionContext);
-            if (altTool) {
-              output += `\n\n[JARVIS] Consider using "${altTool}" as an alternative.`;
-            }
-          }
-
+        const taskCompleteCall = toolCalls.find(
+          tc => tc.name === "task_complete"
+        );
+        if (taskCompleteCall) {
+          const input = taskCompleteCall.input as {
+            summary: string;
+            artifacts?: unknown[];
+          };
           const result: ToolResult = {
-            toolCallId: tc.id,
-            output,
-            isError,
+            toolCallId: taskCompleteCall.id,
+            output: input.summary,
+            isError: false,
           };
           callbacks.onToolResult(result);
+          callbacks.onComplete(input.summary, input.artifacts);
+          isComplete = true;
+        } else {
+          const toolResults = await executeToolsInParallel(
+            toolCalls,
+            executeToolFn,
+            executionContext,
+            callbacks
+          );
 
-          messages.push({
-            role: "tool",
-            content: output,
-            tool_call_id: tc.id,
-          });
+          for (const { tc, output, isError } of toolResults) {
+            const result: ToolResult = {
+              toolCallId: tc.id,
+              output,
+              isError,
+            };
+            callbacks.onToolResult(result);
+
+            messages.push({
+              role: "tool",
+              content: output,
+              tool_call_id: tc.id,
+            });
+          }
         }
       } else if (choice.finish_reason === "stop") {
         callbacks.onComplete(assistantMessage.content || "Task completed.", []);
