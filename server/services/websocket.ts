@@ -564,6 +564,16 @@ async function handleJarvisTask(
         },
         onComplete: (summary: string) => {
           finalResult = summary;
+          // Emit complete immediately so UI updates in sync with actual completion
+          const completeDurationMs = Date.now() - startTime;
+          socket.emit("jarvis:complete", {
+            taskId,
+            summary: finalResult,
+            success: true,
+            iterationCount,
+            durationMs: completeDurationMs,
+            timestamp: Date.now(),
+          });
         },
         onError: (error: string) => {
           hasError = true;
@@ -656,14 +666,16 @@ async function handleJarvisTask(
     console.error("[JARVIS WS] Learning/reflection failed:", error);
   }
 
-  socket.emit("jarvis:complete", {
-    taskId,
-    summary: finalResult,
-    success: !hasError,
-    iterationCount,
-    durationMs,
-    timestamp: Date.now(),
-  });
+  if (hasError) {
+    socket.emit("jarvis:complete", {
+      taskId,
+      summary: finalResult,
+      success: false,
+      iterationCount,
+      durationMs,
+      timestamp: Date.now(),
+    });
+  }
 }
 
 // ============================================================================
