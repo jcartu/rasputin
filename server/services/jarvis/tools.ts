@@ -4326,52 +4326,110 @@ export async function searchMemory(
 export async function storeMemory(
   userId: number,
   memoryType: "episodic" | "semantic" | "procedural",
-  content: Record<string, unknown>
+  content: string | Record<string, unknown>
 ): Promise<string> {
   try {
     const memoryService = getMemoryService();
 
+    // Normalize content - if string, convert to object with sensible structure
+    const normalizedContent: Record<string, unknown> =
+      typeof content === "string"
+        ? { text: content, description: content }
+        : content;
+
     if (memoryType === "episodic") {
+      // For episodic: use text/description as title and description
+      const text =
+        (normalizedContent.text as string) ||
+        (normalizedContent.description as string) ||
+        JSON.stringify(normalizedContent);
       const id = await memoryService.createEpisodicMemory({
         userId,
-        memoryType: (content.memoryType as any) || "interaction",
-        title: content.title as string,
-        description: content.description as string,
-        context: content.context as string,
-        importance: (content.importance as number) || 50,
-        tags: content.tags as string[],
+        memoryType: (normalizedContent.memoryType as any) || "interaction",
+        title:
+          (normalizedContent.title as string) || text.slice(0, 100) || "Memory",
+        description:
+          (normalizedContent.description as string) || text || "No description",
+        context: (normalizedContent.context as string) || "Stored via JARVIS",
+        importance: (normalizedContent.importance as number) || 50,
+        tags: (normalizedContent.tags as string[]) || [],
       });
-      return `Episodic memory stored with ID: ${id}`;
+      return `Episodic memory stored with ID: ${id}. Content: "${text.slice(0, 50)}..."`;
     }
 
     if (memoryType === "semantic") {
+      // For semantic: try to parse "X is Y" patterns or use full text
+      const text =
+        (normalizedContent.text as string) ||
+        (normalizedContent.description as string) ||
+        "";
+
+      // Try to extract subject/predicate/object from text like "The capital of France is Paris"
+      let subject = normalizedContent.subject as string;
+      let predicate = normalizedContent.predicate as string;
+      let object = normalizedContent.object as string;
+
+      if (!subject || !object) {
+        // Simple pattern matching for "X is Y" or "The X of Y is Z" patterns
+        const isMatch = text.match(/^(.+?)\s+is\s+(.+)$/i);
+        const ofMatch = text.match(/^[Tt]he\s+(.+?)\s+of\s+(.+?)\s+is\s+(.+)$/);
+
+        if (ofMatch) {
+          // "The capital of France is Paris" -> subject: France, predicate: capital, object: Paris
+          subject = subject || ofMatch[2];
+          predicate = predicate || ofMatch[1];
+          object = object || ofMatch[3];
+        } else if (isMatch) {
+          // "France is a country" -> subject: France, predicate: is, object: a country
+          subject = subject || isMatch[1];
+          predicate = predicate || "is";
+          object = object || isMatch[2];
+        } else {
+          // Fallback: use text as the fact
+          subject = subject || text.slice(0, 50) || "fact";
+          predicate = predicate || "states";
+          object = object || text || "unknown";
+        }
+      }
+
       const id = await memoryService.createSemanticMemory({
         userId,
-        category: (content.category as any) || "domain_knowledge",
-        subject: content.subject as string,
-        predicate: content.predicate as string,
-        object: content.object as string,
-        confidence: (content.confidence as number) || 80,
-        source: content.source as string,
+        category: (normalizedContent.category as any) || "domain_knowledge",
+        subject,
+        predicate,
+        object,
+        confidence: (normalizedContent.confidence as number) || 80,
+        source: (normalizedContent.source as string) || "JARVIS memory storage",
         isValid: true,
       });
-      return `Semantic memory stored with ID: ${id}`;
+      return `Semantic memory stored with ID: ${id}. Fact: "${subject}" ${predicate} "${object}"`;
     }
 
     if (memoryType === "procedural") {
+      // For procedural: parse description as steps if not provided
+      const text =
+        (normalizedContent.text as string) ||
+        (normalizedContent.description as string) ||
+        "";
       const id = await memoryService.createProceduralMemory({
         userId,
-        name: content.name as string,
-        description: content.description as string,
-        triggerConditions: content.triggerConditions as string[],
-        steps: content.steps as any[],
+        name:
+          (normalizedContent.name as string) ||
+          text.slice(0, 50) ||
+          "Procedure",
+        description: (normalizedContent.description as string) || text,
+        triggerConditions:
+          (normalizedContent.triggerConditions as string[]) || [],
+        steps: (normalizedContent.steps as any[]) || [
+          { action: "execute", description: text },
+        ],
         isActive: true,
         successRate: 100,
         executionCount: 0,
         successCount: 0,
         avgExecutionTimeMs: 0,
       });
-      return `Procedural memory stored with ID: ${id}`;
+      return `Procedural memory stored with ID: ${id}. Procedure: "${text.slice(0, 50)}..."`;
     }
 
     return `Invalid memory type: ${memoryType}`;
@@ -5286,8 +5344,8 @@ export async function executeTool(
     case "spawn_agent":
       return spawnSpecializedAgent(
         input.userId as number,
-        input.agentType as AgentType,
-        input.name as string,
+        (input.agentType || input.type) as AgentType,
+        (input.name || input.agentId) as string,
         input.task as string
       );
     case "list_agents":
@@ -7079,18 +7137,18 @@ export function getAvailableTools(): Array<{
     {
       name: "store_memory",
       description:
-        "Store important information in persistent memory for future recall. Use for learnings, facts, or procedures.",
+        "Store important information in persistent memory for future recall. Accepts simple text or structured objects.",
       parameters: {
         memoryType: {
           type: "string",
           description:
-            "Type: episodic (experience), semantic (fact), procedural (how-to)",
+            "Type: episodic (experience/event), semantic (fact like 'X is Y'), procedural (how-to steps)",
           required: true,
         },
         content: {
-          type: "object",
+          type: "string",
           description:
-            "Memory content. For episodic: {title, description, context, importance}. For semantic: {subject, predicate, object}. For procedural: {name, description, steps}",
+            "Memory content. Can be plain text like 'The capital of France is Paris' (auto-parsed) or JSON object with fields: {subject, predicate, object} for semantic, {title, description} for episodic, {name, steps} for procedural",
           required: true,
         },
       },
@@ -7164,15 +7222,16 @@ export function getAvailableTools(): Array<{
       description:
         "Spawn a specialized agent to work on a specific task. Use for complex work requiring expertise.",
       parameters: {
-        agentType: {
+        type: {
           type: "string",
           description:
-            "Type: code (programming), research (web research), sysadmin (servers), data (analysis), worker (general)",
+            "Agent type: code (programming), research (web research), sysadmin (servers), data (analysis), worker (general)",
           required: true,
         },
         name: {
           type: "string",
-          description: "Name for this agent instance",
+          description:
+            "Unique name for this agent instance (e.g., 'DataFinder', 'CodeReviewer')",
           required: true,
         },
         task: {

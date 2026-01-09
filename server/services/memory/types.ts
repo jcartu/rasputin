@@ -200,7 +200,6 @@ export interface MemoryContext {
   retrievalTimeMs: number;
 }
 
-// Memory statistics
 export interface MemoryStats {
   totalEpisodic: number;
   totalSemantic: number;
@@ -211,4 +210,5 @@ export interface MemoryStats {
   recentAccessCount: number;
   topEntities: Array<{ entity: string; count: number }>;
   topTags: Array<{ tag: string; count: number }>;
+  qdrantVectors?: number;
 }

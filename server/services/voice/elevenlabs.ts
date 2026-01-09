@@ -8,37 +8,43 @@ const ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1";
 
 // Voice options - using professional, clear voices suitable for AI assistant
 export const VOICE_OPTIONS = {
-  // Male voices
+  // Male voices - British
+  george: {
+    id: "JBFqnCBsd6RMkjVDRZzb",
+    name: "George",
+    description: "British, Mature, Warm Storyteller - Serious and Professional",
+    accent: "british",
+  },
+  // Male voices - Other
   roger: {
     id: "CwhRBWXzGAHq8TQ4Fs17",
     name: "Roger",
-    description: "Laid-Back, Casual, Resonant",
+    description: "American, Laid-Back, Casual, Resonant",
+    accent: "american",
   },
   charlie: {
     id: "IKne3meq5aSn9XLyUdCD",
     name: "Charlie",
-    description: "Deep, Confident, Energetic",
-  },
-  george: {
-    id: "JBFqnCBsd6RMkjVDRZzb",
-    name: "George",
-    description: "Warm, Captivating Storyteller",
+    description: "Australian, Deep, Confident, Energetic",
+    accent: "australian",
   },
   // Female voices
   sarah: {
     id: "EXAVITQu4vr4xnSDxMaL",
     name: "Sarah",
-    description: "Mature, Reassuring, Confident",
+    description: "American, Mature, Reassuring, Confident",
+    accent: "american",
   },
   laura: {
     id: "FGY2WhTYpPnrIDTdsKH5",
     name: "Laura",
-    description: "Enthusiast, Quirky Attitude",
+    description: "American, Enthusiastic, Quirky Attitude",
+    accent: "american",
   },
 } as const;
 
-// Default voice for JARVIS - confident and professional
-export const DEFAULT_VOICE = VOICE_OPTIONS.charlie;
+// Default voice for JARVIS - Serious British male (George)
+export const DEFAULT_VOICE = VOICE_OPTIONS.george;
 
 export interface TTSOptions {
   voiceId?: string;

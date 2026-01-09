@@ -29,21 +29,18 @@ import type {
   MemoryContext,
   MemoryStats,
 } from "./types";
+import * as vectorStore from "./vectorStore";
 
-// Cosine similarity calculation
 function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length) return 0;
-
   let dotProduct = 0;
   let normA = 0;
   let normB = 0;
-
   for (let i = 0; i < a.length; i++) {
     dotProduct += a[i] * b[i];
     normA += a[i] * a[i];
     normB += b[i] * b[i];
   }
-
   const magnitude = Math.sqrt(normA) * Math.sqrt(normB);
   return magnitude === 0 ? 0 : dotProduct / magnitude;
 }
@@ -95,13 +92,17 @@ export class MemoryService {
     return embedding;
   }
 
-  /**
-   * Store embedding in database
-   */
   async storeEmbedding(
     memoryType: MemoryType,
     memoryId: number,
-    text: string
+    text: string,
+    userId: number,
+    metadata?: {
+      title?: string;
+      subject?: string;
+      predicate?: string;
+      object?: string;
+    }
   ): Promise<string> {
     const database = await getDb();
     if (!database) throw new Error("Database not available");
@@ -114,10 +115,28 @@ export class MemoryService {
       memoryType,
       memoryId,
       sourceText: text,
-      model: "nomic-embed-text",
+      model: "text-embedding-3-small",
       dimensions: vector.length,
       vector,
     });
+
+    try {
+      await vectorStore.upsertVector(userId, id, vector, {
+        memoryType,
+        memoryId,
+        sourceText: text,
+        title: metadata?.title,
+        subject: metadata?.subject,
+        predicate: metadata?.predicate,
+        object: metadata?.object,
+        createdAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.warn(
+        "[Qdrant] Failed to store vector, falling back to MySQL:",
+        err
+      );
+    }
 
     return id;
   }
@@ -153,15 +172,15 @@ export class MemoryService {
 
     const memoryId = result[0].insertId;
 
-    // Generate and store embedding
     const embeddingText = `${memory.title}. ${memory.description}. ${memory.context || ""}`;
     const embeddingId = await this.storeEmbedding(
       "episodic",
       memoryId,
-      embeddingText
+      embeddingText,
+      memory.userId ?? 0,
+      { title: memory.title }
     );
 
-    // Update with embedding ID
     await database
       .update(episodicMemories)
       .set({ embeddingId })
@@ -170,9 +189,6 @@ export class MemoryService {
     return memoryId;
   }
 
-  /**
-   * Get episodic memory by ID
-   */
   async getEpisodicMemory(id: number): Promise<EpisodicMemory | null> {
     const database = await getDb();
     if (!database) return null;
@@ -197,9 +213,6 @@ export class MemoryService {
     return this.mapEpisodicResult(results[0]);
   }
 
-  /**
-   * Search episodic memories
-   */
   async searchEpisodicMemories(
     query: string,
     options: { userId?: number; limit?: number; tags?: string[] } = {}
@@ -208,15 +221,57 @@ export class MemoryService {
     if (!database) return [];
 
     const { userId, limit = 10, tags } = options;
-
-    // Get query embedding
     const queryEmbedding = await this.generateEmbedding(query);
 
-    // Build conditions
+    if (userId) {
+      try {
+        const qdrantResults = await vectorStore.searchVectors(
+          userId,
+          queryEmbedding,
+          {
+            limit,
+            memoryTypes: ["episodic"],
+          }
+        );
+
+        if (qdrantResults.length > 0) {
+          const memoryIds = qdrantResults.map(r => r.payload.memoryId);
+          const memories = await database
+            .select()
+            .from(episodicMemories)
+            .where(
+              sql`${episodicMemories.id} IN (${sql.join(
+                memoryIds.map(id => sql`${id}`),
+                sql`, `
+              )})`
+            );
+
+          const memoryMap = new Map(
+            memories.map((m: any) => [m.id, this.mapEpisodicResult(m)])
+          );
+
+          return qdrantResults
+            .filter(r => memoryMap.has(r.payload.memoryId))
+            .map(r => ({
+              memory: memoryMap.get(r.payload.memoryId)!,
+              relevance: r.score,
+            }))
+            .filter(m => {
+              if (tags && tags.length > 0) {
+                const memoryTags = m.memory.tags || [];
+                return tags.some(t => memoryTags.includes(t));
+              }
+              return true;
+            });
+        }
+      } catch (err) {
+        console.warn("[Qdrant] Search failed, falling back to MySQL:", err);
+      }
+    }
+
     const conditions = [];
     if (userId) conditions.push(eq(episodicMemories.userId, userId));
 
-    // Get all episodic memories with embeddings
     const memories = await database
       .select()
       .from(episodicMemories)
@@ -227,7 +282,6 @@ export class MemoryService {
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(episodicMemories.importance));
 
-    // Calculate relevance scores
     const scored = memories
       .filter((m: any) => m.memoryEmbeddings?.vector)
       .map((m: any) => ({
@@ -238,7 +292,6 @@ export class MemoryService {
         ),
       }))
       .filter((m: any) => {
-        // Filter by tags if specified
         if (tags && tags.length > 0) {
           const memoryTags = m.memory.tags || [];
           return tags.some((t: string) => memoryTags.includes(t));
@@ -280,15 +333,19 @@ export class MemoryService {
 
     const memoryId = result[0].insertId;
 
-    // Generate and store embedding
     const embeddingText = `${memory.subject} ${memory.predicate} ${memory.object}`;
     const embeddingId = await this.storeEmbedding(
       "semantic",
       memoryId,
-      embeddingText
+      embeddingText,
+      memory.userId ?? 0,
+      {
+        subject: memory.subject,
+        predicate: memory.predicate,
+        object: memory.object,
+      }
     );
 
-    // Update with embedding ID
     await database
       .update(semanticMemories)
       .set({ embeddingId })
@@ -297,9 +354,6 @@ export class MemoryService {
     return memoryId;
   }
 
-  /**
-   * Get semantic memory by subject
-   */
   async getKnowledgeAbout(
     subject: string,
     userId?: number
@@ -322,9 +376,6 @@ export class MemoryService {
     return results.map((r: any) => this.mapSemanticResult(r));
   }
 
-  /**
-   * Search semantic memories
-   */
   async searchSemanticMemories(
     query: string,
     options: { userId?: number; limit?: number; category?: string } = {}
@@ -333,8 +384,47 @@ export class MemoryService {
     if (!database) return [];
 
     const { userId, limit = 10, category } = options;
-
     const queryEmbedding = await this.generateEmbedding(query);
+
+    if (userId) {
+      try {
+        const qdrantResults = await vectorStore.searchVectors(
+          userId,
+          queryEmbedding,
+          {
+            limit,
+            memoryTypes: ["semantic"],
+          }
+        );
+
+        if (qdrantResults.length > 0) {
+          const memoryIds = qdrantResults.map(r => r.payload.memoryId);
+          const memories = await database
+            .select()
+            .from(semanticMemories)
+            .where(
+              sql`${semanticMemories.id} IN (${sql.join(
+                memoryIds.map(id => sql`${id}`),
+                sql`, `
+              )})`
+            );
+
+          const memoryMap = new Map(
+            memories.map((m: any) => [m.id, this.mapSemanticResult(m)])
+          );
+
+          return qdrantResults
+            .filter(r => memoryMap.has(r.payload.memoryId))
+            .map(r => ({
+              memory: memoryMap.get(r.payload.memoryId)!,
+              relevance: r.score,
+            }))
+            .filter(m => !category || m.memory.category === category);
+        }
+      } catch (err) {
+        console.warn("[Qdrant] Search failed, falling back to MySQL:", err);
+      }
+    }
 
     const conditions = [eq(semanticMemories.isValid, 1)];
     if (userId) conditions.push(eq(semanticMemories.userId, userId));
@@ -398,12 +488,13 @@ export class MemoryService {
 
     const memoryId = result[0].insertId;
 
-    // Generate embedding from name, description, and trigger conditions
     const embeddingText = `${memory.name}. ${memory.description}. ${memory.triggerConditions?.join(". ") || ""}`;
     const embeddingId = await this.storeEmbedding(
       "procedural",
       memoryId,
-      embeddingText
+      embeddingText,
+      memory.userId ?? 0,
+      { title: memory.name }
     );
 
     await database
@@ -414,9 +505,6 @@ export class MemoryService {
     return memoryId;
   }
 
-  /**
-   * Find procedure by trigger condition
-   */
   async findProcedureForTask(
     taskDescription: string,
     userId?: number
@@ -430,9 +518,6 @@ export class MemoryService {
       : null;
   }
 
-  /**
-   * Search procedural memories
-   */
   async searchProceduralMemories(
     query: string,
     options: { userId?: number; limit?: number } = {}
@@ -441,8 +526,46 @@ export class MemoryService {
     if (!database) return [];
 
     const { userId, limit = 10 } = options;
-
     const queryEmbedding = await this.generateEmbedding(query);
+
+    if (userId) {
+      try {
+        const qdrantResults = await vectorStore.searchVectors(
+          userId,
+          queryEmbedding,
+          {
+            limit,
+            memoryTypes: ["procedural"],
+          }
+        );
+
+        if (qdrantResults.length > 0) {
+          const memoryIds = qdrantResults.map(r => r.payload.memoryId);
+          const memories = await database
+            .select()
+            .from(proceduralMemories)
+            .where(
+              sql`${proceduralMemories.id} IN (${sql.join(
+                memoryIds.map(id => sql`${id}`),
+                sql`, `
+              )})`
+            );
+
+          const memoryMap = new Map(
+            memories.map((m: any) => [m.id, this.mapProceduralResult(m)])
+          );
+
+          return qdrantResults
+            .filter(r => memoryMap.has(r.payload.memoryId))
+            .map(r => ({
+              memory: memoryMap.get(r.payload.memoryId)!,
+              relevance: r.score,
+            }));
+        }
+      } catch (err) {
+        console.warn("[Qdrant] Search failed, falling back to MySQL:", err);
+      }
+    }
 
     const conditions = [eq(proceduralMemories.isActive, 1)];
     if (userId) conditions.push(eq(proceduralMemories.userId, userId));
@@ -767,6 +890,16 @@ export class MemoryService {
       database.select({ count: sql<number>`count(*)` }).from(trainingData),
     ]);
 
+    let qdrantVectorCount = 0;
+    if (userId) {
+      try {
+        const qdrantInfo = await vectorStore.getUserCollectionInfo(userId);
+        qdrantVectorCount = qdrantInfo.vectorCount;
+      } catch {
+        void 0;
+      }
+    }
+
     return {
       totalEpisodic: episodicCount[0].count,
       totalSemantic: semanticCount[0].count,
@@ -777,6 +910,7 @@ export class MemoryService {
       recentAccessCount: 0,
       topEntities: [],
       topTags: [],
+      qdrantVectors: qdrantVectorCount,
     };
   }
 
