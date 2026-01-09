@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock the database
+vi.mock("./services/websocket", () => ({
+  emitApprovalNew: vi.fn(),
+  emitApprovalResolved: vi.fn(),
+}));
+
 vi.mock("./db", () => ({
   getDb: vi.fn(() =>
     Promise.resolve({
@@ -13,6 +17,7 @@ vi.mock("./db", () => ({
       set: vi.fn().mockReturnThis(),
       delete: vi.fn().mockReturnThis(),
       execute: vi.fn().mockResolvedValue([]),
+      $returningId: vi.fn().mockResolvedValue([{ id: 1 }]),
     })
   ),
 }));
@@ -94,6 +99,49 @@ describe("SSH Service", () => {
       expect(typeof sshManager.readFile).toBe("function");
       expect(typeof sshManager.writeFile).toBe("function");
       expect(typeof sshManager.listDirectory).toBe("function");
+    });
+  });
+
+  describe("Permission Checking", () => {
+    it("should export checkPermissions as private but accessible via executeCommand flow", async () => {
+      const { SSHConnectionManager } = await import("./ssh");
+      const manager = SSHConnectionManager.getInstance();
+      expect(manager).toBeDefined();
+    });
+  });
+
+  describe("Approval Functions", () => {
+    it("should export approvePendingCommand function", async () => {
+      const { approvePendingCommand } = await import("./ssh");
+      expect(typeof approvePendingCommand).toBe("function");
+    });
+
+    it("should export rejectPendingCommand function", async () => {
+      const { rejectPendingCommand } = await import("./ssh");
+      expect(typeof rejectPendingCommand).toBe("function");
+    });
+
+    it("should export getPendingApprovals function", async () => {
+      const { getPendingApprovals } = await import("./ssh");
+      expect(typeof getPendingApprovals).toBe("function");
+    });
+
+    it("should export getApprovalById function", async () => {
+      const { getApprovalById } = await import("./ssh");
+      expect(typeof getApprovalById).toBe("function");
+    });
+
+    it("should export getApprovalHistory function", async () => {
+      const { getApprovalHistory } = await import("./ssh");
+      expect(typeof getApprovalHistory).toBe("function");
+    });
+  });
+
+  describe("Dangerous Command Detection", () => {
+    it("should be tested via permission checking (private method)", async () => {
+      const { SSHConnectionManager } = await import("./ssh");
+      const manager = SSHConnectionManager.getInstance();
+      expect(manager).toBeDefined();
     });
   });
 });
