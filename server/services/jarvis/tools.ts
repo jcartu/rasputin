@@ -35,8 +35,16 @@ import {
 } from "../mcp/client";
 import { agentManager } from "../multiAgent/agentManager";
 import type { AgentType } from "../multiAgent/types";
+import {
+  executeInSandbox,
+  executePythonInSandbox,
+  executeNodeInSandbox,
+  executeShellInSandbox,
+  getSandboxStatus,
+} from "../sandbox";
 
 const execAsync = promisify(exec);
+const USE_DOCKER_SANDBOX = process.env.USE_SANDBOX !== "false";
 
 type ToolResult = {
   success: boolean;
@@ -371,34 +379,38 @@ export async function browseUrl(url: string): Promise<string> {
   }
 }
 
-/**
- * Execute Python code in sandbox
- */
 export async function executePython(code: string): Promise<string> {
+  if (USE_DOCKER_SANDBOX) {
+    const status = await getSandboxStatus();
+    if (status.dockerAvailable && status.imageBuilt) {
+      const result = await executePythonInSandbox(code, { timeoutMs: 30000 });
+      if (result.success) {
+        const output =
+          result.stdout + (result.stderr ? `\nStderr: ${result.stderr}` : "");
+        return output || "Code executed successfully (no output)";
+      }
+      return `Execution error:\n${result.stderr || result.error || ""}\nOutput:\n${result.stdout || ""}`;
+    }
+  }
+
   await ensureSandbox();
 
   const filename = `script_${Date.now()}.py`;
   const filepath = path.join(JARVIS_SANDBOX, filename);
 
   try {
-    // Write code to file
     await fs.writeFile(filepath, code, "utf-8");
 
-    // Execute with timeout
     const { stdout, stderr } = await execAsync(
       `cd ${JARVIS_SANDBOX} && timeout 30 python3 ${filename}`,
-      {
-        maxBuffer: 1024 * 1024, // 1MB
-      }
+      { maxBuffer: 1024 * 1024 }
     );
 
-    // Clean up
     await fs.unlink(filepath).catch(() => {});
 
     const output = stdout + (stderr ? `\nStderr: ${stderr}` : "");
     return output || "Code executed successfully (no output)";
   } catch (error: unknown) {
-    // Clean up on error
     await fs.unlink(filepath).catch(() => {});
 
     const execError = error as {
@@ -413,34 +425,38 @@ export async function executePython(code: string): Promise<string> {
   }
 }
 
-/**
- * Execute JavaScript/Node.js code in sandbox
- */
 export async function executeJavaScript(code: string): Promise<string> {
+  if (USE_DOCKER_SANDBOX) {
+    const status = await getSandboxStatus();
+    if (status.dockerAvailable && status.imageBuilt) {
+      const result = await executeNodeInSandbox(code, { timeoutMs: 30000 });
+      if (result.success) {
+        const output =
+          result.stdout + (result.stderr ? `\nStderr: ${result.stderr}` : "");
+        return output || "Code executed successfully (no output)";
+      }
+      return `Execution error:\n${result.stderr || result.error || ""}\nOutput:\n${result.stdout || ""}`;
+    }
+  }
+
   await ensureSandbox();
 
   const filename = `script_${Date.now()}.mjs`;
   const filepath = path.join(JARVIS_SANDBOX, filename);
 
   try {
-    // Write code to file
     await fs.writeFile(filepath, code, "utf-8");
 
-    // Execute with timeout
     const { stdout, stderr } = await execAsync(
       `cd ${JARVIS_SANDBOX} && timeout 30 node ${filename}`,
-      {
-        maxBuffer: 1024 * 1024, // 1MB
-      }
+      { maxBuffer: 1024 * 1024 }
     );
 
-    // Clean up
     await fs.unlink(filepath).catch(() => {});
 
     const output = stdout + (stderr ? `\nStderr: ${stderr}` : "");
     return output || "Code executed successfully (no output)";
   } catch (error: unknown) {
-    // Clean up on error
     await fs.unlink(filepath).catch(() => {});
 
     const execError = error as {
@@ -455,21 +471,30 @@ export async function executeJavaScript(code: string): Promise<string> {
   }
 }
 
-/**
- * Run shell command in sandbox
- */
 export async function runShell(command: string): Promise<string> {
+  if (USE_DOCKER_SANDBOX) {
+    const status = await getSandboxStatus();
+    if (status.dockerAvailable && status.imageBuilt) {
+      const result = await executeShellInSandbox(command, { timeoutMs: 60000 });
+      if (result.success) {
+        const output =
+          result.stdout + (result.stderr ? `\nStderr: ${result.stderr}` : "");
+        return output || "Command executed successfully (no output)";
+      }
+      return `Command error:\n${result.stderr || result.error || ""}\nOutput:\n${result.stdout || ""}`;
+    }
+  }
+
   await ensureSandbox();
 
-  // Security: block dangerous commands
   const dangerousPatterns = [
-    /rm\s+-rf\s+\//, // rm -rf /
-    /mkfs/, // filesystem format
-    /dd\s+if=.*of=\/dev/, // disk write
-    />\s*\/dev\/sd/, // write to disk
-    /shutdown/, // shutdown
-    /reboot/, // reboot
-    /init\s+0/, // init 0
+    /rm\s+-rf\s+\//,
+    /mkfs/,
+    /dd\s+if=.*of=\/dev/,
+    />\s*\/dev\/sd/,
+    /shutdown/,
+    /reboot/,
+    /init\s+0/,
   ];
 
   for (const pattern of dangerousPatterns) {
@@ -481,9 +506,7 @@ export async function runShell(command: string): Promise<string> {
   try {
     const { stdout, stderr } = await execAsync(
       `cd ${JARVIS_SANDBOX} && timeout 60 ${command}`,
-      {
-        maxBuffer: 1024 * 1024 * 5, // 5MB
-      }
+      { maxBuffer: 1024 * 1024 * 5 }
     );
 
     const output = stdout + (stderr ? `\nStderr: ${stderr}` : "");
@@ -5735,11 +5758,6 @@ export async function executeTool(
         input.database as string | undefined,
         input.authentication as string | undefined,
         input.features as string[] | undefined
-      );
-    case "start_dev_server":
-      return startDevServerTool(
-        input.projectPath as string,
-        input.command as string | undefined
       );
     case "stop_dev_server":
       return stopDevServerTool(input.projectPath as string);
