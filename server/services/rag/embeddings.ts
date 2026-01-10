@@ -76,6 +76,9 @@ export async function generateEmbedding(
     embedding = generatePseudoEmbedding(text);
   }
 
+  // Normalize embedding for cosine similarity
+  embedding = normalizeEmbedding(embedding);
+
   if (embeddingCache.size >= MAX_CACHE_SIZE) {
     const keysToDelete = Array.from(embeddingCache.keys()).slice(0, 1000);
     keysToDelete.forEach(k => embeddingCache.delete(k));
@@ -83,6 +86,15 @@ export async function generateEmbedding(
   embeddingCache.set(cacheKey, embedding);
 
   return embedding;
+}
+
+/**
+ * Normalize embedding to unit length for cosine similarity
+ */
+function normalizeEmbedding(embedding: number[]): number[] {
+  const norm = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
+  if (norm === 0) return embedding;
+  return embedding.map(val => val / norm);
 }
 
 /**
