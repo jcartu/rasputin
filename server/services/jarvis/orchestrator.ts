@@ -3,6 +3,21 @@
  * Uses direct API connections (Anthropic, Cerebras, Gemini, Grok) for autonomous task execution
  */
 
+import { getAvailableTools } from "./tools";
+import {
+  createExecutionPlan,
+  formatPlanForPrompt,
+  assessComplexity,
+} from "./strategicPlanner";
+import {
+  validateToolOutput,
+  enhanceErrorOutput,
+  formatValidationMessage,
+  isDefiniteError,
+  type ToolValidationResult,
+} from "./toolValidation";
+import { postTaskEvolution, type TaskOutcome } from "./autoEvolution";
+
 // Get API keys from environment - Direct connections, no OpenRouter middleman
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const CEREBRAS_API_KEY = process.env.CEREBRAS_API_KEY || "";
@@ -65,1403 +80,30 @@ interface OpenRouterResponse {
   }>;
 }
 
-// Tool definitions for OpenRouter (OpenAI-compatible format)
-const JARVIS_TOOLS: OpenRouterTool[] = [
-  {
-    type: "function",
-    function: {
-      name: "web_search",
-      description:
-        "Search the web for current information using Perplexity. Use this to find up-to-date information, news, facts, or research topics.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: {
-            type: "string",
-            description: "The search query to find information about",
-          },
-        },
-        required: ["query"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "searxng_search",
-      description:
-        "Search the web using SearXNG - a free, unlimited, privacy-focused meta-search engine that aggregates results from Google, Bing, DuckDuckGo, Wikipedia, GitHub, StackOverflow, and more. Use this for bulk searches or when you need diverse results from multiple sources. No API limits.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: {
-            type: "string",
-            description: "The search query to find information about",
-          },
-          engines: {
-            type: "string",
-            description:
-              "Optional: Comma-separated list of engines to use (e.g., 'google,bing,duckduckgo'). Leave empty for all engines.",
-          },
-          categories: {
-            type: "string",
-            description:
-              "Optional: Search category (general, images, news, science, files, it, social media)",
-          },
-        },
-        required: ["query"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "browse_url",
-      description:
-        "Visit a specific URL and extract its content. Use this to read articles, documentation, or any web page.",
-      parameters: {
-        type: "object",
-        properties: {
-          url: {
-            type: "string",
-            description: "The URL to visit and extract content from",
-          },
-        },
-        required: ["url"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "execute_python",
-      description:
-        "Execute Python code in a sandboxed environment. Use for calculations, data processing, file operations, or any Python task.",
-      parameters: {
-        type: "object",
-        properties: {
-          code: {
-            type: "string",
-            description: "The Python code to execute",
-          },
-        },
-        required: ["code"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "execute_javascript",
-      description:
-        "Execute JavaScript/Node.js code in a sandboxed environment. Use for JS-specific tasks or npm package usage.",
-      parameters: {
-        type: "object",
-        properties: {
-          code: {
-            type: "string",
-            description: "The JavaScript code to execute",
-          },
-        },
-        required: ["code"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "execute_shell",
-      description:
-        "Execute shell commands in a sandboxed Linux environment. Use for system operations, file management, or running CLI tools.",
-      parameters: {
-        type: "object",
-        properties: {
-          command: {
-            type: "string",
-            description: "The shell command to execute",
-          },
-        },
-        required: ["command"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "read_file",
-      description: "Read the contents of a file from the sandboxed filesystem.",
-      parameters: {
-        type: "object",
-        properties: {
-          path: {
-            type: "string",
-            description: "The path to the file to read",
-          },
-        },
-        required: ["path"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "write_file",
-      description:
-        "Write content to a file in the sandboxed filesystem. Creates the file if it doesn't exist.",
-      parameters: {
-        type: "object",
-        properties: {
-          path: {
-            type: "string",
-            description: "The path where to write the file",
-          },
-          content: {
-            type: "string",
-            description: "The content to write to the file",
-          },
-        },
-        required: ["path", "content"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "list_files",
-      description: "List files and directories in a given path.",
-      parameters: {
-        type: "object",
-        properties: {
-          path: {
-            type: "string",
-            description:
-              "The directory path to list (default: current directory)",
-          },
-        },
-        required: [],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "calculate",
-      description:
-        "Perform mathematical calculations. Use for precise arithmetic, scientific calculations, or complex math.",
-      parameters: {
-        type: "object",
-        properties: {
-          expression: {
-            type: "string",
-            description:
-              "The mathematical expression to evaluate (e.g., '2 + 2 * 3', 'sqrt(16)', 'sin(pi/2)')",
-          },
-        },
-        required: ["expression"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "http_request",
-      description:
-        "Make HTTP requests to APIs or web services. Use for API calls, data fetching, or web interactions.",
-      parameters: {
-        type: "object",
-        properties: {
-          method: {
-            type: "string",
-            enum: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-            description: "The HTTP method to use",
-          },
-          url: {
-            type: "string",
-            description: "The URL to send the request to",
-          },
-          headers: {
-            type: "object",
-            description: "Optional headers to include in the request",
-          },
-          body: {
-            type: "string",
-            description: "Optional request body (for POST, PUT, PATCH)",
-          },
-        },
-        required: ["method", "url"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "generate_image",
-      description:
-        "Generate an image using AI based on a text description. Use for creating illustrations, diagrams, or any visual content.",
-      parameters: {
-        type: "object",
-        properties: {
-          prompt: {
-            type: "string",
-            description:
-              "A detailed description of the image to generate. Be specific about style, composition, colors, and details.",
-          },
-        },
-        required: ["prompt"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "ssh_execute",
-      description:
-        "Execute a command on a remote server via SSH. Use this to run commands on registered SSH hosts.",
-      parameters: {
-        type: "object",
-        properties: {
-          hostName: {
-            type: "string",
-            description:
-              "The name of the registered SSH host to connect to (e.g., 'rasputin', 'production-server')",
-          },
-          command: {
-            type: "string",
-            description: "The shell command to execute on the remote server",
-          },
-        },
-        required: ["hostName", "command"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "ssh_read_file",
-      description:
-        "Read a file from a remote server via SSH. Use this to view file contents on registered SSH hosts.",
-      parameters: {
-        type: "object",
-        properties: {
-          hostName: {
-            type: "string",
-            description: "The name of the registered SSH host",
-          },
-          path: {
-            type: "string",
-            description: "The absolute path to the file on the remote server",
-          },
-        },
-        required: ["hostName", "path"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "ssh_write_file",
-      description:
-        "Write content to a file on a remote server via SSH. Use this to create or update files on registered SSH hosts.",
-      parameters: {
-        type: "object",
-        properties: {
-          hostName: {
-            type: "string",
-            description: "The name of the registered SSH host",
-          },
-          path: {
-            type: "string",
-            description:
-              "The absolute path where to write the file on the remote server",
-          },
-          content: {
-            type: "string",
-            description: "The content to write to the file",
-          },
-        },
-        required: ["hostName", "path", "content"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "ssh_list_files",
-      description:
-        "List files in a directory on a remote server via SSH. Use this to explore file systems on registered SSH hosts.",
-      parameters: {
-        type: "object",
-        properties: {
-          hostName: {
-            type: "string",
-            description: "The name of the registered SSH host",
-          },
-          path: {
-            type: "string",
-            description:
-              "The directory path to list on the remote server (default: home directory)",
-          },
-        },
-        required: ["hostName"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "tmux_start",
-      description:
-        "Start a long-running process in a background tmux session. Use for dev servers, build watchers, or any process that needs to keep running.",
-      parameters: {
-        type: "object",
-        properties: {
-          sessionName: {
-            type: "string",
-            description:
-              "Name for the tmux session (e.g., 'devserver', 'build')",
-          },
-          command: {
-            type: "string",
-            description:
-              "The command to run (e.g., 'npm run dev', 'pnpm build --watch')",
-          },
-        },
-        required: ["sessionName", "command"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "tmux_output",
-      description:
-        "Get the recent output from a running tmux session. Use to check status of background processes.",
-      parameters: {
-        type: "object",
-        properties: {
-          sessionName: {
-            type: "string",
-            description: "Name of the tmux session to check",
-          },
-          lines: {
-            type: "number",
-            description: "Number of lines to retrieve (default: 100)",
-          },
-        },
-        required: ["sessionName"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "tmux_stop",
-      description: "Stop a running tmux session.",
-      parameters: {
-        type: "object",
-        properties: {
-          sessionName: {
-            type: "string",
-            description: "Name of the tmux session to stop",
-          },
-        },
-        required: ["sessionName"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "tmux_list",
-      description: "List all running JARVIS tmux sessions.",
-      parameters: {
-        type: "object",
-        properties: {},
-        required: [],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "tmux_send",
-      description:
-        "Send input/commands to a running tmux session. Use for interactive processes.",
-      parameters: {
-        type: "object",
-        properties: {
-          sessionName: {
-            type: "string",
-            description: "Name of the tmux session",
-          },
-          input: {
-            type: "string",
-            description: "Input to send to the session",
-          },
-        },
-        required: ["sessionName", "input"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "screenshot",
-      description:
-        "Take a screenshot of a web page. Useful for verifying frontend changes, capturing visual state, or debugging UI issues.",
-      parameters: {
-        type: "object",
-        properties: {
-          url: {
-            type: "string",
-            description:
-              "The URL to screenshot (e.g., 'http://localhost:5173' for dev server)",
-          },
-          fullPage: {
-            type: "boolean",
-            description:
-              "Whether to capture the full scrollable page (default: false)",
-          },
-          waitFor: {
-            type: "number",
-            description:
-              "Milliseconds to wait after page load before taking screenshot",
-          },
-        },
-        required: ["url"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "playwright_browse",
-      description:
-        "Browse a web page using a real browser (Playwright). Better than simple fetch for JavaScript-rendered content.",
-      parameters: {
-        type: "object",
-        properties: {
-          url: {
-            type: "string",
-            description: "The URL to browse",
-          },
-          waitFor: {
-            type: "string",
-            description: "CSS selector to wait for before extracting content",
-          },
-          timeout: {
-            type: "number",
-            description: "Timeout in milliseconds (default: 30000)",
-          },
-        },
-        required: ["url"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "browser_session_start",
-      description:
-        "Start a persistent browser session for interactive testing. Enables clicking, typing, navigating, and captures console/network errors. Use for end-to-end UI testing.",
-      parameters: {
-        type: "object",
-        properties: {
-          sessionId: {
-            type: "string",
-            description: "Unique identifier for this browser session",
-          },
-          url: {
-            type: "string",
-            description: "The initial URL to navigate to",
-          },
-        },
-        required: ["sessionId", "url"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "browser_click",
-      description: "Click an element in the browser session.",
-      parameters: {
-        type: "object",
-        properties: {
-          sessionId: {
-            type: "string",
-            description: "The browser session ID",
-          },
-          selector: {
-            type: "string",
-            description: "CSS selector of element to click",
-          },
-        },
-        required: ["sessionId", "selector"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "browser_fill",
-      description: "Fill a text input in the browser session.",
-      parameters: {
-        type: "object",
-        properties: {
-          sessionId: {
-            type: "string",
-            description: "The browser session ID",
-          },
-          selector: {
-            type: "string",
-            description: "CSS selector of input element",
-          },
-          value: {
-            type: "string",
-            description: "Text to fill in the input",
-          },
-        },
-        required: ["sessionId", "selector", "value"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "browser_select",
-      description: "Select an option from a dropdown in the browser session.",
-      parameters: {
-        type: "object",
-        properties: {
-          sessionId: {
-            type: "string",
-            description: "The browser session ID",
-          },
-          selector: {
-            type: "string",
-            description: "CSS selector of select element",
-          },
-          value: {
-            type: "string",
-            description: "Value to select",
-          },
-        },
-        required: ["sessionId", "selector", "value"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "browser_navigate",
-      description: "Navigate to a different URL in the browser session.",
-      parameters: {
-        type: "object",
-        properties: {
-          sessionId: {
-            type: "string",
-            description: "The browser session ID",
-          },
-          url: {
-            type: "string",
-            description: "URL to navigate to",
-          },
-        },
-        required: ["sessionId", "url"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "browser_screenshot",
-      description: "Take a screenshot in the browser session.",
-      parameters: {
-        type: "object",
-        properties: {
-          sessionId: {
-            type: "string",
-            description: "The browser session ID",
-          },
-          fullPage: {
-            type: "boolean",
-            description: "Capture full scrollable page (default: false)",
-          },
-          name: {
-            type: "string",
-            description: "Custom filename for the screenshot",
-          },
-        },
-        required: ["sessionId"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "browser_get_content",
-      description:
-        "Get the text content of the current page in the browser session.",
-      parameters: {
-        type: "object",
-        properties: {
-          sessionId: {
-            type: "string",
-            description: "The browser session ID",
-          },
-        },
-        required: ["sessionId"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "browser_get_logs",
-      description:
-        "Get console messages and network errors captured during the browser session. Essential for debugging runtime issues.",
-      parameters: {
-        type: "object",
-        properties: {
-          sessionId: {
-            type: "string",
-            description: "The browser session ID",
-          },
-        },
-        required: ["sessionId"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "browser_wait_for",
-      description:
-        "Wait for an element to appear/disappear in the browser session.",
-      parameters: {
-        type: "object",
-        properties: {
-          sessionId: {
-            type: "string",
-            description: "The browser session ID",
-          },
-          selector: {
-            type: "string",
-            description: "CSS selector to wait for",
-          },
-          timeout: {
-            type: "number",
-            description: "Timeout in milliseconds (default: 10000)",
-          },
-          state: {
-            type: "string",
-            enum: ["visible", "hidden", "attached"],
-            description: "State to wait for (default: visible)",
-          },
-        },
-        required: ["sessionId", "selector"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "browser_get_elements",
-      description:
-        "Query elements matching a selector and get their attributes. Useful for finding buttons, links, inputs.",
-      parameters: {
-        type: "object",
-        properties: {
-          sessionId: {
-            type: "string",
-            description: "The browser session ID",
-          },
-          selector: {
-            type: "string",
-            description: "CSS selector to query",
-          },
-        },
-        required: ["sessionId", "selector"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "browser_session_end",
-      description: "End a browser session and get a summary of captured logs.",
-      parameters: {
-        type: "object",
-        properties: {
-          sessionId: {
-            type: "string",
-            description: "The browser session ID to end",
-          },
-        },
-        required: ["sessionId"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "run_build",
-      description:
-        "Run the build command for a project and get structured results. Parses TypeScript and ESLint errors automatically.",
-      parameters: {
-        type: "object",
-        properties: {
-          projectPath: {
-            type: "string",
-            description: "Path to the project directory",
-          },
-          command: {
-            type: "string",
-            description: "Custom build command (default: pnpm build)",
-          },
-        },
-        required: ["projectPath"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "run_tests",
-      description:
-        "Run tests for a project and get structured results. Parses test results automatically.",
-      parameters: {
-        type: "object",
-        properties: {
-          projectPath: {
-            type: "string",
-            description: "Path to the project directory",
-          },
-          pattern: {
-            type: "string",
-            description: "Test file pattern to run (e.g., '*.test.ts')",
-          },
-          command: {
-            type: "string",
-            description: "Custom test command (default: pnpm test)",
-          },
-        },
-        required: ["projectPath"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "run_type_check",
-      description:
-        "Run TypeScript type checking and get structured error list.",
-      parameters: {
-        type: "object",
-        properties: {
-          projectPath: {
-            type: "string",
-            description: "Path to the project directory",
-          },
-        },
-        required: ["projectPath"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "run_lint",
-      description: "Run ESLint and get structured error list.",
-      parameters: {
-        type: "object",
-        properties: {
-          projectPath: {
-            type: "string",
-            description: "Path to the project directory",
-          },
-        },
-        required: ["projectPath"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "start_dev_server",
-      description:
-        "Start the development server in a background tmux session. Automatically checks if server is ready.",
-      parameters: {
-        type: "object",
-        properties: {
-          projectPath: {
-            type: "string",
-            description: "Path to the project directory",
-          },
-          port: {
-            type: "number",
-            description: "Port to run on (default: 5173)",
-          },
-          command: {
-            type: "string",
-            description: "Custom dev command (default: pnpm dev)",
-          },
-        },
-        required: ["projectPath"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "check_dev_server",
-      description: "Check if the dev server is running and responding.",
-      parameters: {
-        type: "object",
-        properties: {
-          port: {
-            type: "number",
-            description: "Port to check (default: 5173)",
-          },
-        },
-        required: [],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "save_baseline_screenshot",
-      description:
-        "Save the current browser view as a baseline screenshot for regression testing.",
-      parameters: {
-        type: "object",
-        properties: {
-          sessionId: {
-            type: "string",
-            description: "The browser session ID",
-          },
-          name: {
-            type: "string",
-            description:
-              "Name for the baseline (e.g., 'homepage', 'login-form')",
-          },
-        },
-        required: ["sessionId", "name"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "compare_screenshot",
-      description:
-        "Compare the current browser view against a saved baseline screenshot.",
-      parameters: {
-        type: "object",
-        properties: {
-          sessionId: {
-            type: "string",
-            description: "The browser session ID",
-          },
-          baselineName: {
-            type: "string",
-            description: "Name of the baseline to compare against",
-          },
-        },
-        required: ["sessionId", "baselineName"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "list_baselines",
-      description: "List all saved baseline screenshots.",
-      parameters: {
-        type: "object",
-        properties: {},
-        required: [],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "git_status",
-      description:
-        "Get git status showing staged, unstaged, and untracked files.",
-      parameters: {
-        type: "object",
-        properties: {
-          projectPath: {
-            type: "string",
-            description: "Path to the git repository",
-          },
-        },
-        required: ["projectPath"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "git_diff",
-      description: "Show git diff of changes.",
-      parameters: {
-        type: "object",
-        properties: {
-          projectPath: {
-            type: "string",
-            description: "Path to the git repository",
-          },
-          staged: {
-            type: "boolean",
-            description: "Show staged changes only",
-          },
-          file: {
-            type: "string",
-            description: "Show diff for specific file only",
-          },
-        },
-        required: ["projectPath"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "git_branch",
-      description: "List, create, checkout, or delete git branches.",
-      parameters: {
-        type: "object",
-        properties: {
-          projectPath: {
-            type: "string",
-            description: "Path to the git repository",
-          },
-          create: {
-            type: "string",
-            description: "Create and checkout new branch with this name",
-          },
-          checkout: {
-            type: "string",
-            description: "Checkout existing branch",
-          },
-          delete: {
-            type: "string",
-            description: "Delete branch with this name",
-          },
-        },
-        required: ["projectPath"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "git_commit",
-      description: "Create a git commit.",
-      parameters: {
-        type: "object",
-        properties: {
-          projectPath: {
-            type: "string",
-            description: "Path to the git repository",
-          },
-          message: {
-            type: "string",
-            description: "Commit message",
-          },
-          addAll: {
-            type: "boolean",
-            description: "Stage all changes before committing",
-          },
-          files: {
-            type: "array",
-            items: { type: "string" },
-            description: "Specific files to stage before committing",
-          },
-        },
-        required: ["projectPath", "message"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "git_log",
-      description: "Show recent git commits.",
-      parameters: {
-        type: "object",
-        properties: {
-          projectPath: {
-            type: "string",
-            description: "Path to the git repository",
-          },
-          count: {
-            type: "number",
-            description: "Number of commits to show (default: 10)",
-          },
-          oneline: {
-            type: "boolean",
-            description: "Show compact one-line format",
-          },
-        },
-        required: ["projectPath"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "git_push",
-      description: "Push commits to remote repository.",
-      parameters: {
-        type: "object",
-        properties: {
-          projectPath: {
-            type: "string",
-            description: "Path to the git repository",
-          },
-          setUpstream: {
-            type: "string",
-            description: "Set upstream branch (for new branches)",
-          },
-          force: {
-            type: "boolean",
-            description: "Force push with lease (safe force push)",
-          },
-        },
-        required: ["projectPath"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "git_pull",
-      description: "Pull latest changes from remote.",
-      parameters: {
-        type: "object",
-        properties: {
-          projectPath: {
-            type: "string",
-            description: "Path to the git repository",
-          },
-        },
-        required: ["projectPath"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "git_stash",
-      description: "Stash or restore uncommitted changes.",
-      parameters: {
-        type: "object",
-        properties: {
-          projectPath: {
-            type: "string",
-            description: "Path to the git repository",
-          },
-          pop: {
-            type: "boolean",
-            description: "Pop most recent stash",
-          },
-          list: {
-            type: "boolean",
-            description: "List all stashes",
-          },
-          message: {
-            type: "string",
-            description: "Message for new stash",
-          },
-        },
-        required: ["projectPath"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "preview_file_edit",
-      description:
-        "Preview changes to a file before applying them. Shows a diff and creates a backup. Use this for large or complex file edits to verify changes first.",
-      parameters: {
-        type: "object",
-        properties: {
-          path: {
-            type: "string",
-            description: "The path to the file to edit",
-          },
-          content: {
-            type: "string",
-            description: "The new content for the file",
-          },
-        },
-        required: ["path", "content"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "apply_file_edit",
-      description:
-        "Apply a previously previewed file edit. Use the backup_id from preview_file_edit.",
-      parameters: {
-        type: "object",
-        properties: {
-          backupId: {
-            type: "string",
-            description: "The backup ID from the preview",
-          },
-        },
-        required: ["backupId"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "rollback_file_edit",
-      description:
-        "Rollback a file to its state before an edit was applied. Use if changes caused problems.",
-      parameters: {
-        type: "object",
-        properties: {
-          backupId: {
-            type: "string",
-            description: "The backup ID of the edit to rollback",
-          },
-        },
-        required: ["backupId"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "discard_file_edit",
-      description: "Discard a previewed file edit without applying it.",
-      parameters: {
-        type: "object",
-        properties: {
-          backupId: {
-            type: "string",
-            description: "The backup ID of the edit to discard",
-          },
-        },
-        required: ["backupId"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "list_pending_edits",
-      description:
-        "List all pending file edits that have been previewed but not yet applied or discarded.",
-      parameters: {
-        type: "object",
-        properties: {},
-        required: [],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "start_debug_session",
-      description:
-        "Start a structured debugging session with a hypothesis about the bug. Use this when debugging complex issues to track attempts and state.",
-      parameters: {
-        type: "object",
-        properties: {
-          hypothesis: {
-            type: "string",
-            description:
-              "Your initial hypothesis about what might be causing the bug",
-          },
-        },
-        required: ["hypothesis"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "debug_snapshot",
-      description:
-        "Capture the current state during debugging. Use at key points to track progress.",
-      parameters: {
-        type: "object",
-        properties: {
-          label: {
-            type: "string",
-            description: "A descriptive label for this snapshot",
-          },
-          state: {
-            type: "object",
-            description:
-              "Key-value pairs of relevant state (variables, config values, etc.)",
-          },
-        },
-        required: ["label", "state"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "debug_log_output",
-      description:
-        "Log command/execution output to the current debug snapshot.",
-      parameters: {
-        type: "object",
-        properties: {
-          output: {
-            type: "string",
-            description: "The output to log",
-          },
-        },
-        required: ["output"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "debug_log_error",
-      description: "Log an error to the current debug snapshot.",
-      parameters: {
-        type: "object",
-        properties: {
-          error: {
-            type: "string",
-            description: "The error message to log",
-          },
-        },
-        required: ["error"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "debug_attempt",
-      description:
-        "Log a fix attempt and its result. After 3 failures, you'll be prompted to reconsider the approach.",
-      parameters: {
-        type: "object",
-        properties: {
-          description: {
-            type: "string",
-            description: "What you tried to do",
-          },
-          result: {
-            type: "string",
-            enum: ["success", "failure"],
-            description: "Whether the attempt succeeded or failed",
-          },
-          error: {
-            type: "string",
-            description: "Error message if the attempt failed",
-          },
-        },
-        required: ["description", "result"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "debug_summary",
-      description:
-        "Get a summary of the current debug session including all attempts and snapshots.",
-      parameters: {
-        type: "object",
-        properties: {},
-        required: [],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "end_debug_session",
-      description:
-        "End the current debug session with a conclusion about what was found/fixed.",
-      parameters: {
-        type: "object",
-        properties: {
-          conclusion: {
-            type: "string",
-            description:
-              "Summary of what was discovered and whether the issue was resolved",
-          },
-        },
-        required: ["conclusion"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_debug_snapshot",
-      description: "Retrieve details of a specific debug snapshot by ID.",
-      parameters: {
-        type: "object",
-        properties: {
-          snapshotId: {
-            type: "string",
-            description: "The snapshot ID (e.g., 'snap_1')",
-          },
-        },
-        required: ["snapshotId"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "task_complete",
-      description:
-        "Mark the task as complete and provide a final summary. Use this when you have finished all required work.",
-      parameters: {
-        type: "object",
-        properties: {
-          summary: {
-            type: "string",
-            description:
-              "A comprehensive summary of what was accomplished, including any important results or outputs",
-          },
-          artifacts: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                type: {
-                  type: "string",
-                  enum: ["file", "image", "code", "data"],
-                },
-                path: { type: "string" },
-                description: { type: "string" },
-              },
-            },
-            description: "List of artifacts created during the task",
-          },
-        },
-        required: ["summary"],
-      },
-    },
-  },
-];
+function buildJarvisTools(): OpenRouterTool[] {
+  return getAvailableTools().map(tool => ({
+    type: "function" as const,
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: {
+        type: "object" as const,
+        properties: Object.fromEntries(
+          Object.entries(tool.parameters).map(([key, val]) => [
+            key,
+            { type: val.type, description: val.description },
+          ])
+        ),
+        required: Object.entries(tool.parameters)
+          .filter(([, val]) => val.required)
+          .map(([key]) => key),
+      },
+    },
+  }));
+}
 
-// Get current date string
+const JARVIS_TOOLS: OpenRouterTool[] = buildJarvisTools();
+
 function getCurrentDateString(): string {
   const now = new Date();
   return now.toLocaleDateString("en-US", {
@@ -1635,6 +277,30 @@ export interface OrchestratorStep {
   toolResult?: ToolResult;
 }
 
+export type TaskStage =
+  | "initializing"
+  | "planning"
+  | "executing"
+  | "verifying"
+  | "recovering"
+  | "complete"
+  | "error";
+
+export interface TaskProgress {
+  stage: TaskStage;
+  stageProgress: number;
+  overallProgress: number;
+  currentAction: string;
+  toolsCompleted: number;
+  toolsTotal: number;
+  iterationsCurrent: number;
+  iterationsMax: number;
+  tokensUsed: number;
+  tokensBudget: number;
+  estimatedTimeRemainingMs?: number;
+  partialResults?: string[];
+}
+
 export interface OrchestratorCallbacks {
   onThinking: (thought: string) => void;
   onThinkingChunk?: (chunk: string) => void;
@@ -1643,6 +309,7 @@ export interface OrchestratorCallbacks {
   onComplete: (summary: string, artifacts?: unknown[]) => void;
   onError: (error: string) => void;
   onIteration?: (iteration: number, maxIterations: number) => void;
+  onProgress?: (progress: TaskProgress) => void;
 }
 
 const TOOL_ALTERNATIVES: Record<string, string[]> = {
@@ -1657,6 +324,162 @@ const TOOL_ALTERNATIVES: Record<string, string[]> = {
 interface ToolExecutionContext {
   failedTools: Map<string, number>;
   lastToolOutputs: Map<string, string>;
+  attemptedCalls: Set<string>;
+  tokenEstimate: number;
+  tokenBudget: number;
+  consecutiveFailures: number;
+  lastFailureTime: number;
+  approachPivots: number;
+  failedApproaches: string[];
+  progressTracker: ProgressTracker;
+  evolutionTracker: EvolutionTracker;
+}
+
+interface EvolutionTracker {
+  toolsUsed: Set<string>;
+  toolsFailed: Set<string>;
+  startTime: number;
+  lastError?: string;
+}
+
+interface ProgressTracker {
+  stage: TaskStage;
+  startTime: number;
+  phaseStartTimes: Map<TaskStage, number>;
+  toolsCompletedThisIteration: number;
+  toolsTotalThisIteration: number;
+  iterationDurations: number[];
+  partialResults: string[];
+}
+
+function createProgressTracker(): ProgressTracker {
+  return {
+    stage: "initializing",
+    startTime: Date.now(),
+    phaseStartTimes: new Map([["initializing", Date.now()]]),
+    toolsCompletedThisIteration: 0,
+    toolsTotalThisIteration: 0,
+    iterationDurations: [],
+    partialResults: [],
+  };
+}
+
+function calculateEstimatedTimeRemaining(
+  tracker: ProgressTracker,
+  currentIteration: number,
+  maxIterations: number
+): number | undefined {
+  if (tracker.iterationDurations.length < 2) return undefined;
+
+  const avgDuration =
+    tracker.iterationDurations.reduce((a, b) => a + b, 0) /
+    tracker.iterationDurations.length;
+  const remainingIterations = maxIterations - currentIteration;
+
+  return Math.round(avgDuration * remainingIterations * 0.7);
+}
+
+function buildProgress(
+  tracker: ProgressTracker,
+  context: ToolExecutionContext,
+  currentIteration: number,
+  maxIterations: number,
+  currentAction: string
+): TaskProgress {
+  const iterationProgress =
+    maxIterations > 0 ? (currentIteration / maxIterations) * 100 : 0;
+
+  const toolProgress =
+    tracker.toolsTotalThisIteration > 0
+      ? (tracker.toolsCompletedThisIteration /
+          tracker.toolsTotalThisIteration) *
+        100
+      : 0;
+
+  let stageWeight = 0;
+  switch (tracker.stage) {
+    case "initializing":
+      stageWeight = 0;
+      break;
+    case "planning":
+      stageWeight = 10;
+      break;
+    case "executing":
+      stageWeight = 50;
+      break;
+    case "verifying":
+      stageWeight = 85;
+      break;
+    case "recovering":
+      stageWeight = 70;
+      break;
+    case "complete":
+      stageWeight = 100;
+      break;
+    case "error":
+      stageWeight = iterationProgress;
+      break;
+  }
+
+  const overallProgress = Math.min(
+    99,
+    Math.round(stageWeight * 0.4 + iterationProgress * 0.4 + toolProgress * 0.2)
+  );
+
+  return {
+    stage: tracker.stage,
+    stageProgress: Math.round(toolProgress),
+    overallProgress,
+    currentAction,
+    toolsCompleted: tracker.toolsCompletedThisIteration,
+    toolsTotal: tracker.toolsTotalThisIteration,
+    iterationsCurrent: currentIteration,
+    iterationsMax: maxIterations,
+    tokensUsed: context.tokenEstimate,
+    tokensBudget: context.tokenBudget,
+    estimatedTimeRemainingMs: calculateEstimatedTimeRemaining(
+      tracker,
+      currentIteration,
+      maxIterations
+    ),
+    partialResults:
+      tracker.partialResults.length > 0
+        ? tracker.partialResults.slice(-5)
+        : undefined,
+  };
+}
+
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+function calculateBackoffDelay(failures: number): number {
+  const baseDelay = 500;
+  const maxDelay = 10000;
+  return Math.min(baseDelay * Math.pow(2, failures - 1), maxDelay);
+}
+
+function summarizeFailedApproach(
+  toolCalls: ToolCall[],
+  errors: string[]
+): string {
+  const tools = toolCalls.map(tc => tc.name).join(", ");
+  const errorSummary = errors.slice(0, 2).join("; ");
+  return `Tools: [${tools}] - Errors: ${errorSummary}`;
+}
+
+function hashToolCall(name: string, input: Record<string, unknown>): string {
+  const normalized = JSON.stringify(
+    { name, input },
+    Object.keys({ name, input }).sort()
+  );
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i++) {
+    const char = normalized.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash;
+  }
+  return `${name}:${hash.toString(16)}`;
 }
 
 function getAlternativeTool(
@@ -1755,34 +578,83 @@ async function executeToolsInParallel(
     input: Record<string, unknown>
   ) => Promise<string>,
   executionContext: ToolExecutionContext,
-  callbacks: OrchestratorCallbacks
-): Promise<Array<{ tc: ToolCall; output: string; isError: boolean }>> {
+  _callbacks: OrchestratorCallbacks
+): Promise<
+  Array<{
+    tc: ToolCall;
+    output: string;
+    isError: boolean;
+    validation?: ToolValidationResult;
+  }>
+> {
   const parallelizable = toolCalls.filter(tc => canRunInParallel(tc.name));
   const sequential = toolCalls.filter(tc => !canRunInParallel(tc.name));
 
-  const results: Array<{ tc: ToolCall; output: string; isError: boolean }> = [];
+  const results: Array<{
+    tc: ToolCall;
+    output: string;
+    isError: boolean;
+    validation?: ToolValidationResult;
+  }> = [];
 
   if (parallelizable.length > 1) {
     const parallelResults = await Promise.all(
       parallelizable.map(async tc => {
+        const callHash = hashToolCall(tc.name, tc.input);
+        if (executionContext.attemptedCalls.has(callHash)) {
+          return {
+            tc,
+            output: `[Skipped] Identical call to "${tc.name}" was already attempted this session.`,
+            isError: true,
+          };
+        }
+        executionContext.attemptedCalls.add(callHash);
+
         try {
           const output = await executeToolFn(tc.name, tc.input);
-          const isError = isToolResultError(output);
+          const validation = validateToolOutput(tc.name, tc.input, output);
+          const isError =
+            isToolResultError(output) ||
+            isDefiniteError(output) ||
+            !validation.valid ||
+            validation.confidence < 50;
+
           if (isError) {
             const failCount =
               (executionContext.failedTools.get(tc.name) || 0) + 1;
             executionContext.failedTools.set(tc.name, failCount);
+
+            const enhancedOutput = enhanceErrorOutput(
+              tc.name,
+              tc.input,
+              output
+            );
+            const validationMsg = formatValidationMessage(tc.name, validation);
+            const finalOutput = validationMsg
+              ? `${enhancedOutput}\n\n${validationMsg}`
+              : enhancedOutput;
+
+            return { tc, output: finalOutput, isError: true, validation };
           } else {
             executionContext.lastToolOutputs.set(tc.name, output);
+            const finalOutput =
+              validation.warnings.length > 0
+                ? `${output}\n\n[Warnings: ${validation.warnings.join(", ")}]`
+                : output;
+            return { tc, output: finalOutput, isError: false, validation };
           }
-          return { tc, output, isError };
         } catch (error) {
           const errorMsg =
             error instanceof Error ? error.message : String(error);
           const failCount =
             (executionContext.failedTools.get(tc.name) || 0) + 1;
           executionContext.failedTools.set(tc.name, failCount);
-          return { tc, output: `Error: ${errorMsg}`, isError: true };
+          const enhancedOutput = enhanceErrorOutput(
+            tc.name,
+            tc.input,
+            `Error: ${errorMsg}`
+          );
+          return { tc, output: enhancedOutput, isError: true };
         }
       })
     );
@@ -1813,24 +685,62 @@ async function executeSingleTool(
     input: Record<string, unknown>
   ) => Promise<string>,
   executionContext: ToolExecutionContext
-): Promise<{ tc: ToolCall; output: string; isError: boolean }> {
+): Promise<{
+  tc: ToolCall;
+  output: string;
+  isError: boolean;
+  validation?: ToolValidationResult;
+}> {
+  const callHash = hashToolCall(tc.name, tc.input);
+  if (executionContext.attemptedCalls.has(callHash)) {
+    return {
+      tc,
+      output: `[Skipped] Identical call to "${tc.name}" was already attempted this session. Try a different approach.`,
+      isError: true,
+    };
+  }
+  executionContext.attemptedCalls.add(callHash);
+
   let output: string;
   let isError = false;
+  let validation: ToolValidationResult | undefined;
 
   try {
     output = await executeToolFn(tc.name, tc.input);
 
-    if (isToolResultError(output)) {
+    validation = validateToolOutput(tc.name, tc.input, output);
+
+    if (isToolResultError(output) || isDefiniteError(output)) {
       isError = true;
       const failCount = (executionContext.failedTools.get(tc.name) || 0) + 1;
       executionContext.failedTools.set(tc.name, failCount);
+
+      output = enhanceErrorOutput(tc.name, tc.input, output);
 
       const altTool = getAlternativeTool(tc.name, executionContext);
       if (altTool && failCount <= 2) {
         output += `\n\n[JARVIS] Tool "${tc.name}" failed. Suggesting alternative: "${altTool}"`;
       }
+    } else if (!validation.valid || validation.confidence < 50) {
+      isError = true;
+      const failCount = (executionContext.failedTools.get(tc.name) || 0) + 1;
+      executionContext.failedTools.set(tc.name, failCount);
+
+      const validationMsg = formatValidationMessage(tc.name, validation);
+      if (validationMsg) {
+        output += `\n\n${validationMsg}`;
+      }
+
+      const altTool = getAlternativeTool(tc.name, executionContext);
+      if (altTool && failCount <= 2) {
+        output += `\n\n[JARVIS] Consider using "${altTool}" as an alternative.`;
+      }
     } else {
       executionContext.lastToolOutputs.set(tc.name, output);
+
+      if (validation.warnings.length > 0) {
+        output += `\n\n[Warnings: ${validation.warnings.join(", ")}]`;
+      }
     }
   } catch (error) {
     if (error instanceof Error && error.name === "ApprovalRequiredError") {
@@ -1839,6 +749,8 @@ async function executeSingleTool(
     const errorMsg = error instanceof Error ? error.message : String(error);
     output = `Error: ${errorMsg}`;
     isError = true;
+
+    output = enhanceErrorOutput(tc.name, tc.input, output);
 
     const failCount = (executionContext.failedTools.get(tc.name) || 0) + 1;
     executionContext.failedTools.set(tc.name, failCount);
@@ -1849,7 +761,7 @@ async function executeSingleTool(
     }
   }
 
-  return { tc, output, isError };
+  return { tc, output, isError, validation };
 }
 
 // Export provider control functions
@@ -2344,7 +1256,10 @@ async function callLLM(
 export interface OrchestratorOptions {
   maxIterations?: number;
   memoryContext?: string;
+  procedureGuidance?: string;
   conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
+  userId?: number;
+  enableMemoryInjection?: boolean;
 }
 
 export async function runOrchestrator(
@@ -2359,6 +1274,7 @@ export async function runOrchestrator(
   const {
     maxIterations = 15,
     memoryContext = "",
+    procedureGuidance = "",
     conversationHistory = [],
   } = options;
   const messages: OpenRouterMessage[] = [];
@@ -2367,7 +1283,21 @@ export async function runOrchestrator(
     messages.push({ role: msg.role, content: msg.content });
   }
 
-  messages.push({ role: "user", content: task });
+  const complexity = assessComplexity(task);
+  const executionPlan = createExecutionPlan(task);
+  const planPrompt = formatPlanForPrompt(executionPlan);
+
+  let taskWithContext = task;
+  if (procedureGuidance) {
+    taskWithContext += `\n\n${procedureGuidance}`;
+  }
+  if (planPrompt && complexity !== "simple") {
+    taskWithContext += `\n\n${planPrompt}`;
+    callbacks.onThinking?.(
+      `Task complexity: ${complexity}. Created ${executionPlan.phases.length}-phase execution plan.`
+    );
+  }
+  messages.push({ role: "user", content: taskWithContext });
 
   let iterations = 0;
   let isComplete = false;
@@ -2377,14 +1307,58 @@ export async function runOrchestrator(
   const executionContext: ToolExecutionContext = {
     failedTools: new Map(),
     lastToolOutputs: new Map(),
+    attemptedCalls: new Set(),
+    tokenEstimate: 0,
+    tokenBudget: 500000,
+    consecutiveFailures: 0,
+    lastFailureTime: 0,
+    approachPivots: 0,
+    failedApproaches: [],
+    progressTracker: createProgressTracker(),
+    evolutionTracker: {
+      toolsUsed: new Set(),
+      toolsFailed: new Set(),
+      startTime: Date.now(),
+    },
   };
 
   while (!isComplete && iterations < maxIterations) {
+    const iterationStartTime = Date.now();
+
+    if (executionContext.tokenEstimate >= executionContext.tokenBudget) {
+      executionContext.progressTracker.stage = "error";
+      callbacks.onProgress?.(
+        buildProgress(
+          executionContext.progressTracker,
+          executionContext,
+          iterations,
+          maxIterations,
+          "Token budget exceeded"
+        )
+      );
+      callbacks.onThinking?.(
+        `\n🛑 Token budget exceeded (~${Math.round(executionContext.tokenEstimate / 1000)}k tokens). Stopping to prevent runaway costs.`
+      );
+      break;
+    }
+
     iterations++;
 
     if (callbacks.onIteration) {
       callbacks.onIteration(iterations, maxIterations);
     }
+
+    executionContext.progressTracker.stage =
+      iterations === 1 ? "planning" : "executing";
+    callbacks.onProgress?.(
+      buildProgress(
+        executionContext.progressTracker,
+        executionContext,
+        iterations,
+        maxIterations,
+        iterations === 1 ? "Analyzing task..." : "Processing..."
+      )
+    );
 
     try {
       const response = await callLLM(
@@ -2399,6 +1373,20 @@ export async function runOrchestrator(
       }
 
       const assistantMessage = choice.message;
+
+      const promptTokens = estimateTokens(
+        messages
+          .map(m => (typeof m.content === "string" ? m.content : ""))
+          .join("")
+      );
+      const responseTokens = estimateTokens(assistantMessage.content || "");
+      executionContext.tokenEstimate += promptTokens + responseTokens;
+
+      if (executionContext.tokenEstimate > executionContext.tokenBudget * 0.9) {
+        callbacks.onThinking?.(
+          `\n⚠️ Token budget warning: ~${Math.round(executionContext.tokenEstimate / 1000)}k tokens used (90% of budget)`
+        );
+      }
       const toolCalls: ToolCall[] = [];
 
       if (assistantMessage.content && !callbacks.onThinkingChunk) {
@@ -2431,6 +1419,7 @@ export async function runOrchestrator(
           tc => tc.name === "task_complete"
         );
         if (taskCompleteCall) {
+          executionContext.progressTracker.stage = "complete";
           const input = taskCompleteCall.input as {
             summary: string;
             artifacts?: unknown[];
@@ -2441,9 +1430,47 @@ export async function runOrchestrator(
             isError: false,
           };
           callbacks.onToolResult(result);
+          callbacks.onProgress?.(
+            buildProgress(
+              executionContext.progressTracker,
+              executionContext,
+              iterations,
+              maxIterations,
+              "Task completed"
+            )
+          );
+
+          const taskOutcome: TaskOutcome = {
+            success: true,
+            query: task,
+            toolsUsed: Array.from(executionContext.evolutionTracker.toolsUsed),
+            toolsFailed: Array.from(
+              executionContext.evolutionTracker.toolsFailed
+            ),
+            iterationsUsed: iterations,
+            tokensUsed: executionContext.tokenEstimate,
+            durationMs:
+              Date.now() - executionContext.evolutionTracker.startTime,
+          };
+          postTaskEvolution(taskOutcome, options.userId).catch(() => {});
+
           callbacks.onComplete(input.summary, input.artifacts);
           isComplete = true;
         } else {
+          executionContext.progressTracker.toolsCompletedThisIteration = 0;
+          executionContext.progressTracker.toolsTotalThisIteration =
+            toolCalls.length;
+
+          callbacks.onProgress?.(
+            buildProgress(
+              executionContext.progressTracker,
+              executionContext,
+              iterations,
+              maxIterations,
+              `Executing ${toolCalls.length} tool${toolCalls.length > 1 ? "s" : ""}...`
+            )
+          );
+
           const toolResults = await executeToolsInParallel(
             toolCalls,
             executeToolFn,
@@ -2451,7 +1478,12 @@ export async function runOrchestrator(
             callbacks
           );
 
+          const errors: string[] = [];
+          let hasSuccess = false;
+
           for (const { tc, output, isError } of toolResults) {
+            executionContext.progressTracker.toolsCompletedThisIteration++;
+
             const result: ToolResult = {
               toolCallId: tc.id,
               output,
@@ -2464,20 +1496,164 @@ export async function runOrchestrator(
               content: output,
               tool_call_id: tc.id,
             });
+
+            executionContext.evolutionTracker.toolsUsed.add(tc.name);
+            if (isError) {
+              errors.push(output.slice(0, 100));
+              executionContext.evolutionTracker.toolsFailed.add(tc.name);
+              executionContext.evolutionTracker.lastError = output.slice(
+                0,
+                500
+              );
+            } else {
+              hasSuccess = true;
+              if (output.length > 50 && output.length < 500) {
+                executionContext.progressTracker.partialResults.push(
+                  `${tc.name}: ${output.slice(0, 200)}${output.length > 200 ? "..." : ""}`
+                );
+              }
+            }
+
+            callbacks.onProgress?.(
+              buildProgress(
+                executionContext.progressTracker,
+                executionContext,
+                iterations,
+                maxIterations,
+                `Completed ${tc.name}`
+              )
+            );
           }
+
+          if (hasSuccess) {
+            executionContext.consecutiveFailures = 0;
+          } else {
+            executionContext.consecutiveFailures++;
+            executionContext.lastFailureTime = Date.now();
+
+            if (executionContext.consecutiveFailures >= 3) {
+              executionContext.progressTracker.stage = "recovering";
+              const failedApproach = summarizeFailedApproach(toolCalls, errors);
+              executionContext.failedApproaches.push(failedApproach);
+              executionContext.approachPivots++;
+
+              const backoffMs = calculateBackoffDelay(
+                executionContext.consecutiveFailures
+              );
+
+              callbacks.onProgress?.(
+                buildProgress(
+                  executionContext.progressTracker,
+                  executionContext,
+                  iterations,
+                  maxIterations,
+                  `Recovering from failures, pivoting approach...`
+                )
+              );
+
+              callbacks.onThinking?.(
+                `\n⚠️ ${executionContext.consecutiveFailures} consecutive failures. ` +
+                  `Pivoting approach (attempt #${executionContext.approachPivots}). ` +
+                  `Waiting ${backoffMs}ms before retry...`
+              );
+
+              await new Promise(resolve => setTimeout(resolve, backoffMs));
+
+              const pivotGuidance = `
+IMPORTANT: Your last ${executionContext.consecutiveFailures} attempts have failed. 
+Failed approaches so far:
+${executionContext.failedApproaches.map((a, i) => `${i + 1}. ${a}`).join("\n")}
+
+You MUST try a DIFFERENT approach. Consider:
+- Using alternative tools
+- Breaking the task into smaller steps
+- Verifying prerequisites before proceeding
+- Asking clarifying questions if the task is unclear
+
+Do NOT repeat the same tool calls with the same inputs.`;
+
+              messages.push({
+                role: "user",
+                content: pivotGuidance,
+              });
+
+              executionContext.consecutiveFailures = 0;
+            }
+          }
+
+          const iterationDuration = Date.now() - iterationStartTime;
+          executionContext.progressTracker.iterationDurations.push(
+            iterationDuration
+          );
         }
       } else if (choice.finish_reason === "stop") {
+        executionContext.progressTracker.stage = "complete";
+        callbacks.onProgress?.(
+          buildProgress(
+            executionContext.progressTracker,
+            executionContext,
+            iterations,
+            maxIterations,
+            "Task completed"
+          )
+        );
         callbacks.onComplete(assistantMessage.content || "Task completed.", []);
         isComplete = true;
       }
     } catch (error) {
+      executionContext.progressTracker.stage = "error";
+      callbacks.onProgress?.(
+        buildProgress(
+          executionContext.progressTracker,
+          executionContext,
+          iterations,
+          maxIterations,
+          "Error occurred"
+        )
+      );
       const errorMsg = error instanceof Error ? error.message : String(error);
+
+      const taskOutcome: TaskOutcome = {
+        success: false,
+        query: task,
+        error: errorMsg,
+        toolsUsed: Array.from(executionContext.evolutionTracker.toolsUsed),
+        toolsFailed: Array.from(executionContext.evolutionTracker.toolsFailed),
+        iterationsUsed: iterations,
+        tokensUsed: executionContext.tokenEstimate,
+        durationMs: Date.now() - executionContext.evolutionTracker.startTime,
+      };
+      postTaskEvolution(taskOutcome, options.userId).catch(() => {});
+
       callbacks.onError(`Orchestrator error: ${errorMsg}`);
       throw error;
     }
   }
 
   if (!isComplete) {
+    executionContext.progressTracker.stage = "error";
+    callbacks.onProgress?.(
+      buildProgress(
+        executionContext.progressTracker,
+        executionContext,
+        iterations,
+        maxIterations,
+        "Max iterations exceeded"
+      )
+    );
+
+    const taskOutcome: TaskOutcome = {
+      success: false,
+      query: task,
+      error: "Max iterations exceeded",
+      toolsUsed: Array.from(executionContext.evolutionTracker.toolsUsed),
+      toolsFailed: Array.from(executionContext.evolutionTracker.toolsFailed),
+      iterationsUsed: iterations,
+      tokensUsed: executionContext.tokenEstimate,
+      durationMs: Date.now() - executionContext.evolutionTracker.startTime,
+    };
+    postTaskEvolution(taskOutcome, options.userId).catch(() => {});
+
     callbacks.onError(
       "Task exceeded maximum iterations. Please try breaking it into smaller steps."
     );

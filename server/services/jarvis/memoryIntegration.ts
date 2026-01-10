@@ -206,6 +206,117 @@ export async function findMatchingProcedure(
   return memoryService.findProcedureForTask(taskDescription, userId);
 }
 
+export interface ProcedureReplayResult {
+  success: boolean;
+  results: Array<{
+    step: number;
+    tool: string;
+    output: string;
+    success: boolean;
+  }>;
+  finalOutput?: string;
+  failedAt?: number;
+  error?: string;
+}
+
+/**
+ * Attempt to replay a known procedure
+ * Returns results of each step, or null if procedure can't be replayed
+ */
+export async function attemptProcedureReplay(
+  procedure: ProceduralMemory,
+  executeToolFn: (
+    name: string,
+    input: Record<string, unknown>
+  ) => Promise<string>,
+  onStepComplete?: (step: number, total: number, output: string) => void
+): Promise<ProcedureReplayResult> {
+  const results: ProcedureReplayResult["results"] = [];
+
+  for (const step of procedure.steps) {
+    if (!step.toolName) {
+      results.push({
+        step: step.order,
+        tool: "none",
+        output: `Step ${step.order}: ${step.action} (manual step)`,
+        success: true,
+      });
+      continue;
+    }
+
+    try {
+      const output = await executeToolFn(step.toolName, {});
+      const isError = output.toLowerCase().includes("error");
+
+      results.push({
+        step: step.order,
+        tool: step.toolName,
+        output: output.slice(0, 500),
+        success: !isError,
+      });
+
+      onStepComplete?.(step.order, procedure.steps.length, output);
+
+      if (isError) {
+        return {
+          success: false,
+          results,
+          failedAt: step.order,
+          error: output,
+        };
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      results.push({
+        step: step.order,
+        tool: step.toolName,
+        output: errorMsg,
+        success: false,
+      });
+      return {
+        success: false,
+        results,
+        failedAt: step.order,
+        error: errorMsg,
+      };
+    }
+  }
+
+  const lastOutput =
+    results[results.length - 1]?.output || "Procedure completed";
+  return {
+    success: true,
+    results,
+    finalOutput: lastOutput,
+  };
+}
+
+/**
+ * Generate procedure replay guidance for the LLM
+ */
+export function generateProcedureGuidance(procedure: ProceduralMemory): string {
+  if (!procedure || !procedure.steps || procedure.steps.length === 0) {
+    return "";
+  }
+
+  const stepsText = procedure.steps
+    .map(s => {
+      const toolPart = s.toolName ? ` using \`${s.toolName}\`` : "";
+      return `${s.order}. ${s.action}${toolPart}`;
+    })
+    .join("\n");
+
+  return `
+KNOWN PROCEDURE MATCHED: "${procedure.name}"
+Success rate: ${procedure.successRate}% (executed ${procedure.executionCount} times)
+
+RECOMMENDED STEPS:
+${stepsText}
+
+This procedure has worked before for similar tasks. Consider following these steps, but adapt as needed for the current context.
+`;
+}
+
 /**
  * Create a new procedure from a successful task
  */

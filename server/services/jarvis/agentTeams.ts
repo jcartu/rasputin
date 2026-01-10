@@ -41,9 +41,13 @@ export interface SubTask {
   id: string;
   assignedAgent: AgentRole;
   description: string;
-  status: "pending" | "running" | "complete" | "failed";
+  status: "pending" | "running" | "complete" | "failed" | "cancelled";
   result?: string;
   error?: string;
+  dependsOn?: string[];
+  priority?: number;
+  startedAt?: number;
+  completedAt?: number;
 }
 
 export interface TeamMessage {
@@ -51,6 +55,142 @@ export interface TeamMessage {
   to: AgentRole | "all";
   content: string;
   timestamp: number;
+  type?: "progress" | "result" | "request" | "broadcast";
+}
+
+export interface TeamCoordination {
+  sharedContext: Map<string, string>;
+  messageQueue: TeamMessage[];
+  activeAgents: Set<string>;
+  cancelledAgents: Set<string>;
+  completedSubtasks: Map<string, string>;
+}
+
+function createTeamCoordination(): TeamCoordination {
+  return {
+    sharedContext: new Map(),
+    messageQueue: [],
+    activeAgents: new Set(),
+    cancelledAgents: new Set(),
+    completedSubtasks: new Map(),
+  };
+}
+
+function buildDependencyOrder(subtasks: SubTask[]): SubTask[][] {
+  const taskMap = new Map(subtasks.map(t => [t.id, t]));
+  const completed = new Set<string>();
+  const batches: SubTask[][] = [];
+
+  while (completed.size < subtasks.length) {
+    const batch: SubTask[] = [];
+
+    for (const task of subtasks) {
+      if (completed.has(task.id)) continue;
+
+      const deps = task.dependsOn || [];
+      const depsCompleted = deps.every(d => completed.has(d));
+
+      if (depsCompleted) {
+        batch.push(task);
+      }
+    }
+
+    if (batch.length === 0 && completed.size < subtasks.length) {
+      const remaining = subtasks.filter(t => !completed.has(t.id));
+      batches.push(remaining);
+      break;
+    }
+
+    for (const task of batch) {
+      completed.add(task.id);
+    }
+
+    if (batch.length > 0) {
+      batches.push(batch);
+    }
+  }
+
+  return batches;
+}
+
+async function executeSubtaskBatch(
+  batch: SubTask[],
+  coordination: TeamCoordination,
+  callbacks: Partial<TeamCallback>
+): Promise<Map<string, string>> {
+  const results = new Map<string, string>();
+
+  const promises = batch.map(async subtask => {
+    if (coordination.cancelledAgents.has(subtask.id)) {
+      subtask.status = "cancelled";
+      return { id: subtask.id, result: "" };
+    }
+
+    coordination.activeAgents.add(subtask.id);
+    subtask.status = "running";
+    subtask.startedAt = Date.now();
+    callbacks.onAgentStart?.(subtask.assignedAgent, subtask);
+
+    try {
+      const contextParts: string[] = [];
+
+      if (subtask.dependsOn) {
+        for (const depId of subtask.dependsOn) {
+          const depResult = coordination.completedSubtasks.get(depId);
+          if (depResult) {
+            contextParts.push(
+              `Previous result (${depId}): ${depResult.slice(0, 500)}`
+            );
+          }
+        }
+      }
+
+      coordination.sharedContext.forEach((value, key) => {
+        contextParts.push(`[${key}]: ${value.slice(0, 200)}`);
+      });
+
+      const context =
+        contextParts.length > 0
+          ? `Context:\n${contextParts.join("\n")}\n\n`
+          : "";
+
+      const result = await executeSubtask(subtask, context, callbacks);
+
+      subtask.status = "complete";
+      subtask.result = result;
+      subtask.completedAt = Date.now();
+      coordination.completedSubtasks.set(subtask.id, result);
+
+      callbacks.onAgentComplete?.(subtask.assignedAgent, subtask, result);
+      callbacks.onTeamMessage?.({
+        from: subtask.assignedAgent,
+        to: "all",
+        content: `Completed: ${subtask.description}`,
+        timestamp: Date.now(),
+        type: "result",
+      });
+
+      return { id: subtask.id, result };
+    } catch (error) {
+      subtask.status = "failed";
+      subtask.error = error instanceof Error ? error.message : "Unknown error";
+      subtask.completedAt = Date.now();
+      callbacks.onAgentError?.(subtask.assignedAgent, subtask, subtask.error);
+      return { id: subtask.id, result: "" };
+    } finally {
+      coordination.activeAgents.delete(subtask.id);
+    }
+  });
+
+  const batchResults = await Promise.all(promises);
+
+  for (const { id, result } of batchResults) {
+    if (result) {
+      results.set(id, result);
+    }
+  }
+
+  return results;
 }
 
 // Predefined agents
@@ -147,16 +287,11 @@ Available agents:
 - coder: Code generation, debugging, technical tasks
 - writer: Content creation, summarization, documentation
 
-Respond with a JSON array of subtasks:
-[
-  { "assignedAgent": "researcher", "description": "..." },
-  { "assignedAgent": "analyst", "description": "..." },
-  ...
-]
+Create subtasks with dependencies. Tasks without dependencies can run in parallel.
+Use "dependsOn" to specify which tasks must complete first (by their id like "subtask-0").
 
-Keep subtasks focused and specific. Use 2-4 subtasks typically.`;
+Example: If analyst needs researcher's data, set dependsOn: ["subtask-0"].`;
 
-  // Use a simple LLM call for planning
   const { invokeLLM } = await import("../../_core/llm");
 
   const response = await invokeLLM({
@@ -186,6 +321,10 @@ Keep subtasks focused and specific. Use 2-4 subtasks typically.`;
                     enum: ["researcher", "analyst", "coder", "writer"],
                   },
                   description: { type: "string" },
+                  dependsOn: {
+                    type: "array",
+                    items: { type: "string" },
+                  },
                 },
                 required: ["assignedAgent", "description"],
                 additionalProperties: false,
@@ -205,12 +344,19 @@ Keep subtasks focused and specific. Use 2-4 subtasks typically.`;
   }
 
   const parsed = JSON.parse(content);
-  return parsed.subtasks.map((st: any, index: number) => ({
-    id: `subtask-${index}`,
-    assignedAgent: st.assignedAgent as AgentRole,
-    description: st.description,
-    status: "pending" as const,
-  }));
+  return parsed.subtasks.map(
+    (
+      st: { assignedAgent: string; description: string; dependsOn?: string[] },
+      index: number
+    ) => ({
+      id: `subtask-${index}`,
+      assignedAgent: st.assignedAgent as AgentRole,
+      description: st.description,
+      status: "pending" as const,
+      dependsOn: st.dependsOn || [],
+      priority: index,
+    })
+  );
 }
 
 /**
@@ -299,62 +445,88 @@ Synthesize these results into a comprehensive, well-structured response that ful
 
 /**
  * Run a collaborative agent team on a complex task
+ * Executes independent subtasks in parallel based on dependency graph
  */
 export async function runAgentTeam(
   query: string,
-  callbacks: TeamCallback
+  callbacks: TeamCallback,
+  options: { maxParallel?: number; timeoutMs?: number } = {}
 ): Promise<string> {
-  const _startTime = Date.now();
+  const { maxParallel = 3, timeoutMs = 300000 } = options;
+  const startTime = Date.now();
+  const coordination = createTeamCoordination();
 
   try {
-    // Step 1: Plan subtasks
     const subtasks = await planSubtasks(query);
     callbacks.onPlanCreated(subtasks);
 
-    // Step 2: Execute subtasks (can be parallelized in future)
-    const results: Array<{ agent: AgentRole; task: string; result: string }> =
-      [];
+    coordination.sharedContext.set("originalQuery", query);
 
-    for (const subtask of subtasks) {
-      callbacks.onAgentStart(subtask.assignedAgent, subtask);
+    const batches = buildDependencyOrder(subtasks);
+    const independentCount = batches[0]?.length || 0;
 
-      try {
-        // Build context from previous results
-        const context =
-          results.length > 0
-            ? `Previous findings:\n${results.map(r => `- ${r.agent}: ${r.result.substring(0, 200)}...`).join("\n")}`
-            : `Original query: ${query}`;
+    if (independentCount > 1) {
+      callbacks.onTeamMessage({
+        from: "coordinator",
+        to: "all",
+        content: `Executing ${independentCount} independent tasks in parallel`,
+        timestamp: Date.now(),
+        type: "broadcast",
+      });
+    }
 
-        const result = await executeSubtask(subtask, context, callbacks);
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
 
-        subtask.status = "complete";
-        subtask.result = result;
-        results.push({
-          agent: subtask.assignedAgent,
-          task: subtask.description,
-          result,
-        });
-
-        callbacks.onAgentComplete(subtask.assignedAgent, subtask, result);
-
-        // Send team message
+      if (Date.now() - startTime > timeoutMs) {
+        for (const task of batch) {
+          coordination.cancelledAgents.add(task.id);
+        }
         callbacks.onTeamMessage({
-          from: subtask.assignedAgent,
-          to: "coordinator",
-          content: `Completed: ${subtask.description}`,
+          from: "coordinator",
+          to: "all",
+          content: "Timeout reached, cancelling remaining tasks",
           timestamp: Date.now(),
+          type: "broadcast",
         });
-      } catch (error) {
-        subtask.status = "failed";
-        subtask.error =
-          error instanceof Error ? error.message : "Unknown error";
-        callbacks.onAgentError(subtask.assignedAgent, subtask, subtask.error);
+        break;
+      }
+
+      const limitedBatch = batch.slice(0, maxParallel);
+      const overflow = batch.slice(maxParallel);
+
+      await executeSubtaskBatch(limitedBatch, coordination, callbacks);
+
+      if (overflow.length > 0) {
+        await executeSubtaskBatch(overflow, coordination, callbacks);
       }
     }
 
-    // Step 3: Synthesize results
+    const results: Array<{ agent: AgentRole; task: string; result: string }> =
+      [];
+    for (const subtask of subtasks) {
+      if (subtask.status === "complete" && subtask.result) {
+        results.push({
+          agent: subtask.assignedAgent,
+          task: subtask.description,
+          result: subtask.result,
+        });
+      }
+    }
+
     callbacks.onSynthesisStart();
     const finalResult = await synthesizeResults(query, results);
+
+    const totalTime = Date.now() - startTime;
+    const parallelSavings = calculateParallelSavings(subtasks);
+
+    callbacks.onTeamMessage({
+      from: "coordinator",
+      to: "all",
+      content: `Team completed in ${Math.round(totalTime / 1000)}s (${parallelSavings}% faster with parallelization)`,
+      timestamp: Date.now(),
+      type: "broadcast",
+    });
 
     callbacks.onComplete(finalResult);
     return finalResult;
@@ -363,6 +535,39 @@ export async function runAgentTeam(
       error instanceof Error ? error.message : "Unknown error";
     callbacks.onError(errorMessage);
     throw error;
+  }
+}
+
+function calculateParallelSavings(subtasks: SubTask[]): number {
+  const completedTasks = subtasks.filter(
+    t => t.status === "complete" && t.startedAt && t.completedAt
+  );
+
+  if (completedTasks.length < 2) return 0;
+
+  const sequentialTime = completedTasks.reduce(
+    (sum, t) => sum + ((t.completedAt || 0) - (t.startedAt || 0)),
+    0
+  );
+
+  const actualStart = Math.min(...completedTasks.map(t => t.startedAt || 0));
+  const actualEnd = Math.max(...completedTasks.map(t => t.completedAt || 0));
+  const actualTime = actualEnd - actualStart;
+
+  if (sequentialTime === 0) return 0;
+  return Math.round(((sequentialTime - actualTime) / sequentialTime) * 100);
+}
+
+export function cancelAgentTeamTask(
+  coordination: TeamCoordination,
+  taskId?: string
+): void {
+  if (taskId) {
+    coordination.cancelledAgents.add(taskId);
+  } else {
+    coordination.activeAgents.forEach(id => {
+      coordination.cancelledAgents.add(id);
+    });
   }
 }
 
