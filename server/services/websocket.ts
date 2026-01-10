@@ -17,6 +17,8 @@ import {
 import { executeTool } from "./jarvis/tools";
 import {
   getPreTaskContext,
+  findMatchingProcedure,
+  generateProcedureGuidance,
   learnFromTask,
   type TaskContext,
   type TaskOutcome,
@@ -499,9 +501,28 @@ async function handleJarvisTask(
   await db.createAgentMessage({ taskId, role: "user", content: task });
 
   let memoryPromptAddition = "";
+  let procedureGuidance = "";
   try {
     const { promptAddition } = await getPreTaskContext(task, userId);
     memoryPromptAddition = promptAddition;
+    if (memoryPromptAddition) {
+      console.info(
+        `[JARVIS WS] Retrieved memory context (${memoryPromptAddition.length} chars)`
+      );
+    }
+
+    const matchedProcedure = await findMatchingProcedure(task, userId);
+    if (matchedProcedure) {
+      console.info(
+        `[JARVIS WS] Procedure match found: "${matchedProcedure.name}" (${matchedProcedure.successRate}% success rate)`
+      );
+      if (matchedProcedure.successRate >= 70) {
+        procedureGuidance = generateProcedureGuidance(matchedProcedure);
+        console.info("[JARVIS WS] Using procedure guidance");
+      }
+    } else {
+      console.info(`[JARVIS WS] No procedure match found for task`);
+    }
   } catch (error) {
     console.error("[JARVIS WS] Memory context retrieval failed:", error);
   }
@@ -623,6 +644,7 @@ async function handleJarvisTask(
       },
       {
         memoryContext: memoryPromptAddition,
+        procedureGuidance,
         userId,
         enableMemoryInjection: true,
         conversationHistory,

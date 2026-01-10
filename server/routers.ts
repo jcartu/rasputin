@@ -717,6 +717,13 @@ export const appRouter = router({
             input.task,
             ctx.user.id
           );
+          if (matchedProcedure) {
+            console.info(
+              `[JARVIS] Procedure match found: "${matchedProcedure.name}" (${matchedProcedure.successRate}% success rate)`
+            );
+          } else {
+            console.info(`[JARVIS] No procedure match found for task`);
+          }
           if (matchedProcedure && matchedProcedure.successRate >= 70) {
             procedureGuidance = generateProcedureGuidance(matchedProcedure);
             console.info(

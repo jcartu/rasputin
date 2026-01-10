@@ -70,7 +70,8 @@ export class MemoryService {
   }
 
   private simpleEmbedding(text: string): number[] {
-    const dimensions = 1536;
+    // Match the dimension of real embeddings (768 for Ollama, 1536 for OpenAI)
+    const dimensions = process.env.OPENAI_API_KEY ? 1536 : 768;
     const embedding = new Array(dimensions).fill(0);
     const words = text.toLowerCase().split(/\s+/);
 
@@ -513,7 +514,8 @@ export class MemoryService {
       userId,
       limit: 1,
     });
-    return results.length > 0 && results[0].relevance > 0.7
+    const threshold = process.env.OPENAI_API_KEY ? 0.4 : 0.7;
+    return results.length > 0 && results[0].relevance > threshold
       ? results[0].memory
       : null;
   }
