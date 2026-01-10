@@ -1,7 +1,7 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
 
 const QDRANT_URL = process.env.QDRANT_URL || "http://localhost:6333";
-const VECTOR_SIZE = 1536;
+const VECTOR_SIZE = process.env.OPENAI_API_KEY ? 1536 : 768;
 
 let qdrantClient: QdrantClient | null = null;
 

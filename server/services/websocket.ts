@@ -651,6 +651,23 @@ async function handleJarvisTask(
   });
 
   try {
+    const storedToolCalls = await db.getAgentTaskToolCalls(taskId);
+    const toolCallSteps = storedToolCalls
+      .filter((tc: { status: string }) => tc.status === "completed")
+      .map(
+        (tc: {
+          toolName: string;
+          input: unknown;
+          output: string | null;
+          status: string;
+        }) => ({
+          toolName: tc.toolName,
+          input: (tc.input as Record<string, unknown>) || {},
+          output: tc.output || "",
+          success: tc.status === "completed",
+        })
+      );
+
     const taskContext: TaskContext = { taskId, userId, query: task };
     const outcome: TaskOutcome = {
       success: !hasError,
@@ -659,6 +676,7 @@ async function handleJarvisTask(
       toolsUsed: Array.from(new Set(toolsUsed)),
       duration: durationMs,
       iterations: iterationCount,
+      toolCallSteps,
     };
     await learnFromTask(taskContext, outcome);
 

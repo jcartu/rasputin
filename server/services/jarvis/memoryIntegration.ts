@@ -25,6 +25,13 @@ export interface TaskContext {
   matchedProcedure?: ProceduralMemory;
 }
 
+export interface ToolCallStep {
+  toolName: string;
+  input: Record<string, unknown>;
+  output: string;
+  success: boolean;
+}
+
 export interface TaskOutcome {
   success: boolean;
   result?: string;
@@ -32,6 +39,7 @@ export interface TaskOutcome {
   toolsUsed: string[];
   duration: number;
   iterations: number;
+  toolCallSteps?: ToolCallStep[];
 }
 
 /**
@@ -191,6 +199,47 @@ export async function learnFromTask(
     const newKnowledge = extractKnowledge(taskContext, outcome);
     for (const knowledge of newKnowledge) {
       await memoryService.createSemanticMemory(knowledge);
+    }
+  }
+
+  // 6. Create procedural memory from successful tasks with tool steps
+  if (
+    outcome.success &&
+    outcome.toolCallSteps &&
+    outcome.toolCallSteps.length > 0
+  ) {
+    // Only create procedure if we have meaningful tool steps (not just task_complete)
+    const meaningfulSteps = outcome.toolCallSteps.filter(
+      s => s.success && s.toolName !== "task_complete"
+    );
+
+    if (meaningfulSteps.length >= 1) {
+      // Check if a similar procedure already exists
+      const existingProcedure = await memoryService.findProcedureForTask(
+        taskContext.query,
+        taskContext.userId
+      );
+
+      if (!existingProcedure) {
+        // Create new procedure from successful task
+        const steps = meaningfulSteps.map((s, i) => ({
+          action: `Use ${s.toolName}`,
+          tool: s.toolName,
+          result: s.output.slice(0, 200),
+        }));
+
+        await createProcedureFromTask(taskContext, outcome, steps);
+        console.info(
+          `[Memory] Created procedural memory from task: ${taskContext.query.slice(0, 50)}...`
+        );
+      } else {
+        // Update existing procedure stats
+        await memoryService.recordProcedureExecution(
+          existingProcedure.id!,
+          true,
+          outcome.duration
+        );
+      }
     }
   }
 }

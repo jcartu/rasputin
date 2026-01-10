@@ -893,6 +893,20 @@ export const appRouter = router({
         });
 
         try {
+          const toolCallSteps = steps
+            .filter(s => s.type === "tool_use" && s.toolCall)
+            .map((s, i) => {
+              const resultStep = steps.find(
+                (r, ri) => ri > i && r.type === "tool_result" && r.toolResult
+              );
+              return {
+                toolName: s.toolCall!.name,
+                input: s.toolCall!.input,
+                output: resultStep?.toolResult?.output || "",
+                success: !resultStep?.toolResult?.isError,
+              };
+            });
+
           const taskContext: TaskContext = {
             taskId: taskId!,
             userId: ctx.user.id,
@@ -907,6 +921,7 @@ export const appRouter = router({
             toolsUsed: Array.from(new Set(toolsUsed)),
             duration: durationMs,
             iterations: iterationCount,
+            toolCallSteps,
           };
           await learnFromTask(taskContext, outcome);
           console.info(
