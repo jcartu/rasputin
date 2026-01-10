@@ -414,8 +414,26 @@ function CompletionCard({
         URL.revokeObjectURL(url);
         toast.success("Exported as HTML");
       } else if (format === "pdf") {
-        window.print();
-        toast.success("Print dialog opened for PDF");
+        const htmlContent = `<h1>JARVIS Task Report</h1><div class="meta"><p><strong>Date:</strong> ${new Date().toLocaleString()}</p><p><strong>Status:</strong> ${success ? "Completed" : "Failed"}</p><p><strong>Duration:</strong> ${durationMs ? (durationMs / 1000).toFixed(1) + "s" : "N/A"}</p></div><h2>Summary</h2><div>${summary.replace(/\n/g, "<br>")}</div>`;
+        fetch("/api/files/export-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            html: htmlContent,
+            filename: `${filename}.pdf`,
+          }),
+        })
+          .then(res => res.blob())
+          .then(blob => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${filename}.pdf`;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast.success("Exported as PDF");
+          })
+          .catch(() => toast.error("PDF export failed"));
       } else if (format === "json") {
         const content = JSON.stringify(
           { summary, success, durationMs, artifacts, exportedAt: new Date() },

@@ -481,6 +481,7 @@ function FileWritePreview({
   output: string;
   input?: string;
 }) {
+  const [isExporting, setIsExporting] = useState(false);
   const pathMatch = output.match(/File written.*?:\s*([^\s(]+)/i);
   const filePath = pathMatch?.[1];
 
@@ -513,8 +514,10 @@ function FileWritePreview({
   const downloadUrl = `/api/files/workspace/${relativePath}`;
 
   const isHtml = filename.endsWith(".html");
+  const isMarkdown = filename.endsWith(".md");
   const isPdf = filename.endsWith(".pdf");
   const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(filename);
+  const canExportPdf = isHtml || isMarkdown;
 
   const iconColor = isPdf
     ? "text-red-400"
@@ -526,6 +529,43 @@ function FileWritePreview({
     : isHtml
       ? "bg-cyan-500/10 border-cyan-500/20"
       : "bg-green-500/10 border-green-500/20";
+
+  const handleExportPdf = async () => {
+    if (!parsedInput?.content) return;
+
+    setIsExporting(true);
+    try {
+      let htmlContent = parsedInput.content;
+
+      if (isMarkdown) {
+        const { marked } = await import("marked");
+        htmlContent = await marked(parsedInput.content);
+      }
+
+      const response = await fetch("/api/files/export-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          html: htmlContent,
+          filename: filename.replace(/\.(html|md)$/, ".pdf"),
+        }),
+      });
+
+      if (!response.ok) throw new Error("PDF generation failed");
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename.replace(/\.(html|md)$/, ".pdf");
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PDF export failed:", err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <div className={`mt-2 p-3 rounded ${bgColor} border space-y-3`}>
@@ -563,6 +603,18 @@ function FileWritePreview({
             Download
           </a>
         </Button>
+        {canExportPdf && parsedInput?.content && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={handleExportPdf}
+            disabled={isExporting}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            {isExporting ? "Exporting..." : "Export PDF"}
+          </Button>
+        )}
         <Button
           variant="outline"
           size="sm"

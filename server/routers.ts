@@ -1099,8 +1099,55 @@ export const appRouter = router({
       )
       .mutation(async ({ input }) => {
         const { textToSpeech } = await import("./services/voice/elevenlabs");
+
+        // Clean text for TTS - strip markdown, code, and other non-speech elements
+        const cleanTextForSpeech = (text: string): string => {
+          return (
+            text
+              // Remove code blocks (```...```)
+              .replace(/```[\s\S]*?```/g, "")
+              // Remove inline code (`...`)
+              .replace(/`[^`]+`/g, "")
+              // Remove markdown links but keep text [text](url) -> text
+              .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+              // Remove raw URLs
+              .replace(/https?:\/\/[^\s]+/g, "")
+              // Remove markdown headers (# ## ### etc) but keep text
+              .replace(/^#{1,6}\s+/gm, "")
+              // Remove bold/italic markers
+              .replace(/\*\*([^*]+)\*\*/g, "$1")
+              .replace(/\*([^*]+)\*/g, "$1")
+              .replace(/__([^_]+)__/g, "$1")
+              .replace(/_([^_]+)_/g, "$1")
+              // Remove horizontal rules
+              .replace(/^[-*_]{3,}$/gm, "")
+              // Remove HTML tags
+              .replace(/<[^>]+>/g, "")
+              // Remove image references ![alt](url)
+              .replace(/!\[[^\]]*\]\([^)]+\)/g, "")
+              // Remove blockquotes >
+              .replace(/^>\s*/gm, "")
+              // Remove bullet points but keep text
+              .replace(/^[-*+]\s+/gm, "")
+              // Remove numbered lists markers but keep text
+              .replace(/^\d+\.\s+/gm, "")
+              // Clean up multiple newlines
+              .replace(/\n{3,}/g, "\n\n")
+              // Clean up multiple spaces
+              .replace(/  +/g, " ")
+              // Trim
+              .trim()
+          );
+        };
+
+        const cleanedText = cleanTextForSpeech(input.text);
+
+        if (!cleanedText) {
+          throw new Error("No speakable text after cleaning");
+        }
+
         try {
-          const audioBuffer = await textToSpeech(input.text, {
+          const audioBuffer = await textToSpeech(cleanedText, {
             voiceId: input.voiceId,
           });
           // Convert to base64 for transmission

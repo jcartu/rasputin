@@ -8,14 +8,18 @@ const ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1";
 
 // Voice options - using professional, clear voices suitable for AI assistant
 export const VOICE_OPTIONS = {
-  // Male voices - British
+  daniel: {
+    id: "onwK4e9ZLuTAKqWW03F9",
+    name: "Daniel",
+    description: "British, Deep, Authoritative - News Presenter Style",
+    accent: "british",
+  },
   george: {
     id: "JBFqnCBsd6RMkjVDRZzb",
     name: "George",
     description: "British, Mature, Warm Storyteller - Serious and Professional",
     accent: "british",
   },
-  // Male voices - Other
   roger: {
     id: "CwhRBWXzGAHq8TQ4Fs17",
     name: "Roger",
@@ -28,7 +32,6 @@ export const VOICE_OPTIONS = {
     description: "Australian, Deep, Confident, Energetic",
     accent: "australian",
   },
-  // Female voices
   sarah: {
     id: "EXAVITQu4vr4xnSDxMaL",
     name: "Sarah",
@@ -43,8 +46,7 @@ export const VOICE_OPTIONS = {
   },
 } as const;
 
-// Default voice for JARVIS - Serious British male (George)
-export const DEFAULT_VOICE = VOICE_OPTIONS.george;
+export const DEFAULT_VOICE = VOICE_OPTIONS.daniel;
 
 export interface TTSOptions {
   voiceId?: string;

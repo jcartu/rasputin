@@ -107,6 +107,75 @@ async function startServer() {
     }
   });
 
+  app.post("/api/files/export-pdf", express.json(), async (req, res) => {
+    try {
+      const { html, filename = "report.pdf" } = req.body as {
+        html?: string;
+        filename?: string;
+      };
+
+      if (!html) {
+        res.status(400).json({ error: "HTML content required" });
+        return;
+      }
+
+      const { chromium } = await import("playwright");
+      const browser = await chromium.launch({ headless: true });
+      const page = await browser.newPage();
+
+      const styledHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              line-height: 1.6;
+              max-width: 800px;
+              margin: 0 auto;
+              padding: 40px;
+              color: #333;
+            }
+            h1, h2, h3 { color: #1a1a1a; margin-top: 1.5em; }
+            h1 { border-bottom: 2px solid #0066cc; padding-bottom: 0.3em; }
+            code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+            pre { background: #f4f4f4; padding: 16px; border-radius: 6px; overflow-x: auto; }
+            pre code { background: none; padding: 0; }
+            blockquote { border-left: 4px solid #0066cc; margin-left: 0; padding-left: 16px; color: #666; }
+            table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+            th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+            th { background: #f4f4f4; }
+            a { color: #0066cc; }
+            img { max-width: 100%; height: auto; }
+          </style>
+        </head>
+        <body>${html}</body>
+        </html>
+      `;
+
+      await page.setContent(styledHtml, { waitUntil: "networkidle" });
+
+      const pdfBuffer = await page.pdf({
+        format: "A4",
+        margin: { top: "20mm", right: "20mm", bottom: "20mm", left: "20mm" },
+        printBackground: true,
+      });
+
+      await browser.close();
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}"`
+      );
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("[PDF Export] Error:", error);
+      res.status(500).json({ error: "Failed to generate PDF" });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",
