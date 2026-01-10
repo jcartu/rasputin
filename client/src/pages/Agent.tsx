@@ -1138,7 +1138,6 @@ export default function AgentPage() {
     const taskInput = input.trim();
     setInput("");
     setCurrentTask(null);
-    jarvisStream.reset();
     jarvisStream.startTask(taskInput, user.id);
   }, [input, jarvisStream, user?.id]);
 

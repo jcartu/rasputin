@@ -10,6 +10,11 @@ import {
   type JarvisErrorEvent,
 } from "@/lib/socket";
 
+export interface ConversationMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export interface StreamingToolCall {
   id: string;
   name: string;
@@ -30,10 +35,17 @@ export interface StreamingStep {
   timestamp: number;
 }
 
+export interface TaskExchange {
+  userQuery: string;
+  assistantSummary: string | null;
+  timestamp: number;
+}
+
 export interface StreamingState {
   taskId: number | null;
   isStreaming: boolean;
   steps: StreamingStep[];
+  exchanges: TaskExchange[];
   currentIteration: number;
   maxIterations: number;
   summary: string | null;
@@ -46,6 +58,7 @@ const initialState: StreamingState = {
   taskId: null,
   isStreaming: false,
   steps: [],
+  exchanges: [],
   currentIteration: 0,
   maxIterations: 10,
   summary: null,
@@ -61,12 +74,32 @@ export function useJarvisStream() {
   const startTask = useCallback((task: string, userId: number) => {
     const socket = getSocket();
 
-    setState({
-      ...initialState,
-      isStreaming: true,
-    });
+    setState(prev => {
+      const conversationHistory: ConversationMessage[] = prev.exchanges.flatMap(
+        ex =>
+          ex.assistantSummary
+            ? [
+                { role: "user" as const, content: ex.userQuery },
+                { role: "assistant" as const, content: ex.assistantSummary },
+              ]
+            : [{ role: "user" as const, content: ex.userQuery }]
+      );
 
-    socket.emit("jarvis:start", { task, userId });
+      socket.emit("jarvis:start", { task, userId, conversationHistory });
+
+      return {
+        ...prev,
+        isStreaming: true,
+        exchanges: [
+          ...prev.exchanges,
+          { userQuery: task, assistantSummary: null, timestamp: Date.now() },
+        ],
+        summary: null,
+        success: null,
+        error: null,
+        durationMs: null,
+      };
+    });
   }, []);
 
   const cancelTask = useCallback(() => {
@@ -220,14 +253,24 @@ export function useJarvisStream() {
       console.info("[JARVIS] complete:", event.success, event.taskId);
       if (event.taskId !== activeTaskIdRef.current) return;
 
-      setState(prev => ({
-        ...prev,
-        isStreaming: false,
-        summary: event.summary,
-        success: event.success,
-        durationMs: event.durationMs,
-        currentIteration: event.iterationCount,
-      }));
+      setState(prev => {
+        const exchanges = [...prev.exchanges];
+        if (exchanges.length > 0) {
+          exchanges[exchanges.length - 1] = {
+            ...exchanges[exchanges.length - 1],
+            assistantSummary: event.summary,
+          };
+        }
+        return {
+          ...prev,
+          isStreaming: false,
+          summary: event.summary,
+          success: event.success,
+          durationMs: event.durationMs,
+          currentIteration: event.iterationCount,
+          exchanges,
+        };
+      });
       activeTaskIdRef.current = null;
     };
 

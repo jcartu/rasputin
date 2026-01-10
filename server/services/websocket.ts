@@ -35,10 +35,16 @@ interface QueryRequest {
   userId: number;
 }
 
+interface ConversationMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 interface JarvisRequest {
   task: string;
   taskId?: number;
   userId: number;
+  conversationHistory?: ConversationMessage[];
 }
 
 interface ClientToServerEvents {
@@ -463,7 +469,7 @@ async function handleJarvisTask(
   data: JarvisRequest,
   queryKey: string
 ): Promise<void> {
-  const { task, userId } = data;
+  const { task, userId, conversationHistory } = data;
   const startTime = Date.now();
   let iterationCount = 0;
   const toolsUsed: string[] = [];
@@ -619,6 +625,7 @@ async function handleJarvisTask(
         memoryContext: memoryPromptAddition,
         userId,
         enableMemoryInjection: true,
+        conversationHistory,
       }
     );
   } catch (error) {
