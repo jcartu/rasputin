@@ -17,6 +17,8 @@ import { executeTool } from "./services/jarvis/tools";
 import {
   getPreTaskContext,
   learnFromTask,
+  findMatchingProcedure,
+  generateProcedureGuidance,
   type TaskContext,
   type TaskOutcome,
 } from "./services/jarvis/memoryIntegration";
@@ -698,6 +700,7 @@ export const appRouter = router({
 
         // Get memory context for this task
         let memoryPromptAddition = "";
+        let procedureGuidance = "";
         try {
           const { promptAddition } = await getPreTaskContext(
             input.task,
@@ -707,6 +710,18 @@ export const appRouter = router({
           if (memoryPromptAddition) {
             console.info(
               `[JARVIS] Retrieved memory context (${memoryPromptAddition.length} chars)`
+            );
+          }
+
+          const matchedProcedure = await findMatchingProcedure(
+            input.task,
+            ctx.user.id
+          );
+          if (matchedProcedure && matchedProcedure.successRate >= 70) {
+            procedureGuidance = generateProcedureGuidance(matchedProcedure);
+            console.info(
+              `[JARVIS] Found matching procedure: "${matchedProcedure.name}" ` +
+                `(${matchedProcedure.successRate}% success rate)`
             );
           }
         } catch (error) {
@@ -819,7 +834,10 @@ export const appRouter = router({
             },
             {
               memoryContext: memoryPromptAddition,
+              procedureGuidance,
               conversationHistory: input.conversationHistory,
+              userId: ctx.user.id,
+              enableMemoryInjection: true,
             }
           );
         } catch (error) {
