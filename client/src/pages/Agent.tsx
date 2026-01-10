@@ -1824,7 +1824,8 @@ export default function AgentPage() {
             workspaceId={selectedWorkspaceId}
             onBack={() => setSelectedWorkspaceId(null)}
           />
-        ) : useStreamingMode && jarvisStream.isStreaming ? (
+        ) : useStreamingMode &&
+          (jarvisStream.isStreaming || jarvisStream.steps.length > 0) ? (
           <div className="flex-1 flex">
             <ScrollArea className="flex-1 p-4">
               <div className="max-w-3xl mx-auto">
