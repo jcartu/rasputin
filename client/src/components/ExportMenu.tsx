@@ -15,6 +15,8 @@ import {
   FileType,
   Loader2,
   CheckCircle2,
+  Share2,
+  Link,
 } from "lucide-react";
 import { saveAs } from "file-saver";
 import * as XLSX from "xlsx";
@@ -55,7 +57,7 @@ interface ExportMenuProps {
   className?: string;
 }
 
-type ExportFormat = "md" | "xlsx" | "docx" | "pdf";
+type ExportFormat = "md" | "xlsx" | "docx" | "pdf" | "html" | "link";
 
 export function ExportMenu({
   content,
@@ -576,6 +578,250 @@ export function ExportMenu({
     }
   };
 
+  const generateStandaloneHTML = () => {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${content.title} - RASPUTIN</title>
+  <style>
+    :root {
+      --primary: #00d9c0;
+      --primary-dark: #00b4a0;
+      --bg: #0a0a0f;
+      --bg-secondary: #12121a;
+      --text: #e4e4e7;
+      --text-muted: #a1a1aa;
+      --border: #27272a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 48px 24px;
+    }
+    header {
+      margin-bottom: 40px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .brand-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 18px;
+      color: var(--bg);
+    }
+    .brand-text {
+      font-size: 14px;
+      color: var(--text-muted);
+      letter-spacing: 2px;
+    }
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--primary), #00ffff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 16px;
+    }
+    .metadata {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+    .metadata-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .metadata-label {
+      color: var(--primary);
+      font-weight: 500;
+    }
+    .content { margin-top: 32px; }
+    .content h2 {
+      font-size: 1.75rem;
+      color: var(--text);
+      margin: 40px 0 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .content h3 {
+      font-size: 1.25rem;
+      color: var(--text);
+      margin: 32px 0 12px;
+    }
+    .content p { margin: 16px 0; color: var(--text); }
+    .content ul, .content ol { margin: 16px 0; padding-left: 24px; }
+    .content li { margin: 8px 0; color: var(--text); }
+    .content pre {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      margin: 16px 0;
+      font-family: 'SF Mono', 'Consolas', monospace;
+      font-size: 14px;
+    }
+    .content code {
+      background: var(--bg-secondary);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'SF Mono', 'Consolas', monospace;
+      font-size: 0.9em;
+      color: var(--primary);
+    }
+    .content pre code { background: none; padding: 0; color: var(--text); }
+    .content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 24px 0;
+    }
+    .content th, .content td {
+      border: 1px solid var(--border);
+      padding: 12px;
+      text-align: left;
+    }
+    .content th {
+      background: var(--bg-secondary);
+      color: var(--primary);
+      font-weight: 600;
+    }
+    .content tr:hover { background: var(--bg-secondary); }
+    .content blockquote {
+      border-left: 4px solid var(--primary);
+      margin: 24px 0;
+      padding: 16px 24px;
+      background: var(--bg-secondary);
+      border-radius: 0 8px 8px 0;
+    }
+    .content hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 32px 0;
+    }
+    .content strong { color: var(--primary); font-weight: 600; }
+    footer {
+      margin-top: 64px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    footer a { color: var(--primary); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    @media (max-width: 640px) {
+      .container { padding: 24px 16px; }
+      h1 { font-size: 1.75rem; }
+      .metadata { flex-direction: column; gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="brand-icon">R</div>
+        <span class="brand-text">RASPUTIN</span>
+      </div>
+      <h1>${content.title}</h1>
+      ${
+        content.metadata
+          ? `
+      <div class="metadata">
+        ${content.metadata.date ? `<div class="metadata-item"><span class="metadata-label">Date:</span> ${content.metadata.date}</div>` : ""}
+        ${content.metadata.mode ? `<div class="metadata-item"><span class="metadata-label">Mode:</span> ${content.metadata.mode}</div>` : ""}
+        ${content.metadata.model ? `<div class="metadata-item"><span class="metadata-label">Model:</span> ${content.metadata.model}</div>` : ""}
+        ${content.metadata.duration ? `<div class="metadata-item"><span class="metadata-label">Duration:</span> ${content.metadata.duration}</div>` : ""}
+      </div>
+      `
+          : ""
+      }
+    </header>
+    <div class="content">
+      ${content.content
+        .replace(/^### (.+)$/gm, "<h3>$1</h3>")
+        .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+        .replace(/^# (.+)$/gm, "<h1>$1</h1>")
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\*(.+?)\*/g, "<em>$1</em>")
+        .replace(/`([^`]+)`/g, "<code>$1</code>")
+        .replace(
+          /```(\w*)\n([\s\S]*?)```/g,
+          (_match, _lang, code) =>
+            `<pre><code>${code.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></pre>`
+        )
+        .replace(/^[-*] (.+)$/gm, "<li>$1</li>")
+        .replace(/(<li>[\s\S]*?<\/li>)/g, "<ul>$1</ul>")
+        .replace(/<\/ul>\s*<ul>/g, "")
+        .replace(/^> (.+)$/gm, "<blockquote>$1</blockquote>")
+        .replace(/---/g, "<hr>")
+        .replace(/\n\n/g, "</p><p>")
+        .replace(/^(?!<[hupol])/gm, "<p>")
+        .replace(/(?<![>])$/gm, "</p>")
+        .replace(/<p><\/p>/g, "")
+        .replace(/<p>(<[hupol])/g, "$1")
+        .replace(/(<\/[hupol][^>]*>)<\/p>/g, "$1")}
+    </div>
+    <footer>
+      Generated by <a href="https://github.com" target="_blank">RASPUTIN</a> - Multi-Model Consensus Engine<br>
+      ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+    </footer>
+  </div>
+</body>
+</html>`;
+  };
+
+  const exportHTML = async () => {
+    setExporting("html");
+    try {
+      const html = generateStandaloneHTML();
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      saveAs(blob, `${sanitizeFilename(content.title)}.html`);
+      showSuccess("html");
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const copyShareableLink = async () => {
+    setExporting("link");
+    try {
+      const html = generateStandaloneHTML();
+      const base64 = btoa(unescape(encodeURIComponent(html)));
+      const dataUrl = `data:text/html;base64,${base64}`;
+      await navigator.clipboard.writeText(dataUrl);
+      showSuccess("link");
+    } finally {
+      setExporting(null);
+    }
+  };
+
   const formats: Array<{
     format: ExportFormat;
     label: string;
@@ -610,6 +856,20 @@ export function ExportMenu({
       icon: <FileText className="h-4 w-4" />,
       action: exportPDF,
       description: "Print-ready document",
+    },
+    {
+      format: "html",
+      label: "HTML",
+      icon: <Share2 className="h-4 w-4" />,
+      action: exportHTML,
+      description: "Standalone shareable page",
+    },
+    {
+      format: "link",
+      label: "Copy Data URL",
+      icon: <Link className="h-4 w-4" />,
+      action: copyShareableLink,
+      description: "Self-contained link to clipboard",
     },
   ];
 
