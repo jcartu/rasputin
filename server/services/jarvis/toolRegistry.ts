@@ -4,6 +4,7 @@ export interface ToolParameter {
   required: boolean;
   default?: unknown;
   enum?: string[];
+  items?: { type: string };
 }
 
 export interface ToolResult {

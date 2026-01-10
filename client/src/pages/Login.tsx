@@ -1,38 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { Loader2, Eye, EyeOff, Zap } from "lucide-react";
 
-// Google logo SVG component
-function GoogleLogo() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 18 18"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"
-        fill="#4285F4"
-      />
-      <path
-        d="M9.003 18c2.43 0 4.467-.806 5.956-2.18l-2.909-2.26c-.806.54-1.836.86-3.047.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9.003 18z"
-        fill="#34A853"
-      />
-      <path
-        d="M3.964 10.712A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.33z"
-        fill="#FBBC05"
-      />
-      <path
-        d="M9.003 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.464.891 11.428 0 9.002 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29c.708-2.127 2.692-3.71 5.036-3.71z"
-        fill="#EA4335"
-      />
-    </svg>
-  );
-}
-
-// Hexagon cluster logo component
 function HexagonLogo() {
   const hexagonPoints = (cx: number, cy: number, r: number): string => {
     const points: string[] = [];
@@ -46,26 +18,30 @@ function HexagonLogo() {
   };
 
   return (
-    <svg viewBox="0 0 200 200" className="w-32 h-32">
+    <svg viewBox="0 0 200 200" className="w-40 h-40">
       <defs>
         <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+          <feGaussianBlur stdDeviation="4" result="coloredBlur" />
           <feMerge>
             <feMergeNode in="coloredBlur" />
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
         <linearGradient id="hexGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="oklch(0.75 0.18 195)" />
-          <stop offset="100%" stopColor="oklch(0.65 0.15 220)" />
+          <stop offset="0%" stopColor="#22d3ee" />
+          <stop offset="50%" stopColor="#a855f7" />
+          <stop offset="100%" stopColor="#22d3ee" />
+        </linearGradient>
+        <linearGradient id="coreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#a855f7" />
+          <stop offset="100%" stopColor="#22d3ee" />
         </linearGradient>
       </defs>
 
-      {/* Outer hexagons - 5 AI models */}
       {[0, 1, 2, 3, 4].map(i => {
         const angle = (i * 72 - 90) * (Math.PI / 180);
-        const cx = 100 + Math.cos(angle) * 55;
-        const cy = 100 + Math.sin(angle) * 55;
+        const cx = 100 + Math.cos(angle) * 60;
+        const cy = 100 + Math.sin(angle) * 60;
         return (
           <g key={i} filter="url(#glow)">
             <polygon
@@ -74,42 +50,47 @@ function HexagonLogo() {
               stroke="url(#hexGradient)"
               strokeWidth="2"
               className="animate-pulse"
-              style={{ animationDelay: `${i * 0.2}s` }}
+              style={{
+                animationDelay: `${i * 0.15}s`,
+                animationDuration: "2s",
+              }}
             />
             <polygon
-              points={hexagonPoints(cx, cy, 20)}
-              fill="oklch(0.75 0.18 195 / 0.15)"
+              points={hexagonPoints(cx, cy, 18)}
+              fill="rgba(168, 85, 247, 0.1)"
               className="animate-pulse"
-              style={{ animationDelay: `${i * 0.2}s` }}
+              style={{
+                animationDelay: `${i * 0.15}s`,
+                animationDuration: "2s",
+              }}
             />
           </g>
         );
       })}
 
-      {/* Center hexagon - The Eye of Truth */}
       <g filter="url(#glow)">
         <polygon
-          points={hexagonPoints(100, 100, 35)}
-          fill="oklch(0.75 0.18 195 / 0.3)"
-          stroke="oklch(0.85 0.2 195)"
+          points={hexagonPoints(100, 100, 40)}
+          fill="rgba(34, 211, 238, 0.15)"
+          stroke="url(#coreGradient)"
           strokeWidth="3"
         />
         <circle
           cx="100"
           cy="100"
-          r="15"
-          fill="oklch(0.75 0.18 195)"
+          r="20"
+          fill="url(#coreGradient)"
           className="animate-pulse"
+          style={{ animationDuration: "1.5s" }}
         />
-        <circle cx="100" cy="100" r="8" fill="oklch(0.15 0.01 260)" />
-        <circle cx="104" cy="96" r="3" fill="oklch(0.95 0.01 260)" />
+        <circle cx="100" cy="100" r="10" fill="#0a0a0f" />
+        <circle cx="105" cy="95" r="4" fill="rgba(255,255,255,0.8)" />
       </g>
 
-      {/* Connection lines */}
       {[0, 1, 2, 3, 4].map(i => {
         const angle = (i * 72 - 90) * (Math.PI / 180);
-        const x1 = 100 + Math.cos(angle) * 55;
-        const y1 = 100 + Math.sin(angle) * 55;
+        const x1 = 100 + Math.cos(angle) * 60;
+        const y1 = 100 + Math.sin(angle) * 60;
         return (
           <line
             key={`line-${i}`}
@@ -117,9 +98,10 @@ function HexagonLogo() {
             y1={y1}
             x2="100"
             y2="100"
-            stroke="oklch(0.75 0.18 195 / 0.4)"
+            stroke="url(#hexGradient)"
             strokeWidth="1"
-            strokeDasharray="4 2"
+            strokeDasharray="6 4"
+            opacity="0.5"
           />
         );
       })}
@@ -128,116 +110,151 @@ function HexagonLogo() {
 }
 
 export default function Login() {
-  const [, _setLocation] = useLocation();
-  const { user: _user, loading } = useAuth();
+  const [, setLocation] = useLocation();
+  const { loading: authLoading } = useAuth();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Check for error in URL params
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const errorParam = params.get("error");
-    if (errorParam) {
-      const errorMessages: Record<string, string> = {
-        oauth_denied: "You cancelled the sign-in process.",
-        invalid_request: "Invalid authentication request.",
-        invalid_state: "Session expired. Please try again.",
-        token_exchange_failed: "Failed to complete authentication.",
-        userinfo_failed: "Failed to get your profile information.",
-        auth_failed: "Authentication failed. Please try again.",
-      };
-      setError(
-        errorMessages[errorParam] || "An error occurred during sign-in."
-      );
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username || !password) {
+      setError("Please enter username and password");
+      return;
     }
-  }, []);
 
-  const handleGoogleSignIn = () => {
-    window.location.href = "/api/auth/google";
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Login failed");
+        setIsLoading(false);
+        return;
+      }
+
+      setLocation(data.redirect || "/agent");
+    } catch {
+      setError("Connection failed. Please try again.");
+      setIsLoading(false);
+    }
   };
 
-  if (loading) {
+  if (authLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" />
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-cyan-500" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Background effects */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-gradient-radial from-cyan-500/20 via-cyan-500/5 to-transparent" />
+    <div className="min-h-screen bg-[#0a0a0f] flex flex-col overflow-hidden relative">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-purple-500/10 blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-cyan-500/10 blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-gradient-radial from-cyan-500/5 via-transparent to-transparent" />
       </div>
 
-      {/* Main content */}
       <div className="flex-1 flex items-center justify-center p-4 relative z-10">
         <div className="w-full max-w-md space-y-8">
-          {/* Logo and title */}
-          <div className="flex flex-col items-center space-y-4">
+          <div className="flex flex-col items-center space-y-6">
             <HexagonLogo />
-            <h1 className="text-4xl font-bold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-cyan-300 to-cyan-500">
-              RASPUTIN
-            </h1>
-            <p className="text-muted-foreground text-center">
-              Multi-Model Consensus & Synthesis Engine
-            </p>
+            <div className="space-y-2 text-center">
+              <h1 className="text-5xl font-black tracking-[0.2em] text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-cyan-400">
+                RASPUTIN
+              </h1>
+              <p className="text-sm text-gray-500 tracking-widest uppercase">
+                Autonomous AI Agent System
+              </p>
+            </div>
           </div>
 
-          {/* Error message */}
-          {error && (
-            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 text-center">
-              <p className="text-destructive text-sm">{error}</p>
-            </div>
-          )}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center">
+                <p className="text-red-400 text-sm">{error}</p>
+              </div>
+            )}
 
-          {/* Sign in with Google - Single option */}
-          <div className="space-y-4">
+            <div className="space-y-4">
+              <div className="relative">
+                <Input
+                  type="text"
+                  placeholder="Username"
+                  value={username}
+                  onChange={e => setUsername(e.target.value)}
+                  className="h-14 bg-white/5 border-white/10 text-white placeholder:text-gray-500 text-lg px-4 focus:border-cyan-500/50 focus:ring-cyan-500/20"
+                  autoComplete="username"
+                  autoFocus
+                />
+              </div>
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className="h-14 bg-white/5 border-white/10 text-white placeholder:text-gray-500 text-lg px-4 pr-12 focus:border-cyan-500/50 focus:ring-cyan-500/20"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
+            </div>
+
             <Button
-              onClick={handleGoogleSignIn}
-              variant="outline"
-              className="w-full h-14 bg-white hover:bg-gray-50 text-gray-700 border-gray-300 font-medium text-lg shadow-lg hover:shadow-xl transition-all"
+              type="submit"
+              disabled={isLoading}
+              className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-cyan-500 via-purple-500 to-cyan-500 hover:from-cyan-400 hover:via-purple-400 hover:to-cyan-400 text-white border-0 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all duration-300"
             >
-              <GoogleLogo />
-              <span className="ml-3">Continue with Google</span>
+              {isLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <>
+                  <Zap className="h-5 w-5 mr-2" />
+                  Initialize Session
+                </>
+              )}
             </Button>
-          </div>
+          </form>
 
-          {/* Features */}
-          <div className="grid grid-cols-2 gap-4 pt-8">
-            <div className="text-center p-4 rounded-lg bg-card/50 border border-border/50">
-              <div className="text-2xl mb-2">🤖</div>
-              <h3 className="font-medium text-sm">5 AI Models</h3>
-              <p className="text-xs text-muted-foreground">
-                GPT-5, Claude, Gemini, Grok, Sonar
-              </p>
+          <div className="grid grid-cols-3 gap-4 pt-6">
+            <div className="text-center p-3 rounded-lg bg-white/5 border border-white/5">
+              <div className="text-2xl mb-1">🤖</div>
+              <p className="text-xs text-gray-500">JARVIS Agent</p>
             </div>
-            <div className="text-center p-4 rounded-lg bg-card/50 border border-border/50">
-              <div className="text-2xl mb-2">⚡</div>
-              <h3 className="font-medium text-sm">Real-time</h3>
-              <p className="text-xs text-muted-foreground">
-                Live streaming responses
-              </p>
+            <div className="text-center p-3 rounded-lg bg-white/5 border border-white/5">
+              <div className="text-2xl mb-1">🧠</div>
+              <p className="text-xs text-gray-500">Multi-Model AI</p>
             </div>
-            <div className="text-center p-4 rounded-lg bg-card/50 border border-border/50">
-              <div className="text-2xl mb-2">🎯</div>
-              <h3 className="font-medium text-sm">Consensus</h3>
-              <p className="text-xs text-muted-foreground">
-                Agreement analysis
-              </p>
-            </div>
-            <div className="text-center p-4 rounded-lg bg-card/50 border border-border/50">
-              <div className="text-2xl mb-2">🔬</div>
-              <h3 className="font-medium text-sm">Synthesis</h3>
-              <p className="text-xs text-muted-foreground">
-                Deep research pipeline
-              </p>
+            <div className="text-center p-3 rounded-lg bg-white/5 border border-white/5">
+              <div className="text-2xl mb-1">⚡</div>
+              <p className="text-xs text-gray-500">Real-time</p>
             </div>
           </div>
 
-          {/* Footer */}
-          <p className="text-center text-xs text-muted-foreground pt-4">
-            By signing in, you agree to our Terms of Service and Privacy Policy
+          <p className="text-center text-xs text-gray-600 pt-4">
+            Powered by Claude, GPT-4, Gemini, Grok & Sonar
           </p>
         </div>
       </div>

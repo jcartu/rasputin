@@ -49,7 +49,6 @@ import {
   ArrowLeft,
   Plus,
   Trash2,
-  Download,
   Copy,
   Calculator,
   Image as ImageIcon,
@@ -58,7 +57,6 @@ import {
   RefreshCw,
   Sparkles,
   Mic,
-  MicOff,
   Volume2,
   VolumeX,
   Calendar,
@@ -82,6 +80,7 @@ import { ExportMenu } from "@/components/ExportMenu";
 import { VoiceConversation } from "@/components/VoiceConversation";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Streamdown } from "streamdown";
 
 // Types for JARVIS
 interface ToolCall {
@@ -223,149 +222,283 @@ const toolIcons: Record<string, React.ReactNode> = {
   get_datetime: <Clock className="h-4 w-4" />,
 };
 
-// Tool status badge
-function ToolStatusBadge({ status }: { status: ToolCall["status"] }) {
-  const variants: Record<
-    ToolCall["status"],
-    { icon: React.ReactNode; className: string; label: string }
-  > = {
-    pending: {
-      icon: <Clock className="h-3 w-3" />,
-      className: "bg-muted text-muted-foreground",
-      label: "Pending",
-    },
-    running: {
-      icon: <Loader2 className="h-3 w-3 animate-spin" />,
-      className: "bg-cyan-500/20 text-cyan-400",
-      label: "Running",
-    },
-    completed: {
-      icon: <CheckCircle2 className="h-3 w-3" />,
-      className: "bg-green-500/20 text-green-400",
-      label: "Done",
-    },
-    failed: {
-      icon: <XCircle className="h-3 w-3" />,
-      className: "bg-red-500/20 text-red-400",
-      label: "Failed",
-    },
+function AgentToolRow({
+  tool,
+  isExpanded,
+  onToggle,
+}: {
+  tool: ToolCall;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const statusIcon = {
+    pending: <Clock className="h-3.5 w-3.5 text-muted-foreground" />,
+    running: <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" />,
+    completed: <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />,
+    failed: <XCircle className="h-3.5 w-3.5 text-red-400" />,
   };
-  const { icon, className, label } = variants[status];
-  return (
-    <Badge variant="outline" className={cn("gap-1 text-xs", className)}>
-      {icon}
-      {label}
-    </Badge>
-  );
-}
 
-// Tool call card with real-time updates
-function ToolCallCard({ tool, isLive }: { tool: ToolCall; isLive?: boolean }) {
-  const [expanded, setExpanded] = useState(false);
   const duration =
     tool.endTime && tool.startTime
       ? ((tool.endTime - tool.startTime) / 1000).toFixed(2)
       : null;
 
   return (
+    <div className="group">
+      <div
+        className={cn(
+          "flex items-center gap-3 py-2 px-3 cursor-pointer rounded-md transition-colors",
+          "hover:bg-muted/40",
+          isExpanded && "bg-muted/30"
+        )}
+        onClick={onToggle}
+      >
+        <div className="flex-shrink-0">{statusIcon[tool.status]}</div>
+        <div
+          className={cn(
+            "p-1.5 rounded transition-colors flex-shrink-0",
+            tool.status === "running" && "bg-cyan-500/20",
+            tool.status === "completed" && "bg-green-500/10",
+            tool.status === "failed" && "bg-red-500/10"
+          )}
+        >
+          {toolIcons[tool.name] || <Zap className="h-3.5 w-3.5" />}
+        </div>
+        <span
+          className={cn(
+            "font-mono text-sm flex-1 truncate",
+            tool.status === "running" && "text-cyan-400",
+            tool.status === "completed" && "text-foreground/80",
+            tool.status === "failed" && "text-red-400"
+          )}
+        >
+          {tool.name.replace(/_/g, " ")}
+        </span>
+        {duration && (
+          <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
+            {duration}s
+          </span>
+        )}
+        <ChevronRight
+          className={cn(
+            "h-3.5 w-3.5 text-muted-foreground/50 transition-transform flex-shrink-0",
+            isExpanded && "rotate-90"
+          )}
+        />
+      </div>
+
+      {isExpanded && (
+        <div className="ml-10 mr-3 mb-2 p-3 rounded-md bg-muted/20 border border-border/30 space-y-3">
+          {tool.input && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Input
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 px-1.5"
+                  onClick={e => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(tool.input || "");
+                    toast.success("Copied");
+                  }}
+                >
+                  <Copy className="h-3 w-3" />
+                </Button>
+              </div>
+              <pre className="p-2 rounded bg-muted/50 text-xs overflow-x-auto max-h-24 font-mono">
+                {tool.input}
+              </pre>
+            </div>
+          )}
+          {tool.output && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Output
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 px-1.5"
+                  onClick={e => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(tool.output || "");
+                    toast.success("Copied");
+                  }}
+                >
+                  <Copy className="h-3 w-3" />
+                </Button>
+              </div>
+              <ToolOutputPreview
+                toolName={tool.name}
+                output={tool.output}
+                input={tool.input}
+              />
+            </div>
+          )}
+          {tool.status === "running" && !tool.output && (
+            <div className="flex items-center gap-2 text-cyan-400 text-sm">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span>Processing...</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Consolidated panel for agent steps (tools + thinking)
+function AgentStepsPanel({
+  steps,
+  isLive,
+}: {
+  steps: AgentStep[];
+  isLive?: boolean;
+}) {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [expandedToolId, setExpandedToolId] = useState<string | null>(null);
+
+  // Convert steps to tool calls
+  const tools: ToolCall[] = steps
+    .filter(s => s.type === "tool" || s.type === "tool_call")
+    .map(s => ({
+      id: s.id,
+      name: s.tool || "unknown",
+      status:
+        s.status === "success"
+          ? "completed"
+          : s.status === "error"
+            ? "failed"
+            : s.status === "running"
+              ? "running"
+              : "pending",
+      input: s.input,
+      output: s.output,
+      startTime: s.timestamp,
+      endTime:
+        s.status === "success" || s.status === "error" ? Date.now() : undefined,
+    }));
+
+  const thinkingSteps = steps.filter(s => s.type === "thinking" && s.content);
+  const latestThinking = thinkingSteps[thinkingSteps.length - 1]?.content;
+
+  const completedCount = tools.filter(t => t.status === "completed").length;
+  const runningCount = tools.filter(t => t.status === "running").length;
+  const failedCount = tools.filter(t => t.status === "failed").length;
+
+  const hasRunning = runningCount > 0;
+  const allDone = !isLive && tools.length > 0 && runningCount === 0;
+
+  if (tools.length === 0 && !latestThinking) return null;
+
+  return (
     <Card
       className={cn(
-        "bg-background/50 border-border/50 transition-all",
-        isLive &&
-          tool.status === "running" &&
-          "border-cyan-500/50 shadow-cyan-500/10 shadow-lg"
+        "overflow-hidden transition-all duration-300 bg-background/50",
+        hasRunning && "border-cyan-500/40 shadow-lg shadow-cyan-500/5",
+        allDone && failedCount === 0 && "border-green-500/30",
+        allDone && failedCount > 0 && "border-yellow-500/30"
       )}
     >
-      <CardContent className="p-3">
+      <CardContent className="p-0">
+        {/* Header */}
         <div
-          className="flex items-center justify-between cursor-pointer"
-          onClick={() => setExpanded(!expanded)}
+          className={cn(
+            "flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors",
+            "hover:bg-muted/30 border-b border-border/30"
+          )}
+          onClick={() => setIsCollapsed(!isCollapsed)}
         >
-          <div className="flex items-center gap-2">
-            {expanded ? (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          <div className="flex items-center gap-3">
+            {hasRunning ? (
+              <Sparkles className="h-4 w-4 text-cyan-400 animate-pulse" />
+            ) : allDone ? (
+              failedCount > 0 ? (
+                <XCircle className="h-4 w-4 text-yellow-400" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 text-green-400" />
+              )
             ) : (
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              <Brain className="h-4 w-4 text-purple-400" />
             )}
-            <div
-              className={cn(
-                "p-1.5 rounded",
-                tool.status === "running"
-                  ? "bg-cyan-500/20 text-cyan-400"
-                  : "bg-muted text-muted-foreground"
-              )}
-            >
-              {toolIcons[tool.name] || <Zap className="h-4 w-4" />}
-            </div>
-            <span className="font-mono text-sm">
-              {tool.name.replace(/_/g, " ")}
+            <span className="font-medium text-sm">
+              {hasRunning
+                ? "Working..."
+                : allDone
+                  ? failedCount > 0
+                    ? "Completed with errors"
+                    : "Completed"
+                  : "Processing"}
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            {duration && (
-              <span className="text-xs text-muted-foreground">{duration}s</span>
-            )}
-            <ToolStatusBadge status={tool.status} />
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {completedCount > 0 && (
+                <span className="flex items-center gap-1">
+                  <CheckCircle2 className="h-3 w-3 text-green-400" />
+                  {completedCount}
+                </span>
+              )}
+              {runningCount > 0 && (
+                <span className="flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin text-cyan-400" />
+                  {runningCount}
+                </span>
+              )}
+              {failedCount > 0 && (
+                <span className="flex items-center gap-1">
+                  <XCircle className="h-3 w-3 text-red-400" />
+                  {failedCount}
+                </span>
+              )}
+            </div>
+
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 text-muted-foreground transition-transform",
+                isCollapsed && "-rotate-90"
+              )}
+            />
           </div>
         </div>
-        {expanded && (
-          <div className="mt-3 space-y-2 pl-6">
-            {tool.input && (
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground font-medium">
-                    Input
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2"
-                    onClick={e => {
-                      e.stopPropagation();
-                      navigator.clipboard.writeText(tool.input || "");
-                      toast.success("Copied to clipboard");
-                    }}
-                  >
-                    <Copy className="h-3 w-3" />
-                  </Button>
+
+        {/* Collapsible content */}
+        {!isCollapsed && (
+          <div>
+            {/* Thinking section */}
+            {latestThinking && isLive && (
+              <div className="px-4 py-2.5 border-b border-border/20 bg-purple-500/5">
+                <div className="flex items-start gap-3">
+                  <Brain className="h-4 w-4 text-purple-400 animate-pulse mt-0.5 flex-shrink-0" />
+                  <p className="text-sm italic text-purple-200/90">
+                    {latestThinking}
+                  </p>
                 </div>
-                <pre className="mt-1 p-2 rounded bg-muted/50 text-xs overflow-x-auto max-h-32">
-                  {tool.input}
-                </pre>
               </div>
             )}
-            {tool.output && (
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground font-medium">
-                    Output
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2"
-                    onClick={e => {
-                      e.stopPropagation();
-                      navigator.clipboard.writeText(tool.output || "");
-                      toast.success("Copied to clipboard");
-                    }}
-                  >
-                    <Copy className="h-3 w-3" />
-                  </Button>
-                </div>
-                <ToolOutputPreview
-                  toolName={tool.name}
-                  output={tool.output}
-                  input={tool.input}
+
+            {/* Tool list */}
+            <div className="py-1">
+              {tools.map((tool, index) => (
+                <AgentToolRow
+                  key={tool.id || index}
+                  tool={tool}
+                  isExpanded={expandedToolId === (tool.id || String(index))}
+                  onToggle={() =>
+                    setExpandedToolId(
+                      expandedToolId === (tool.id || String(index))
+                        ? null
+                        : tool.id || String(index)
+                    )
+                  }
                 />
-              </div>
-            )}
-            {tool.status === "running" && !tool.output && (
-              <div className="flex items-center gap-2 text-cyan-400 text-sm">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Executing...</span>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
         )}
       </CardContent>
@@ -373,50 +506,6 @@ function ToolCallCard({ tool, isLive }: { tool: ToolCall; isLive?: boolean }) {
   );
 }
 
-// Agent step component
-function AgentStepView({
-  step,
-  isLive,
-}: {
-  step: AgentStep;
-  isLive?: boolean;
-}) {
-  if (step.type === "thinking") {
-    return (
-      <div className="flex items-start gap-2 text-muted-foreground animate-in fade-in slide-in-from-left-2">
-        <Brain
-          className={cn(
-            "h-4 w-4 mt-0.5",
-            isLive ? "text-purple-400 animate-pulse" : "text-purple-400/50"
-          )}
-        />
-        <p className="text-sm italic">{step.content}</p>
-      </div>
-    );
-  }
-
-  if (step.type === "tool" || step.type === "tool_call") {
-    const toolCall: ToolCall = {
-      id: step.id,
-      name: step.tool || "unknown",
-      status:
-        step.status === "success"
-          ? "completed"
-          : step.status === "error"
-            ? "failed"
-            : step.status === "running"
-              ? "running"
-              : "pending",
-      input: step.input,
-      output: step.output,
-    };
-    return <ToolCallCard tool={toolCall} isLive={isLive} />;
-  }
-
-  return null;
-}
-
-// Message component
 function AgentMessageView({
   message,
   isLive,
@@ -488,16 +577,12 @@ function AgentMessageView({
           </div>
         ) : (
           <>
-            {message.steps?.map((step, idx) => (
-              <AgentStepView
-                key={step.id}
-                step={step}
-                isLive={isLive && idx === message.steps!.length - 1}
-              />
-            ))}
+            {message.steps && message.steps.length > 0 && (
+              <AgentStepsPanel steps={message.steps} isLive={isLive} />
+            )}
             {message.content && (
               <div className="relative p-4 rounded-lg bg-muted/30 text-foreground prose prose-sm prose-invert max-w-none">
-                <div className="absolute top-2 right-2">
+                <div className="absolute top-2 right-2 z-10">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -512,9 +597,9 @@ function AgentMessageView({
                     )}
                   </Button>
                 </div>
-                <pre className="whitespace-pre-wrap font-sans text-sm pr-8">
-                  {message.content}
-                </pre>
+                <div className="pr-8">
+                  <Streamdown>{message.content}</Streamdown>
+                </div>
               </div>
             )}
           </>

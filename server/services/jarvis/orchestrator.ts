@@ -89,10 +89,17 @@ function buildJarvisTools(): OpenRouterTool[] {
       parameters: {
         type: "object" as const,
         properties: Object.fromEntries(
-          Object.entries(tool.parameters).map(([key, val]) => [
-            key,
-            { type: val.type, description: val.description },
-          ])
+          Object.entries(tool.parameters).map(([key, val]) => {
+            const prop: Record<string, unknown> = {
+              type: val.type,
+              description: val.description,
+            };
+            // Gemini requires 'items' field for array types
+            if (val.type === "array") {
+              prop.items = val.items || { type: "string" };
+            }
+            return [key, prop];
+          })
         ),
         required: Object.entries(tool.parameters)
           .filter(([, val]) => val.required)
@@ -137,9 +144,10 @@ For SECURITY ANALYSIS (ALWAYS use specialized tools first!):
   3. read_file package.json for manual review
 
 For FILE CREATION:
-  1. write_file to create the file
-  2. read_file to VERIFY it was created correctly
-  3. For code: execute the file to test it works
+  1. write_file for text/code files (.txt, .md, .py, .js, etc.)
+  2. write_docx for Word documents (.docx) - USE THIS for reports/documents user will open in Word
+  3. read_file to VERIFY content was created correctly
+  4. For code: execute the file to test it works
 
 For RUNNING SHELL COMMANDS:
   1. run_shell - Execute any shell command
@@ -158,6 +166,12 @@ For GIT OPERATIONS:
   5. git_commit - Commit changes
   6. git_push/git_pull - Sync with remote
   7. git_create_pr - Create GitHub pull request
+
+For SELF-INTROSPECTION (status, capabilities, skills):
+  1. self_comprehensive_introspection - ALWAYS USE THIS FIRST
+     - Returns status, capabilities, skills, and memory stats in ONE call
+     - Much faster than calling multiple self_* tools separately
+  2. Only use individual self_* tools if you need SPECIFIC deep details
 `;
 
 const FAILURE_RECOVERY_PROTOCOL = `
@@ -565,6 +579,16 @@ const PARALLELIZABLE_TOOLS = new Set([
   "git_log",
   "database_query",
   "analyze_screenshot",
+  "self_how_am_i_doing",
+  "self_what_can_i_do",
+  "self_list_skills",
+  "self_suggest_improvement",
+  "self_search_code",
+  "self_get_symbol",
+  "self_what_do_i_know",
+  "self_modification_history",
+  "get_memory_stats",
+  "recall_memory",
 ]);
 
 function canRunInParallel(toolName: string): boolean {
@@ -837,7 +861,7 @@ function toAnthropicMessages(messages: OpenRouterMessage[]): Array<{
         typeof msg.content === "string" &&
         msg.content.trim()
       ) {
-        contentBlocks.push({ type: "text", text: msg.content });
+        contentBlocks.push({ type: "text", text: msg.content.trim() });
       }
 
       for (const tc of msg.tool_calls) {
@@ -855,12 +879,13 @@ function toAnthropicMessages(messages: OpenRouterMessage[]): Array<{
       };
     }
 
+    const content =
+      typeof msg.content === "string"
+        ? msg.content
+        : JSON.stringify(msg.content);
     return {
       role: msg.role === "assistant" ? "assistant" : "user",
-      content:
-        typeof msg.content === "string"
-          ? msg.content
-          : JSON.stringify(msg.content),
+      content: msg.role === "assistant" ? content.trim() : content,
     };
   });
 }

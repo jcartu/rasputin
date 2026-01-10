@@ -144,6 +144,9 @@ export async function executeInSandbox(
 
   if (config.workspacePath) {
     dockerArgs.push("-v", `${config.workspacePath}:/workspace:rw`);
+    const uid = process.getuid?.() ?? 1000;
+    const gid = process.getgid?.() ?? 1000;
+    dockerArgs.push("--user", `${uid}:${gid}`);
   }
 
   if (config.env) {
@@ -242,7 +245,8 @@ export async function executePythonInSandbox(
   config: SandboxConfig = {}
 ): Promise<SandboxResult> {
   const escapedCode = code.replace(/'/g, "'\"'\"'");
-  const command = `python3 -c '${escapedCode}'`;
+  const cdPrefix = config.workspacePath ? "cd /workspace && " : "";
+  const command = `${cdPrefix}python3 -c '${escapedCode}'`;
   return executeInSandbox(command, config);
 }
 
@@ -251,7 +255,8 @@ export async function executeNodeInSandbox(
   config: SandboxConfig = {}
 ): Promise<SandboxResult> {
   const escapedCode = code.replace(/'/g, "'\"'\"'");
-  const command = `node -e '${escapedCode}'`;
+  const cdPrefix = config.workspacePath ? "cd /workspace && " : "";
+  const command = `${cdPrefix}node -e '${escapedCode}'`;
   return executeInSandbox(command, config);
 }
 
@@ -259,7 +264,9 @@ export async function executeShellInSandbox(
   script: string,
   config: SandboxConfig = {}
 ): Promise<SandboxResult> {
-  return executeInSandbox(script, config);
+  const cdPrefix = config.workspacePath ? "cd /workspace && " : "";
+  const command = `${cdPrefix}${script}`;
+  return executeInSandbox(command, config);
 }
 
 export async function cleanupStaleContainers(): Promise<number> {

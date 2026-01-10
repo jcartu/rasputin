@@ -27,6 +27,7 @@ import {
   ExternalLink,
   Link,
   File,
+  AlertTriangle,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -70,38 +71,36 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
   task_complete: <CheckCircle2 className="h-4 w-4 text-green-400" />,
 };
 
-function ThinkingBubble({ content }: { content: string }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
-      className="flex items-start gap-3"
-    >
-      <motion.div
-        animate={{ scale: [1, 1.1, 1] }}
-        transition={{ duration: 2, repeat: Infinity }}
-        className="p-2 rounded-full bg-purple-500/20 flex-shrink-0"
-      >
-        <Brain className="h-5 w-5 text-purple-400" />
-      </motion.div>
-      <div className="flex-1 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20 overflow-hidden">
-        <div className="prose prose-invert prose-sm max-w-none prose-p:text-purple-200 prose-headings:text-purple-100 prose-strong:text-purple-100 prose-code:text-purple-300 prose-pre:bg-purple-950/50">
-          <Streamdown>{content}</Streamdown>
-        </div>
-      </div>
-    </motion.div>
-  );
+function extractErrorMessage(output: string): string | null {
+  if (!output) return null;
+  const lowerOutput = output.toLowerCase();
+  if (
+    lowerOutput.includes("error") ||
+    lowerOutput.includes("failed") ||
+    lowerOutput.includes("exception") ||
+    lowerOutput.includes("traceback")
+  ) {
+    const lines = output.split("\n").filter(l => l.trim());
+    if (lines.length <= 3) return output;
+    const errorLine = lines.find(
+      l =>
+        l.toLowerCase().includes("error") ||
+        l.toLowerCase().includes("exception")
+    );
+    return errorLine || lines.slice(-2).join("\n");
+  }
+  return null;
 }
 
-function ToolCard({
+function ToolRow({
   tool,
-  isLive,
+  isExpanded,
+  onToggle,
 }: {
   tool: StreamingToolCall;
-  isLive?: boolean;
+  isExpanded: boolean;
+  onToggle: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const isRunning = tool.status === "running";
   const isCompleted = tool.status === "completed";
   const isFailed = tool.status === "failed";
@@ -112,160 +111,357 @@ function ToolCard({
       ? ((tool.endTime - tool.startTime) / 1000).toFixed(2)
       : null;
 
-  const statusColors = {
-    running: "border-cyan-500/50 shadow-cyan-500/20",
-    completed: "border-green-500/30",
-    failed: "border-red-500/30",
-  };
+  const errorSummary = isFailed ? extractErrorMessage(tool.output || "") : null;
 
-  const statusBadge = {
-    running: (
-      <Badge className="bg-cyan-500/20 text-cyan-400 border-cyan-500/30 gap-1">
-        <Loader2 className="h-3 w-3 animate-spin" />
-        Running
-      </Badge>
-    ),
-    completed: (
-      <Badge className="bg-green-500/20 text-green-400 border-green-500/30 gap-1">
-        <CheckCircle2 className="h-3 w-3" />
-        Done
-      </Badge>
-    ),
-    failed: (
-      <Badge className="bg-red-500/20 text-red-400 border-red-500/30 gap-1">
-        <XCircle className="h-3 w-3" />
-        Failed
-      </Badge>
-    ),
+  const statusIcon = {
+    running: <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" />,
+    completed: <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />,
+    failed: <XCircle className="h-3.5 w-3.5 text-red-400" />,
   };
 
   return (
+    <div className="group">
+      <div
+        className={cn(
+          "flex items-center gap-3 py-2 px-3 cursor-pointer rounded-md transition-colors",
+          "hover:bg-muted/40",
+          isExpanded && "bg-muted/30",
+          isFailed && !isExpanded && "bg-red-500/5"
+        )}
+        onClick={onToggle}
+      >
+        <div className="flex-shrink-0">{statusIcon[tool.status]}</div>
+
+        <div
+          className={cn(
+            "p-1.5 rounded transition-colors flex-shrink-0",
+            isRunning && "bg-cyan-500/20",
+            isCompleted && "bg-green-500/10",
+            isFailed && "bg-red-500/10"
+          )}
+        >
+          {TOOL_ICONS[tool.name] || <Zap className="h-3.5 w-3.5" />}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <span
+            className={cn(
+              "font-mono text-sm truncate block",
+              isRunning && "text-cyan-400",
+              isCompleted && "text-foreground/80",
+              isFailed && "text-red-400"
+            )}
+          >
+            {tool.name.replace(/_/g, " ")}
+          </span>
+          {isFailed && errorSummary && !isExpanded && (
+            <span className="text-xs text-red-400/80 truncate block mt-0.5">
+              {errorSummary.slice(0, 60)}
+              {errorSummary.length > 60 ? "..." : ""}
+            </span>
+          )}
+        </div>
+
+        {duration && (
+          <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
+            {duration}s
+          </span>
+        )}
+
+        <motion.div
+          animate={{ rotate: isExpanded ? 90 : 0 }}
+          transition={{ duration: 0.15 }}
+          className="text-muted-foreground/50 flex-shrink-0"
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </motion.div>
+      </div>
+
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden"
+          >
+            <div
+              className={cn(
+                "ml-10 mr-3 mb-2 p-3 rounded-md border space-y-3",
+                isFailed
+                  ? "bg-red-500/5 border-red-500/20"
+                  : "bg-muted/20 border-border/30"
+              )}
+            >
+              {isFailed && tool.output && (
+                <div className="p-3 rounded-md bg-red-500/10 border border-red-500/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <XCircle className="h-4 w-4 text-red-400 flex-shrink-0" />
+                    <span className="text-sm font-medium text-red-400">
+                      Error Details
+                    </span>
+                  </div>
+                  <pre className="text-xs text-red-300 whitespace-pre-wrap overflow-x-auto max-h-32 font-mono">
+                    {tool.output}
+                  </pre>
+                </div>
+              )}
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Input
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 px-1.5"
+                    onClick={e => {
+                      e.stopPropagation();
+                      navigator.clipboard.writeText(
+                        JSON.stringify(tool.input, null, 2)
+                      );
+                      toast.success("Copied");
+                    }}
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                </div>
+                <pre className="p-2 rounded bg-muted/50 text-xs overflow-x-auto max-h-24 font-mono">
+                  {JSON.stringify(tool.input, null, 2)}
+                </pre>
+              </div>
+
+              {tool.output && !isFailed && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Output
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 px-1.5"
+                      onClick={e => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(tool.output || "");
+                        toast.success("Copied");
+                      }}
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <ToolOutputPreview
+                    toolName={tool.name}
+                    output={tool.output}
+                    input={JSON.stringify(tool.input)}
+                  />
+                </div>
+              )}
+
+              {isRunning && !tool.output && (
+                <div className="flex items-center gap-2 text-cyan-400 text-sm">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Processing...</span>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function ToolExecutionPanel({
+  tools,
+  thinking,
+  isStreaming,
+}: {
+  tools: StreamingToolCall[];
+  thinking?: string;
+  isStreaming: boolean;
+}) {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [expandedToolId, setExpandedToolId] = useState<string | null>(null);
+  const [autoExpandedFailures, setAutoExpandedFailures] = useState<Set<string>>(
+    new Set()
+  );
+
+  const completedCount = tools.filter(t => t.status === "completed").length;
+  const runningCount = tools.filter(t => t.status === "running").length;
+  const failedCount = tools.filter(t => t.status === "failed").length;
+  const totalCount = tools.length;
+
+  useEffect(() => {
+    const newFailedTool = tools.find(
+      t =>
+        t.status === "failed" &&
+        !autoExpandedFailures.has(t.id || String(tools.indexOf(t)))
+    );
+    if (newFailedTool) {
+      const toolId = newFailedTool.id || String(tools.indexOf(newFailedTool));
+      setExpandedToolId(toolId);
+      setAutoExpandedFailures(prev => new Set(prev).add(toolId));
+    }
+  }, [tools, autoExpandedFailures]);
+
+  const hasRunning = runningCount > 0;
+  const allDone = !isStreaming && totalCount > 0 && runningCount === 0;
+
+  // Calculate total duration
+  const totalDuration = tools.reduce((acc, t) => {
+    const d =
+      t.durationMs || (t.endTime && t.startTime ? t.endTime - t.startTime : 0);
+    return acc + d;
+  }, 0);
+
+  if (tools.length === 0 && !thinking) return null;
+
+  return (
     <motion.div
-      initial={{ opacity: 0, x: -20, scale: 0.95 }}
-      animate={{ opacity: 1, x: 0, scale: 1 }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
     >
       <Card
         className={cn(
-          "transition-all duration-300 overflow-hidden",
-          statusColors[tool.status],
-          isLive && isRunning && "shadow-lg shadow-cyan-500/10 animate-pulse"
+          "overflow-hidden transition-all duration-300",
+          hasRunning && "border-cyan-500/40 shadow-lg shadow-cyan-500/5",
+          allDone && failedCount === 0 && "border-green-500/30",
+          allDone &&
+            failedCount > 0 &&
+            "border-amber-500/40 shadow-lg shadow-amber-500/5"
         )}
       >
         <CardContent className="p-0">
+          {/* Header */}
           <div
-            className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/30 transition-colors"
-            onClick={() => setExpanded(!expanded)}
+            className={cn(
+              "flex items-center justify-between px-4 py-3 cursor-pointer transition-colors",
+              "hover:bg-muted/30 border-b border-border/30"
+            )}
+            onClick={() => setIsCollapsed(!isCollapsed)}
           >
             <div className="flex items-center gap-3">
-              <motion.button
-                animate={{ rotate: expanded ? 90 : 0 }}
+              {hasRunning ? (
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                >
+                  <Sparkles className="h-5 w-5 text-cyan-400" />
+                </motion.div>
+              ) : allDone ? (
+                failedCount > 0 ? (
+                  <AlertTriangle className="h-5 w-5 text-amber-400" />
+                ) : (
+                  <CheckCircle2 className="h-5 w-5 text-green-400" />
+                )
+              ) : (
+                <Brain className="h-5 w-5 text-purple-400" />
+              )}
+              <div className="flex flex-col">
+                <span className="font-medium text-sm">
+                  {hasRunning
+                    ? "Working..."
+                    : allDone
+                      ? failedCount > 0
+                        ? "Completed with errors"
+                        : "Completed"
+                      : "Processing"}
+                </span>
+                {allDone && failedCount > 0 && (
+                  <span className="text-xs text-amber-400/80">
+                    {failedCount} tool{failedCount > 1 ? "s" : ""} failed -
+                    click to view details
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* Stats */}
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                {completedCount > 0 && (
+                  <span className="flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3 text-green-400" />
+                    {completedCount}
+                  </span>
+                )}
+                {runningCount > 0 && (
+                  <span className="flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin text-cyan-400" />
+                    {runningCount}
+                  </span>
+                )}
+                {failedCount > 0 && (
+                  <span className="flex items-center gap-1">
+                    <XCircle className="h-3 w-3 text-red-400" />
+                    {failedCount}
+                  </span>
+                )}
+              </div>
+
+              {totalDuration > 0 && (
+                <span className="text-xs text-muted-foreground font-mono">
+                  {(totalDuration / 1000).toFixed(1)}s
+                </span>
+              )}
+
+              <motion.div
+                animate={{ rotate: isCollapsed ? 0 : 180 }}
                 transition={{ duration: 0.2 }}
                 className="text-muted-foreground"
               >
-                <ChevronRight className="h-4 w-4" />
-              </motion.button>
-              <div
-                className={cn(
-                  "p-2 rounded-lg transition-colors",
-                  isRunning && "bg-cyan-500/20",
-                  isCompleted && "bg-green-500/20",
-                  isFailed && "bg-red-500/20"
-                )}
-              >
-                {TOOL_ICONS[tool.name] || <Zap className="h-4 w-4" />}
-              </div>
-              <div>
-                <p className="font-mono text-sm font-medium">
-                  {tool.name.replace(/_/g, " ")}
-                </p>
-                {isRunning && (
-                  <motion.p
-                    animate={{ opacity: [0.5, 1, 0.5] }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                    className="text-xs text-cyan-400"
-                  >
-                    Executing...
-                  </motion.p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {duration && (
-                <span className="text-xs text-muted-foreground font-mono">
-                  {duration}s
-                </span>
-              )}
-              {statusBadge[tool.status]}
+                <ChevronRight className="h-4 w-4 rotate-90" />
+              </motion.div>
             </div>
           </div>
 
+          {/* Collapsible content */}
           <AnimatePresence>
-            {expanded && (
+            {!isCollapsed && (
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="border-t border-border/50"
               >
-                <div className="p-3 space-y-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        Input
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2"
-                        onClick={e => {
-                          e.stopPropagation();
-                          navigator.clipboard.writeText(
-                            JSON.stringify(tool.input, null, 2)
-                          );
-                          toast.success("Copied to clipboard");
-                        }}
+                {/* Thinking section */}
+                {thinking && (
+                  <div className="px-4 py-3 border-b border-border/20 bg-purple-500/5">
+                    <div className="flex items-start gap-3">
+                      <motion.div
+                        animate={{ scale: [1, 1.1, 1] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                        className="p-1.5 rounded-full bg-purple-500/20 flex-shrink-0"
                       >
-                        <Copy className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    <pre className="p-2 rounded bg-muted/50 text-xs overflow-x-auto max-h-32 font-mono">
-                      {JSON.stringify(tool.input, null, 2)}
-                    </pre>
-                  </div>
-                  {tool.output && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-muted-foreground">
-                          Output
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 px-2"
-                          onClick={e => {
-                            e.stopPropagation();
-                            navigator.clipboard.writeText(tool.output || "");
-                            toast.success("Copied to clipboard");
-                          }}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
+                        <Brain className="h-4 w-4 text-purple-400" />
+                      </motion.div>
+                      <div className="flex-1 min-w-0 prose prose-invert prose-sm max-w-none prose-p:text-purple-200/90 prose-p:my-1">
+                        <Streamdown>{thinking}</Streamdown>
                       </div>
-                      <ToolOutputPreview
-                        toolName={tool.name}
-                        output={tool.output}
-                        input={JSON.stringify(tool.input)}
-                      />
                     </div>
-                  )}
-                  {isRunning && !tool.output && (
-                    <div className="flex items-center gap-2 text-cyan-400">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span className="text-sm">Processing...</span>
-                    </div>
-                  )}
+                  </div>
+                )}
+
+                {/* Tool list */}
+                <div className="py-1">
+                  {tools.map((tool, index) => (
+                    <ToolRow
+                      key={tool.id || index}
+                      tool={tool}
+                      isExpanded={expandedToolId === (tool.id || String(index))}
+                      onToggle={() =>
+                        setExpandedToolId(
+                          expandedToolId === (tool.id || String(index))
+                            ? null
+                            : tool.id || String(index)
+                        )
+                      }
+                    />
+                  ))}
                 </div>
               </motion.div>
             )}
@@ -675,7 +871,6 @@ export function JarvisStreamView({
   }, [state.steps]);
 
   const isComplete = state.success !== null && !state.isStreaming;
-  const lastStepIndex = state.steps.length - 1;
 
   useEffect(() => {
     if (
@@ -777,6 +972,15 @@ export function JarvisStreamView({
     })
     .filter((a): a is NonNullable<typeof a> => a !== null);
 
+  // Extract tools and thinking from steps
+  const tools = state.steps
+    .filter(s => s.type === "tool" && s.tool)
+    .map(s => s.tool!);
+
+  const latestThinking = state.steps
+    .filter(s => s.type === "thinking" && s.content)
+    .pop()?.content;
+
   return (
     <div className="space-y-4">
       <ProgressIndicator
@@ -786,30 +990,14 @@ export function JarvisStreamView({
         success={state.success}
       />
 
-      <div className="space-y-3">
-        <AnimatePresence mode="popLayout">
-          {state.steps.map((step, index) => (
-            <motion.div
-              key={step.id}
-              layout
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.3 }}
-            >
-              {step.type === "thinking" && step.content && (
-                <ThinkingBubble content={step.content} />
-              )}
-              {step.type === "tool" && step.tool && (
-                <ToolCard
-                  tool={step.tool}
-                  isLive={state.isStreaming && index === lastStepIndex}
-                />
-              )}
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+      {/* Consolidated tool execution panel */}
+      {(tools.length > 0 || latestThinking) && (
+        <ToolExecutionPanel
+          tools={tools}
+          thinking={state.isStreaming ? latestThinking : undefined}
+          isStreaming={state.isStreaming}
+        />
+      )}
 
       {state.error && !isComplete && (
         <motion.div

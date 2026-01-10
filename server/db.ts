@@ -148,6 +148,68 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get user: database not available");
+    return undefined;
+  }
+
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function updateUserOpenId(userId: number, newOpenId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(users).set({ openId: newOpenId }).where(eq(users.id, userId));
+}
+
+export async function getUserByUsername(username: string) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get user: database not available");
+    return undefined;
+  }
+
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.username, username))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createUserWithPassword(user: {
+  openId: string;
+  username: string;
+  passwordHash: string;
+  name?: string;
+  email?: string;
+  role?: "user" | "admin";
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.insert(users).values({
+    openId: user.openId,
+    username: user.username,
+    passwordHash: user.passwordHash,
+    name: user.name || null,
+    email: user.email || null,
+    role: user.role || "user",
+    loginMethod: "password",
+    lastSignedIn: new Date(),
+  });
+}
+
 // ============================================================================
 // Chat Functions
 // ============================================================================

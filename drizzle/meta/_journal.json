@@ -78,6 +78,13 @@
       "when": 1767956290177,
       "tag": "0010_fearless_jackpot",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1768065054110,
+      "tag": "0011_last_umar",
+      "breakpoints": true
     }
   ]
 }

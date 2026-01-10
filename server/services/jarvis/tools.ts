@@ -42,6 +42,14 @@ import {
   executeShellInSandbox,
   getSandboxStatus,
 } from "../sandbox";
+import {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  HeadingLevel,
+  AlignmentType,
+} from "docx";
 
 const execAsync = promisify(exec);
 const USE_DOCKER_SANDBOX = process.env.USE_SANDBOX !== "false";
@@ -383,7 +391,12 @@ export async function executePython(code: string): Promise<string> {
   if (USE_DOCKER_SANDBOX) {
     const status = await getSandboxStatus();
     if (status.dockerAvailable && status.imageBuilt) {
-      const result = await executePythonInSandbox(code, { timeoutMs: 30000 });
+      // Ensure sandbox directory exists on host for volume mounting
+      await ensureSandbox();
+      const result = await executePythonInSandbox(code, {
+        timeoutMs: 30000,
+        workspacePath: JARVIS_SANDBOX, // Mount shared workspace
+      });
       if (result.success) {
         const output =
           result.stdout + (result.stderr ? `\nStderr: ${result.stderr}` : "");
@@ -429,7 +442,11 @@ export async function executeJavaScript(code: string): Promise<string> {
   if (USE_DOCKER_SANDBOX) {
     const status = await getSandboxStatus();
     if (status.dockerAvailable && status.imageBuilt) {
-      const result = await executeNodeInSandbox(code, { timeoutMs: 30000 });
+      await ensureSandbox();
+      const result = await executeNodeInSandbox(code, {
+        timeoutMs: 30000,
+        workspacePath: JARVIS_SANDBOX,
+      });
       if (result.success) {
         const output =
           result.stdout + (result.stderr ? `\nStderr: ${result.stderr}` : "");
@@ -475,7 +492,11 @@ export async function runShell(command: string): Promise<string> {
   if (USE_DOCKER_SANDBOX) {
     const status = await getSandboxStatus();
     if (status.dockerAvailable && status.imageBuilt) {
-      const result = await executeShellInSandbox(command, { timeoutMs: 60000 });
+      await ensureSandbox();
+      const result = await executeShellInSandbox(command, {
+        timeoutMs: 60000,
+        workspacePath: JARVIS_SANDBOX,
+      });
       if (result.success) {
         const output =
           result.stdout + (result.stderr ? `\nStderr: ${result.stderr}` : "");
@@ -575,9 +596,119 @@ export async function writeFile(
   }
 }
 
-/**
- * List files in directory
- */
+export async function writeDocx(
+  filePath: string,
+  content: string,
+  title?: string
+): Promise<string> {
+  await ensureSandbox();
+
+  const resolvedPath = filePath.startsWith("/")
+    ? filePath
+    : path.join(JARVIS_SANDBOX, filePath);
+
+  const finalPath = resolvedPath.endsWith(".docx")
+    ? resolvedPath
+    : resolvedPath + ".docx";
+
+  try {
+    await fs.mkdir(path.dirname(finalPath), { recursive: true });
+
+    const children: Paragraph[] = [];
+
+    if (title) {
+      children.push(
+        new Paragraph({
+          text: title,
+          heading: HeadingLevel.TITLE,
+          alignment: AlignmentType.CENTER,
+        })
+      );
+      children.push(new Paragraph({ text: "" }));
+    }
+
+    const lines = content.split("\n");
+    for (const line of lines) {
+      if (line.startsWith("# ")) {
+        children.push(
+          new Paragraph({
+            text: line.substring(2),
+            heading: HeadingLevel.HEADING_1,
+          })
+        );
+      } else if (line.startsWith("## ")) {
+        children.push(
+          new Paragraph({
+            text: line.substring(3),
+            heading: HeadingLevel.HEADING_2,
+          })
+        );
+      } else if (line.startsWith("### ")) {
+        children.push(
+          new Paragraph({
+            text: line.substring(4),
+            heading: HeadingLevel.HEADING_3,
+          })
+        );
+      } else if (line.startsWith("- ") || line.startsWith("* ")) {
+        children.push(
+          new Paragraph({
+            text: line.substring(2),
+            bullet: { level: 0 },
+          })
+        );
+      } else if (line.trim() === "") {
+        children.push(new Paragraph({ text: "" }));
+      } else {
+        const runs: TextRun[] = [];
+        let remaining = line;
+
+        while (remaining.length > 0) {
+          const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
+          const italicMatch = remaining.match(/\*(.+?)\*/);
+
+          if (boldMatch && boldMatch.index === 0) {
+            runs.push(new TextRun({ text: boldMatch[1], bold: true }));
+            remaining = remaining.substring(boldMatch[0].length);
+          } else if (
+            italicMatch &&
+            italicMatch.index === 0 &&
+            !remaining.startsWith("**")
+          ) {
+            runs.push(new TextRun({ text: italicMatch[1], italics: true }));
+            remaining = remaining.substring(italicMatch[0].length);
+          } else {
+            const nextBold = remaining.indexOf("**");
+            const nextItalic = remaining.indexOf("*");
+            let endIdx = remaining.length;
+
+            if (nextBold > 0) endIdx = Math.min(endIdx, nextBold);
+            if (nextItalic > 0 && !remaining.startsWith("**"))
+              endIdx = Math.min(endIdx, nextItalic);
+
+            runs.push(new TextRun({ text: remaining.substring(0, endIdx) }));
+            remaining = remaining.substring(endIdx);
+          }
+        }
+
+        children.push(new Paragraph({ children: runs }));
+      }
+    }
+
+    const doc = new Document({
+      sections: [{ children }],
+    });
+
+    const buffer = await Packer.toBuffer(doc);
+    await fs.writeFile(finalPath, buffer);
+
+    const stats = await fs.stat(finalPath);
+    return `Word document created: ${finalPath} (${stats.size} bytes, ${lines.length} lines)`;
+  } catch (error) {
+    return `Error creating Word document: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 export async function listFiles(dirPath: string): Promise<string> {
   await ensureSandbox();
 
@@ -5461,6 +5592,12 @@ export async function executeTool(
       return readFile(input.path as string);
     case "write_file":
       return writeFile(input.path as string, input.content as string);
+    case "write_docx":
+      return writeDocx(
+        input.path as string,
+        input.content as string,
+        input.title as string | undefined
+      );
     case "list_files":
       return listFiles(input.path as string);
     case "calculate":
@@ -5832,7 +5969,12 @@ export function getAvailableTools(): Array<{
   description: string;
   parameters: Record<
     string,
-    { type: string; description: string; required?: boolean }
+    {
+      type: string;
+      description: string;
+      required?: boolean;
+      items?: { type: string };
+    }
   >;
 }> {
   return [
@@ -5931,6 +6073,29 @@ export function getAvailableTools(): Array<{
           type: "string",
           description: "Directory path to list",
           required: true,
+        },
+      },
+    },
+    {
+      name: "write_docx",
+      description:
+        "Create a Microsoft Word document (.docx) from text/markdown content. Use this instead of write_file when the user needs a document that opens in Word, Google Docs, or other office applications.",
+      parameters: {
+        path: {
+          type: "string",
+          description: "Path for the .docx file (extension added if missing)",
+          required: true,
+        },
+        content: {
+          type: "string",
+          description:
+            "Content to write. Supports markdown formatting: # headings, **bold**, *italic*, - bullet points",
+          required: true,
+        },
+        title: {
+          type: "string",
+          description: "Optional document title (appears at top, centered)",
+          required: false,
         },
       },
     },
@@ -6301,11 +6466,13 @@ export function getAvailableTools(): Array<{
         },
         toolsUsed: {
           type: "array",
+          items: { type: "string" },
           description: "List of tool names used during the task",
           required: true,
         },
         results: {
           type: "array",
+          items: { type: "string" },
           description: "List of results/outputs from each tool",
           required: true,
         },
@@ -6851,6 +7018,7 @@ export function getAvailableTools(): Array<{
         },
         params: {
           type: "array",
+          items: { type: "string" },
           description: "Query parameters for prepared statements",
           required: false,
         },
@@ -6895,6 +7063,7 @@ export function getAvailableTools(): Array<{
         },
         labels: {
           type: "array",
+          items: { type: "string" },
           description: "Labels to add to the issue",
           required: false,
         },
@@ -7047,6 +7216,7 @@ export function getAvailableTools(): Array<{
         },
         agentTypes: {
           type: "array",
+          items: { type: "string" },
           description:
             "Types of agents to include: 'code', 'research', 'sysadmin', 'data', 'reviewer'",
           required: false,
@@ -7098,6 +7268,7 @@ export function getAvailableTools(): Array<{
         },
         steps: {
           type: "array",
+          items: { type: "object" },
           description: "Array of tool calls to execute in sequence",
           required: true,
         },
@@ -7141,6 +7312,7 @@ export function getAvailableTools(): Array<{
         },
         memoryTypes: {
           type: "array",
+          items: { type: "string" },
           description:
             "Types of memory to search: episodic (experiences), semantic (facts), procedural (how-to)",
           required: false,
@@ -7194,6 +7366,7 @@ export function getAvailableTools(): Array<{
         },
         args: {
           type: "array",
+          items: { type: "string" },
           description: "Command arguments",
           required: false,
         },
@@ -7299,8 +7472,15 @@ export function getAvailableTools(): Array<{
         },
         toolsUsed: {
           type: "array",
-          description: "List of tools used in completing the task",
-          required: false,
+          items: { type: "string" },
+          description: "List of tool names used during the task",
+          required: true,
+        },
+        results: {
+          type: "array",
+          items: { type: "string" },
+          description: "List of results/outputs from each tool",
+          required: true,
         },
       },
     },

@@ -36,10 +36,37 @@ export async function initializeSelfEvolution(userId: number): Promise<string> {
   }
 }
 
-export async function indexMyCode(): Promise<string> {
+const INDEX_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+let lastIndexTime: number | null = null;
+let lastIndexStats: {
+  totalFiles: number;
+  totalSymbols: number;
+  languages: Record<string, number>;
+  lastIndexed: Date | null;
+} | null = null;
+
+export async function indexMyCode(forceReindex = false): Promise<string> {
   try {
     const codeMap = getCodeMap(RASPUTIN_PROJECT_PATH);
+
+    if (!forceReindex && lastIndexTime && lastIndexStats) {
+      const timeSinceLastIndex = Date.now() - lastIndexTime;
+      if (timeSinceLastIndex < INDEX_CACHE_TTL_MS) {
+        const minutesAgo = Math.round(timeSinceLastIndex / 60000);
+        return `Codebase already indexed (${minutesAgo} minutes ago):
+- Files: ${lastIndexStats.totalFiles}
+- Symbols: ${lastIndexStats.totalSymbols}
+- Languages: ${Object.entries(lastIndexStats.languages)
+          .map(([lang, count]) => `${lang}: ${count}`)
+          .join(", ")}
+- Last indexed: ${lastIndexStats.lastIndexed?.toISOString() || "recently"}
+(Use force_reindex=true to re-index)`;
+      }
+    }
+
     const stats = await codeMap.indexCodebase();
+    lastIndexTime = Date.now();
+    lastIndexStats = stats;
 
     return `Codebase indexed successfully:
 - Files: ${stats.totalFiles}
@@ -163,6 +190,49 @@ export async function suggestImprovement(): Promise<string> {
     return await api.suggestImprovement();
   } catch (error) {
     return `Failed to suggest improvements: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function comprehensiveIntrospection(): Promise<string> {
+  const sections: string[] = [];
+
+  try {
+    const [statusReport, capabilitiesReport, skillsReport, memStats] =
+      await Promise.all([
+        howAmIDoing().catch(() => "Unable to get status"),
+        whatCanIDo().catch(() => "Unable to list capabilities"),
+        listMySkills().catch(() => "Unable to list skills"),
+        getMemoryStatsForIntrospection().catch(
+          () => "Unable to get memory stats"
+        ),
+      ]);
+
+    sections.push("# Comprehensive Self-Assessment\n");
+    sections.push("## Status Report");
+    sections.push(statusReport);
+    sections.push("\n## Capabilities Summary");
+    sections.push(capabilitiesReport);
+    sections.push("\n## Active Skills");
+    sections.push(skillsReport);
+    sections.push("\n## Memory Statistics");
+    sections.push(memStats);
+
+    return sections.join("\n");
+  } catch (error) {
+    return `Failed comprehensive introspection: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function getMemoryStatsForIntrospection(): Promise<string> {
+  try {
+    const { getMemoryService } = await import("../memory");
+    const memoryService = getMemoryService();
+    const stats = await memoryService.getStats(1);
+    return `- Episodic memories: ${(stats as { episodic?: number }).episodic || 0}
+- Semantic memories: ${(stats as { semantic?: number }).semantic || 0}
+- Procedural memories: ${(stats as { procedural?: number }).procedural || 0}`;
+  } catch {
+    return "Memory service not available";
   }
 }
 
@@ -445,6 +515,12 @@ export function getSelfEvolutionTools(): Array<{
       parameters: {},
     },
     {
+      name: "self_comprehensive_introspection",
+      description:
+        "PREFERRED: Get a complete self-assessment combining status, capabilities, skills, and memory stats in ONE call. Use this instead of calling self_how_am_i_doing, self_what_can_i_do, and self_list_skills separately.",
+      parameters: {},
+    },
+    {
       name: "self_suggest_improvement",
       description:
         "Get suggestions for how I can improve based on my current state.",
@@ -592,6 +668,8 @@ export async function executeSelfEvolutionTool(
       return whatDoIKnow(input.topic as string);
     case "self_how_am_i_doing":
       return howAmIDoing();
+    case "self_comprehensive_introspection":
+      return comprehensiveIntrospection();
     case "self_suggest_improvement":
       return suggestImprovement();
     case "self_detect_gap":
