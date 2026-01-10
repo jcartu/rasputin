@@ -10,8 +10,15 @@ import * as path from "path";
 import { exec, spawn, ChildProcess } from "child_process";
 import { promisify } from "util";
 import { createHash } from "crypto";
+import {
+  executeInSandbox,
+  getSandboxStatus,
+  type SandboxConfig,
+} from "../sandbox";
 
 const execAsync = promisify(exec);
+
+const USE_SANDBOX = process.env.USE_SANDBOX !== "false";
 
 // Base directory for all workspaces
 const WORKSPACES_BASE =
@@ -797,25 +804,41 @@ export async function stopDevServer(
   }
 }
 
-/**
- * Execute a command in workspace
- */
 export async function executeCommand(
   userId: number,
   workspaceId: string,
   command: string,
-  timeout: number = 30000
+  timeout: number = 30000,
+  options?: { useSandbox?: boolean }
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const workspacePath = getWorkspacePath(userId, workspaceId);
+  const shouldUseSandbox = options?.useSandbox ?? USE_SANDBOX;
 
-  // Security: block dangerous commands
+  if (shouldUseSandbox) {
+    const status = await getSandboxStatus();
+    if (status.dockerAvailable) {
+      const sandboxConfig: SandboxConfig = {
+        timeoutMs: timeout,
+        workspacePath,
+        networkEnabled: false,
+      };
+
+      const result = await executeInSandbox(command, sandboxConfig);
+      return {
+        stdout: result.stdout,
+        stderr: result.stderr + (result.error ? `\n${result.error}` : ""),
+        exitCode: result.exitCode,
+      };
+    }
+  }
+
   const blockedPatterns = [
-    /rm\s+-rf\s+\//, // rm -rf /
-    /sudo/, // sudo
-    /chmod\s+777/, // chmod 777
-    />\s*\/etc/, // writing to /etc
-    /curl.*\|.*sh/, // curl | sh
-    /wget.*\|.*sh/, // wget | sh
+    /rm\s+-rf\s+\//,
+    /sudo/,
+    /chmod\s+777/,
+    />\s*\/etc/,
+    /curl.*\|.*sh/,
+    /wget.*\|.*sh/,
   ];
 
   for (const pattern of blockedPatterns) {
@@ -832,15 +855,21 @@ export async function executeCommand(
     const { stdout, stderr } = await execAsync(command, {
       cwd: workspacePath,
       timeout,
-      maxBuffer: 10 * 1024 * 1024, // 10MB
+      maxBuffer: 10 * 1024 * 1024,
     });
 
     return { stdout, stderr, exitCode: 0 };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const execError = error as {
+      stdout?: string;
+      stderr?: string;
+      message?: string;
+      code?: number;
+    };
     return {
-      stdout: error.stdout || "",
-      stderr: error.stderr || error.message,
-      exitCode: error.code || 1,
+      stdout: execError.stdout || "",
+      stderr: execError.stderr || execError.message || "",
+      exitCode: execError.code || 1,
     };
   }
 }
