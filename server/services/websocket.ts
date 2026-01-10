@@ -615,7 +615,11 @@ async function handleJarvisTask(
           throw error;
         }
       },
-      { memoryContext: memoryPromptAddition }
+      {
+        memoryContext: memoryPromptAddition,
+        userId,
+        enableMemoryInjection: true,
+      }
     );
   } catch (error) {
     hasError = true;
