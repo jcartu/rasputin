@@ -474,17 +474,136 @@ function extractImageUrl(output: string): string | null {
   return null;
 }
 
+function FileWritePreview({
+  output,
+  input,
+}: {
+  output: string;
+  input?: string;
+}) {
+  const pathMatch = output.match(/File written.*?:\s*([^\s(]+)/i);
+  const filePath = pathMatch?.[1];
+
+  let parsedInput: { path?: string; content?: string } | null = null;
+  try {
+    parsedInput = input ? JSON.parse(input) : null;
+  } catch {
+    parsedInput = null;
+  }
+
+  const inputPath = parsedInput?.path;
+  const finalPath = filePath || inputPath;
+
+  if (!finalPath) {
+    return (
+      <pre className="mt-1 p-2 rounded bg-muted/50 text-xs overflow-x-auto max-h-48 whitespace-pre-wrap">
+        {output}
+      </pre>
+    );
+  }
+
+  const filename = finalPath.split("/").pop() || finalPath;
+  const relativePath = finalPath.startsWith("/tmp/jarvis-workspace/")
+    ? finalPath.replace("/tmp/jarvis-workspace/", "")
+    : finalPath.startsWith("/tmp/")
+      ? finalPath.replace("/tmp/", "")
+      : finalPath.startsWith("/")
+        ? finalPath.substring(1)
+        : finalPath;
+  const downloadUrl = `/api/files/workspace/${relativePath}`;
+
+  const isHtml = filename.endsWith(".html");
+  const isPdf = filename.endsWith(".pdf");
+  const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(filename);
+
+  const iconColor = isPdf
+    ? "text-red-400"
+    : isHtml
+      ? "text-cyan-400"
+      : "text-green-400";
+  const bgColor = isPdf
+    ? "bg-red-500/10 border-red-500/20"
+    : isHtml
+      ? "bg-cyan-500/10 border-cyan-500/20"
+      : "bg-green-500/10 border-green-500/20";
+
+  return (
+    <div className={`mt-2 p-3 rounded ${bgColor} border space-y-3`}>
+      <div className="flex items-center gap-2">
+        <FileText className={`h-5 w-5 ${iconColor}`} />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate">{filename}</p>
+          <p className="text-xs text-muted-foreground truncate">{finalPath}</p>
+        </div>
+      </div>
+
+      {isHtml && parsedInput?.content && (
+        <div className="border border-border/50 rounded overflow-hidden">
+          <iframe
+            srcDoc={parsedInput.content}
+            className="w-full h-64 bg-white"
+            sandbox="allow-scripts"
+            title={filename}
+          />
+        </div>
+      )}
+
+      {isImage && (
+        <img
+          src={downloadUrl}
+          alt={filename}
+          className="max-w-full max-h-64 rounded object-contain"
+        />
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="sm" className="gap-1.5" asChild>
+          <a href={downloadUrl} download={filename}>
+            <Download className="h-3.5 w-3.5" />
+            Download
+          </a>
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => {
+            navigator.clipboard.writeText(
+              `${window.location.origin}${downloadUrl}`
+            );
+          }}
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          Copy Link
+        </Button>
+        <Button variant="outline" size="sm" className="gap-1.5" asChild>
+          <a href={downloadUrl} target="_blank" rel="noopener noreferrer">
+            <Maximize2 className="h-3.5 w-3.5" />
+            Open
+          </a>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // Main Preview Component
 export function ToolOutputPreview({
   toolName,
   output,
-  input: _input,
+  input,
 }: ToolOutputPreviewProps) {
+  if (
+    toolName === "write_file" &&
+    output.toLowerCase().includes("file written")
+  ) {
+    return <FileWritePreview output={output} input={input} />;
+  }
+
   const fileInfo = detectFileType(output, toolName);
 
   switch (fileInfo.type) {
     case "image": {
-      // For generate_image tool, extract the URL from the formatted output
       const imageUrl =
         toolName === "generate_image"
           ? extractImageUrl(output) || output.trim()
@@ -520,7 +639,6 @@ export function ToolOutputPreview({
       return <UrlPreview url={output.trim()} />;
 
     default:
-      // Default text preview
       return (
         <pre className="mt-1 p-2 rounded bg-muted/50 text-xs overflow-x-auto max-h-48 whitespace-pre-wrap">
           {output}

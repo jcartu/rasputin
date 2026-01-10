@@ -79,6 +79,7 @@ import { ToolOutputPreview } from "@/components/ToolOutputPreview";
 import { HostsManager } from "@/components/HostsManager";
 import { ApprovalBadge, ApprovalWorkflow } from "@/components/ApprovalWorkflow";
 import { ExportMenu } from "@/components/ExportMenu";
+import { VoiceConversation } from "@/components/VoiceConversation";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -424,6 +425,39 @@ function AgentMessageView({
   isLive?: boolean;
 }) {
   const isUser = message.role === "user";
+  const [isSpeakingThis, setIsSpeakingThis] = useState(false);
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(
+    null
+  );
+  const ttsMutation = trpc.voice.textToSpeech.useMutation();
+
+  const handleSpeak = useCallback(async () => {
+    if (!message.content) return;
+
+    if (isSpeakingThis && audioElement) {
+      audioElement.pause();
+      setAudioElement(null);
+      setIsSpeakingThis(false);
+      return;
+    }
+
+    try {
+      setIsSpeakingThis(true);
+      const result = await ttsMutation.mutateAsync({
+        text: message.content.slice(0, 4000),
+      });
+      const audio = new Audio(`data:${result.mimeType};base64,${result.audio}`);
+      setAudioElement(audio);
+      audio.onended = () => {
+        setIsSpeakingThis(false);
+        setAudioElement(null);
+      };
+      await audio.play();
+    } catch {
+      toast.error("Failed to generate speech");
+      setIsSpeakingThis(false);
+    }
+  }, [message.content, isSpeakingThis, audioElement, ttsMutation]);
 
   return (
     <div
@@ -462,8 +496,23 @@ function AgentMessageView({
               />
             ))}
             {message.content && (
-              <div className="p-4 rounded-lg bg-muted/30 text-foreground prose prose-sm prose-invert max-w-none">
-                <pre className="whitespace-pre-wrap font-sans text-sm">
+              <div className="relative p-4 rounded-lg bg-muted/30 text-foreground prose prose-sm prose-invert max-w-none">
+                <div className="absolute top-2 right-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={handleSpeak}
+                    title={isSpeakingThis ? "Stop speaking" : "Read aloud"}
+                  >
+                    {isSpeakingThis ? (
+                      <VolumeX className="h-4 w-4 text-purple-400" />
+                    ) : (
+                      <Volume2 className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <pre className="whitespace-pre-wrap font-sans text-sm pr-8">
                   {message.content}
                 </pre>
               </div>
@@ -993,15 +1042,9 @@ export default function AgentPage() {
   // Voice mode state
   const [voiceMode, setVoiceMode] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, _setIsSpeaking] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceMuted, setVoiceMuted] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(false);
-  const [_audioLevel, _setAudioLevel] = useState(0);
-  const _mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const _audioChunksRef = useRef<Blob[]>([]);
-  const _audioContextRef = useRef<AudioContext | null>(null);
-  const _analyserRef = useRef<AnalyserNode | null>(null);
-  const _audioElementRef = useRef<HTMLAudioElement | null>(null);
 
   const jarvisStream = useJarvisStream();
   const [useStreamingMode, setUseStreamingMode] = useState(true);
@@ -1603,68 +1646,27 @@ export default function AgentPage() {
 
           <TabsContent value="voice" className="flex-1 m-0">
             <div className="p-4 space-y-4">
-              <div className="text-center py-4">
-                <div className="relative inline-block">
-                  <div
-                    className={cn(
-                      "w-24 h-24 rounded-full flex items-center justify-center transition-all",
-                      voiceMode ? "bg-purple-500/20 animate-pulse" : "bg-muted"
-                    )}
-                  >
-                    {isListening ? (
-                      <Mic className="h-10 w-10 text-red-400 animate-pulse" />
-                    ) : isSpeaking ? (
-                      <Volume2 className="h-10 w-10 text-purple-400 animate-pulse" />
-                    ) : (
-                      <Mic className="h-10 w-10 text-muted-foreground" />
-                    )}
-                  </div>
-                  {voiceMode && (
-                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-background" />
-                  )}
-                </div>
-                <h3 className="font-semibold mt-4 mb-2">Voice Mode</h3>
+              <div className="text-center">
+                <h3 className="font-semibold mb-2">Voice Mode</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  {voiceMode
-                    ? "Voice mode active - speak to JARVIS"
-                    : "Enable voice for hands-free interaction"}
+                  Press the microphone to talk to JARVIS
                 </p>
-                <div className="flex items-center justify-center gap-2">
-                  <Button
-                    variant={voiceMode ? "destructive" : "default"}
-                    onClick={() => {
-                      setVoiceMode(!voiceMode);
-                      toast.success(
-                        voiceMode ? "Voice mode disabled" : "Voice mode enabled"
-                      );
-                    }}
-                  >
-                    {voiceMode ? (
-                      <>
-                        <MicOff className="h-4 w-4 mr-2" />
-                        Disable Voice
-                      </>
-                    ) : (
-                      <>
-                        <Mic className="h-4 w-4 mr-2" />
-                        Enable Voice
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setVoiceMuted(!voiceMuted)}
-                    className={voiceMuted ? "text-red-400" : ""}
-                  >
-                    {voiceMuted ? (
-                      <VolumeX className="h-4 w-4" />
-                    ) : (
-                      <Volume2 className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
               </div>
+
+              <VoiceConversation
+                onTranscription={text => {
+                  setInput(text);
+                  setIsListening(false);
+                  toast.success("Transcribed: " + text.slice(0, 50) + "...");
+                  setTimeout(() => {
+                    handleSubmit();
+                  }, 500);
+                }}
+                onSpeakingStart={() => setIsSpeaking(true)}
+                onSpeakingEnd={() => setIsSpeaking(false)}
+                autoSpeak={autoSpeak}
+              />
+
               <Separator />
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
@@ -1695,10 +1697,6 @@ export default function AgentPage() {
                   >
                     {autoSpeak ? "On" : "Off"}
                   </Button>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Wake Word</span>
-                  <Badge variant="outline">"Hey JARVIS"</Badge>
                 </div>
               </div>
             </div>

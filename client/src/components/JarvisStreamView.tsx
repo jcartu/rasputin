@@ -24,6 +24,9 @@ import {
   FileDown,
   FileJson,
   Printer,
+  ExternalLink,
+  Link,
+  File,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -329,6 +332,15 @@ function ProgressIndicator({
   );
 }
 
+type Artifact = {
+  type: string;
+  url?: string;
+  content?: string;
+  path?: string;
+  filename?: string;
+  downloadUrl?: string;
+};
+
 function CompletionCard({
   summary,
   success,
@@ -338,7 +350,7 @@ function CompletionCard({
   summary: string | null;
   success: boolean;
   durationMs: number | null;
-  artifacts?: Array<{ type: string; url?: string; content?: string }>;
+  artifacts?: Artifact[];
 }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(
@@ -553,6 +565,65 @@ function CompletionCard({
                             className="max-w-full rounded-lg"
                           />
                         )}
+                        {artifact.type === "pdf" && artifact.downloadUrl && (
+                          <div className="flex items-center gap-3 p-2">
+                            <File className="h-8 w-8 text-red-400" />
+                            <span className="text-sm font-medium">
+                              {artifact.filename || "document.pdf"}
+                            </span>
+                          </div>
+                        )}
+                        {artifact.type === "file" && (
+                          <div className="flex items-center gap-3 p-2">
+                            <FileText className="h-8 w-8 text-muted-foreground" />
+                            <span className="text-sm font-medium">
+                              {artifact.filename || "file"}
+                            </span>
+                          </div>
+                        )}
+                        {artifact.downloadUrl && (
+                          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
+                              onClick={() => {
+                                const a = document.createElement("a");
+                                a.href = artifact.downloadUrl!;
+                                a.download = artifact.filename || "download";
+                                a.click();
+                                toast.success("Download started");
+                              }}
+                            >
+                              <Download className="h-4 w-4" />
+                              Download
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
+                              onClick={() => {
+                                const url = `${window.location.origin}${artifact.downloadUrl}`;
+                                navigator.clipboard.writeText(url);
+                                toast.success("Link copied to clipboard");
+                              }}
+                            >
+                              <Link className="h-4 w-4" />
+                              Copy Link
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
+                              onClick={() => {
+                                window.open(artifact.downloadUrl!, "_blank");
+                              }}
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                              Open
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -642,10 +713,46 @@ export function JarvisStreamView({
         typeof t.input === "object" &&
         "path" in t.input
       ) {
-        const path = String((t.input as Record<string, unknown>).path);
-        if (path.endsWith(".html")) {
-          const content = (t.input as Record<string, unknown>).content;
-          if (typeof content === "string") return { type: "html", content };
+        const filePath = String((t.input as Record<string, unknown>).path);
+        const content = (t.input as Record<string, unknown>).content;
+        const filename = filePath.split("/").pop() || filePath;
+        const relativePath = filePath.startsWith("/tmp/jarvis-workspace/")
+          ? filePath.replace("/tmp/jarvis-workspace/", "")
+          : filePath.startsWith("/")
+            ? filePath.substring(1)
+            : filePath;
+        const downloadUrl = `/api/files/workspace/${relativePath}`;
+
+        if (filePath.endsWith(".html")) {
+          if (typeof content === "string") {
+            return {
+              type: "html",
+              content,
+              path: filePath,
+              filename,
+              downloadUrl,
+            };
+          }
+        } else if (filePath.endsWith(".pdf")) {
+          return { type: "pdf", path: filePath, filename, downloadUrl };
+        } else if (filePath.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i)) {
+          return {
+            type: "image",
+            url: downloadUrl,
+            path: filePath,
+            filename,
+            downloadUrl,
+          };
+        } else if (filePath.match(/\.(mp4|webm|mov)$/i)) {
+          return {
+            type: "video",
+            url: downloadUrl,
+            path: filePath,
+            filename,
+            downloadUrl,
+          };
+        } else {
+          return { type: "file", path: filePath, filename, downloadUrl };
         }
       }
       return null;
