@@ -2603,3 +2603,84 @@ export const asyncTaskLogs = mysqlTable("asyncTaskLogs", {
 
 export type AsyncTaskLog = typeof asyncTaskLogs.$inferSelect;
 export type InsertAsyncTaskLog = typeof asyncTaskLogs.$inferInsert;
+
+export const dynamicTools = mysqlTable("dynamic_tools", {
+  id: int("id").autoincrement().primaryKey(),
+
+  userId: int("user_id").notNull(),
+
+  name: varchar("name", { length: 100 }).notNull(),
+
+  description: text("description").notNull(),
+
+  parameters: json("parameters")
+    .$type<
+      Record<string, { type: string; description: string; required?: boolean }>
+    >()
+    .notNull(),
+
+  implementation: text("implementation").notNull(),
+
+  testCases:
+    json("test_cases").$type<
+      Array<{ input: Record<string, unknown>; expectedPattern: string }>
+    >(),
+
+  isActive: int("is_active").notNull().default(1),
+
+  usageCount: int("usage_count").notNull().default(0),
+
+  lastUsedAt: timestamp("last_used_at"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type DynamicTool = typeof dynamicTools.$inferSelect;
+export type InsertDynamicTool = typeof dynamicTools.$inferInsert;
+
+export const dynamicAgentTypes = mysqlTable("dynamic_agent_types", {
+  id: int("id").autoincrement().primaryKey(),
+
+  userId: int("user_id").notNull(),
+
+  typeName: varchar("type_name", { length: 50 }).notNull(),
+
+  displayName: varchar("display_name", { length: 100 }),
+
+  systemPrompt: text("system_prompt").notNull(),
+
+  capabilities: json("capabilities").$type<{
+    canBrowse?: boolean;
+    canCode?: boolean;
+    canSearchWeb?: boolean;
+    canUseFiles?: boolean;
+    canRunShell?: boolean;
+    canSSH?: boolean;
+    canManageInfrastructure?: boolean;
+    canDelegateToSubAgents?: boolean;
+    canLearn?: boolean;
+    domains?: string[];
+  }>(),
+
+  toolRestrictions: json("tool_restrictions").$type<{
+    allowed?: string[];
+    forbidden?: string[];
+  }>(),
+
+  proposedReason: text("proposed_reason"),
+
+  triggerPatterns: json("trigger_patterns").$type<string[]>(),
+
+  usageCount: int("usage_count").notNull().default(0),
+
+  successRate: decimal("success_rate", { precision: 5, scale: 2 }),
+
+  isActive: int("is_active").notNull().default(1),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type DynamicAgentType = typeof dynamicAgentTypes.$inferSelect;
+export type InsertDynamicAgentType = typeof dynamicAgentTypes.$inferInsert;

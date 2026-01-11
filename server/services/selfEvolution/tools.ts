@@ -15,6 +15,22 @@ import {
   initializeIntrospectionAPI,
   getIntrospectionAPI,
 } from "./introspection";
+import {
+  generateToolFromDescription,
+  validateGeneratedTool,
+  testGeneratedTool,
+  registerDynamicTool,
+  listDynamicTools,
+  deactivateDynamicTool,
+} from "./toolGenerator";
+import {
+  analyzeTaskPatterns,
+  shouldProposeNewAgentType,
+  generateAgentType,
+  registerAgentType,
+  listDynamicAgentTypes,
+  deactivateDynamicAgentType,
+} from "./agentTypeGenerator";
 
 const RASPUTIN_PROJECT_PATH =
   process.env.RASPUTIN_PROJECT_PATH || "/home/josh/rasputin";
@@ -641,6 +657,82 @@ export function getSelfEvolutionTools(): Array<{
       description: "View history of all self-modifications I have made.",
       parameters: {},
     },
+    {
+      name: "self_generate_tool",
+      description:
+        "Generate a new tool from a natural language description. The tool will be validated and tested in a sandbox before being registered for use. This is how JARVIS can extend its own capabilities dynamically.",
+      parameters: {
+        description: {
+          type: "string",
+          description:
+            "Natural language description of what the tool should do (e.g., 'check if a website is up and return the status code')",
+          required: true,
+        },
+        exampleUsage: {
+          type: "string",
+          description:
+            "Optional example of how the tool would be used (e.g., 'check_website_status(url=\"https://google.com\")')",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "self_list_dynamic_tools",
+      description:
+        "List all dynamically generated tools that have been created.",
+      parameters: {},
+    },
+    {
+      name: "self_deactivate_tool",
+      description: "Deactivate a dynamically generated tool by name.",
+      parameters: {
+        toolName: {
+          type: "string",
+          description: "Name of the dynamic tool to deactivate",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "self_analyze_task_patterns",
+      description:
+        "Analyze recent task history to identify patterns that might warrant a new specialized agent type.",
+      parameters: {
+        lookbackDays: {
+          type: "number",
+          description: "Number of days of task history to analyze (default: 7)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "self_propose_agent_type",
+      description:
+        "Analyze task patterns and propose a new specialized agent type if warranted. This creates a new kind of agent with specific capabilities and domain expertise.",
+      parameters: {
+        lookbackDays: {
+          type: "number",
+          description: "Number of days of task history to analyze (default: 7)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "self_list_agent_types",
+      description: "List all dynamically created agent types.",
+      parameters: {},
+    },
+    {
+      name: "self_deactivate_agent_type",
+      description: "Deactivate a dynamically created agent type by name.",
+      parameters: {
+        typeName: {
+          type: "string",
+          description: "Name of the agent type to deactivate",
+          required: true,
+        },
+      },
+    },
   ];
 }
 
@@ -701,7 +793,215 @@ export async function executeSelfEvolutionTool(
       return applyCodeChange(input.specId as string);
     case "self_modification_history":
       return getModificationHistory();
+    case "self_generate_tool":
+      return generateNewTool(
+        input.description as string,
+        input.exampleUsage as string | undefined,
+        userId
+      );
+    case "self_list_dynamic_tools":
+      return listMyDynamicTools(userId);
+    case "self_deactivate_tool":
+      return deactivateMyTool(input.toolName as string, userId);
+    case "self_analyze_task_patterns":
+      return analyzeMyTaskPatterns(
+        userId,
+        input.lookbackDays as number | undefined
+      );
+    case "self_propose_agent_type":
+      return proposeNewAgentType(
+        userId,
+        input.lookbackDays as number | undefined
+      );
+    case "self_list_agent_types":
+      return listMyAgentTypes(userId);
+    case "self_deactivate_agent_type":
+      return deactivateMyAgentType(input.typeName as string, userId);
     default:
       return `Unknown self-evolution tool: ${name}`;
+  }
+}
+
+async function generateNewTool(
+  description: string,
+  exampleUsage: string | undefined,
+  userId: number
+): Promise<string> {
+  try {
+    const tool = await generateToolFromDescription(description, exampleUsage);
+
+    const validation = validateGeneratedTool(tool);
+    if (!validation.valid) {
+      return `Tool generation failed validation:\n${validation.errors.join("\n")}`;
+    }
+
+    const testResult = await testGeneratedTool(tool);
+    if (!testResult.success) {
+      return `Tool generated but failed testing:\n${testResult.error}`;
+    }
+
+    const registration = await registerDynamicTool(tool, userId);
+    if (!registration.success) {
+      return `Tool generated and tested but failed to register:\n${registration.error}`;
+    }
+
+    let result = `Tool "${tool.name}" successfully created and registered!\n\n`;
+    result += `**Description**: ${tool.description}\n`;
+    result += `**Parameters**:\n`;
+    for (const [paramName, param] of Object.entries(tool.parameters)) {
+      result += `  - ${paramName} (${param.type}${param.required ? ", required" : ""}): ${param.description}\n`;
+    }
+    result += `\n**Test Result**: ${testResult.output?.substring(0, 200) || "Passed"}\n`;
+
+    if (validation.warnings.length > 0) {
+      result += `\n**Warnings**:\n${validation.warnings.map(w => `  - ${w}`).join("\n")}`;
+    }
+
+    result += `\nThe tool is now available and can be used immediately.`;
+
+    return result;
+  } catch (error) {
+    return `Failed to generate tool: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function listMyDynamicTools(userId: number): Promise<string> {
+  try {
+    const tools = await listDynamicTools(userId);
+
+    if (tools.length === 0) {
+      return "No dynamic tools have been created yet. Use self_generate_tool to create new tools.";
+    }
+
+    let result = `## Dynamic Tools (${tools.length})\n\n`;
+    for (const tool of tools) {
+      result += `- **${tool.name}**: ${tool.description}\n`;
+      result += `  Used: ${tool.usageCount} times | Created: ${tool.createdAt?.toLocaleDateString() || "unknown"}\n\n`;
+    }
+
+    return result;
+  } catch (error) {
+    return `Failed to list dynamic tools: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function deactivateMyTool(
+  toolName: string,
+  userId: number
+): Promise<string> {
+  try {
+    const success = await deactivateDynamicTool(toolName, userId);
+    if (success) {
+      return `Tool "${toolName}" has been deactivated and is no longer available.`;
+    }
+    return `Failed to deactivate tool "${toolName}". It may not exist or you may not have permission.`;
+  } catch (error) {
+    return `Error deactivating tool: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function analyzeMyTaskPatterns(
+  userId: number,
+  lookbackDays?: number
+): Promise<string> {
+  try {
+    const patterns = await analyzeTaskPatterns(userId, lookbackDays || 7);
+
+    if (patterns.length === 0) {
+      return "No significant task patterns found in the specified time period.";
+    }
+
+    let result = `## Task Pattern Analysis (last ${lookbackDays || 7} days)\n\n`;
+    for (const pattern of patterns) {
+      result += `### ${pattern.domain}\n`;
+      result += `- Frequency: ${pattern.frequency} tasks\n`;
+      result += `- Success Rate: ${pattern.averageSuccessRate.toFixed(0)}%\n`;
+      result += `- Tools Used: ${pattern.toolsUsed.slice(0, 5).join(", ")}\n`;
+      result += `- Common Terms: ${pattern.commonPromptPatterns.slice(0, 5).join(", ")}\n\n`;
+    }
+
+    return result;
+  } catch (error) {
+    return `Failed to analyze patterns: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function proposeNewAgentType(
+  userId: number,
+  lookbackDays?: number
+): Promise<string> {
+  try {
+    const patterns = await analyzeTaskPatterns(userId, lookbackDays || 7);
+
+    if (patterns.length === 0) {
+      return "No task patterns found. Run more tasks before proposing new agent types.";
+    }
+
+    const proposal = await shouldProposeNewAgentType(patterns);
+
+    if (!proposal.propose) {
+      return `No new agent type needed at this time.\nReason: ${proposal.rationale}`;
+    }
+
+    const generatedType = await generateAgentType(patterns);
+
+    if (!generatedType) {
+      return "Pattern analysis suggested a new agent type, but generation failed.";
+    }
+
+    const registration = await registerAgentType(generatedType, userId);
+
+    if (!registration.success) {
+      return `Agent type generated but failed to register: ${registration.error}`;
+    }
+
+    let result = `New agent type "${generatedType.displayName}" created!\n\n`;
+    result += `**Type Name**: ${generatedType.typeName}\n`;
+    result += `**System Prompt**: ${generatedType.systemPrompt.substring(0, 200)}...\n`;
+    result += `**Capabilities**:\n`;
+    for (const [cap, enabled] of Object.entries(generatedType.capabilities)) {
+      if (enabled) result += `  - ${cap}\n`;
+    }
+    result += `\n**Reason**: ${generatedType.proposedReason}\n`;
+    result += `\nThis agent type is now available for use.`;
+
+    return result;
+  } catch (error) {
+    return `Failed to propose agent type: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function listMyAgentTypes(userId: number): Promise<string> {
+  try {
+    const types = await listDynamicAgentTypes(userId);
+
+    if (types.length === 0) {
+      return "No dynamic agent types have been created yet. Use self_propose_agent_type to create new agent types based on your task patterns.";
+    }
+
+    let result = `## Dynamic Agent Types (${types.length})\n\n`;
+    for (const type of types) {
+      result += `- **${type.displayName}** (${type.typeName})\n`;
+      result += `  Used: ${type.usageCount} times | Success: ${type.successRate?.toFixed(0) || "N/A"}% | Created: ${type.createdAt?.toLocaleDateString() || "unknown"}\n\n`;
+    }
+
+    return result;
+  } catch (error) {
+    return `Failed to list agent types: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function deactivateMyAgentType(
+  typeName: string,
+  userId: number
+): Promise<string> {
+  try {
+    const success = await deactivateDynamicAgentType(typeName, userId);
+    if (success) {
+      return `Agent type "${typeName}" has been deactivated and is no longer available.`;
+    }
+    return `Failed to deactivate agent type "${typeName}". It may not exist or you may not have permission.`;
+  } catch (error) {
+    return `Error deactivating agent type: ${error instanceof Error ? error.message : String(error)}`;
   }
 }

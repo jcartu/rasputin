@@ -61,6 +61,12 @@ import {
 } from "docx";
 import PptxGenJS from "pptxgenjs";
 import ExcelJS from "exceljs";
+import {
+  getDynamicTools,
+  isDynamicTool,
+  executeDynamicTool,
+  loadDynamicToolsFromDatabase,
+} from "../selfEvolution/toolGenerator";
 
 const execAsync = promisify(exec);
 const USE_DOCKER_SANDBOX = process.env.USE_SANDBOX !== "false";
@@ -6485,6 +6491,9 @@ export async function executeTool(
       if (name.startsWith("self_")) {
         return executeSelfEvolutionTool(name, input, input.userId as number);
       }
+      if (isDynamicTool(name)) {
+        return executeDynamicTool(name, input);
+      }
       return `Unknown tool: ${name}`;
   }
 }
@@ -8291,5 +8300,14 @@ export function getAvailableTools(): Array<{
         },
       },
     },
+    ...getDynamicTools().map(tool => ({
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
+    })),
   ];
+}
+
+export async function initializeDynamicTools(): Promise<number> {
+  return loadDynamicToolsFromDatabase();
 }
