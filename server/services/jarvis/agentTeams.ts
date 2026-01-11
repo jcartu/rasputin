@@ -298,44 +298,20 @@ Example: If analyst needs researcher's data, set dependsOn: ["subtask-0"].`;
     messages: [
       {
         role: "system",
-        content:
-          "You are a task planning assistant. Respond only with valid JSON.",
+        content: `You are a task planning assistant. Respond only with valid JSON in this exact format:
+{
+  "subtasks": [
+    {
+      "assignedAgent": "researcher" | "analyst" | "coder" | "writer",
+      "description": "task description",
+      "dependsOn": ["subtask-0"] // optional, array of task IDs this depends on
+    }
+  ]
+}`,
       },
       { role: "user", content: planningPrompt },
     ],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "subtask_plan",
-        strict: true,
-        schema: {
-          type: "object",
-          properties: {
-            subtasks: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  assignedAgent: {
-                    type: "string",
-                    enum: ["researcher", "analyst", "coder", "writer"],
-                  },
-                  description: { type: "string" },
-                  dependsOn: {
-                    type: "array",
-                    items: { type: "string" },
-                  },
-                },
-                required: ["assignedAgent", "description"],
-                additionalProperties: false,
-              },
-            },
-          },
-          required: ["subtasks"],
-          additionalProperties: false,
-        },
-      },
-    },
+    response_format: { type: "json_object" },
   });
 
   const content = response.choices[0]?.message?.content;

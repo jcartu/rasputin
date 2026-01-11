@@ -203,16 +203,24 @@ let activeDebugSession: string | null = null;
 // Perplexity API for web search
 const SONAR_API_KEY = process.env.SONAR_API_KEY || "";
 
-// Sandbox directory for JARVIS operations - use /tmp for cross-platform compatibility
 const JARVIS_SANDBOX = process.env.JARVIS_SANDBOX || "/tmp/jarvis-workspace";
 
-// Ensure sandbox directory exists
 async function ensureSandbox(): Promise<void> {
   try {
     await fs.mkdir(JARVIS_SANDBOX, { recursive: true });
   } catch {
     // Directory may already exist
   }
+}
+
+function resolveSandboxPath(filePath: string): string {
+  if (filePath === "/workspace" || filePath.startsWith("/workspace/")) {
+    return path.join(JARVIS_SANDBOX, filePath.replace(/^\/workspace\/?/, ""));
+  }
+  if (filePath.startsWith("/")) {
+    return filePath;
+  }
+  return path.join(JARVIS_SANDBOX, filePath);
 }
 
 async function perplexitySearch(query: string): Promise<string> {
@@ -665,10 +673,7 @@ export async function runShell(command: string): Promise<string> {
 export async function readFile(filePath: string): Promise<string> {
   await ensureSandbox();
 
-  // Resolve path relative to sandbox
-  const resolvedPath = filePath.startsWith("/")
-    ? filePath
-    : path.join(JARVIS_SANDBOX, filePath);
+  const resolvedPath = resolveSandboxPath(filePath);
 
   try {
     const content = await fs.readFile(resolvedPath, "utf-8");
@@ -690,9 +695,7 @@ export async function writeFile(
 ): Promise<string> {
   await ensureSandbox();
 
-  const resolvedPath = filePath.startsWith("/")
-    ? filePath
-    : path.join(JARVIS_SANDBOX, filePath);
+  const resolvedPath = resolveSandboxPath(filePath);
 
   try {
     await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
@@ -717,9 +720,7 @@ export async function writeDocx(
 ): Promise<string> {
   await ensureSandbox();
 
-  const resolvedPath = filePath.startsWith("/")
-    ? filePath
-    : path.join(JARVIS_SANDBOX, filePath);
+  const resolvedPath = resolveSandboxPath(filePath);
 
   const finalPath = resolvedPath.endsWith(".docx")
     ? resolvedPath
@@ -845,9 +846,7 @@ export async function writePptx(
 ): Promise<string> {
   await ensureSandbox();
 
-  const resolvedPath = filePath.startsWith("/")
-    ? filePath
-    : path.join(JARVIS_SANDBOX, filePath);
+  const resolvedPath = resolveSandboxPath(filePath);
 
   const finalPath = resolvedPath.endsWith(".pptx")
     ? resolvedPath
@@ -1088,9 +1087,7 @@ export async function writeXlsx(
 ): Promise<string> {
   await ensureSandbox();
 
-  const resolvedPath = filePath.startsWith("/")
-    ? filePath
-    : path.join(JARVIS_SANDBOX, filePath);
+  const resolvedPath = resolveSandboxPath(filePath);
 
   const finalPath = resolvedPath.endsWith(".xlsx")
     ? resolvedPath
@@ -1225,10 +1222,7 @@ export async function writeXlsx(
 export async function listFiles(dirPath: string): Promise<string> {
   await ensureSandbox();
 
-  // Resolve path relative to sandbox
-  const resolvedPath = dirPath.startsWith("/")
-    ? dirPath
-    : path.join(JARVIS_SANDBOX, dirPath);
+  const resolvedPath = resolveSandboxPath(dirPath);
 
   try {
     const entries = await fs.readdir(resolvedPath, { withFileTypes: true });
@@ -8297,6 +8291,26 @@ export function getAvailableTools(): Array<{
           description:
             "Research depth (1=quick, 2=standard, 3=thorough). Default: 2",
           required: false,
+        },
+      },
+    },
+    {
+      name: "task_complete",
+      description:
+        "Signal that the task is complete. Call this when you have finished the requested task and want to provide a final summary. IMPORTANT: You MUST call this tool when the task is done.",
+      parameters: {
+        summary: {
+          type: "string",
+          description:
+            "A comprehensive summary of what was accomplished, including key results and any files created",
+          required: true,
+        },
+        artifacts: {
+          type: "array",
+          description:
+            "Optional array of artifact objects (files, outputs) created during the task",
+          required: false,
+          items: { type: "object" },
         },
       },
     },

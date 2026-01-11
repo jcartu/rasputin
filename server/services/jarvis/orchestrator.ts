@@ -362,10 +362,12 @@ const TOOL_ALTERNATIVES: Record<string, string[]> = {
   npm_audit: ["security_analysis", "execute_shell"],
 };
 
+const MAX_IDENTICAL_CALLS_PER_APPROACH = 2;
+
 interface ToolExecutionContext {
   failedTools: Map<string, number>;
   lastToolOutputs: Map<string, string>;
-  attemptedCalls: Set<string>;
+  attemptedCalls: Map<string, number>;
   tokenEstimate: number;
   tokenBudget: number;
   consecutiveFailures: number;
@@ -657,14 +659,15 @@ async function executeToolsInParallel(
     const parallelResults = await Promise.all(
       parallelizable.map(async tc => {
         const callHash = hashToolCall(tc.name, tc.input);
-        if (executionContext.attemptedCalls.has(callHash)) {
+        const callCount = executionContext.attemptedCalls.get(callHash) || 0;
+        if (callCount >= MAX_IDENTICAL_CALLS_PER_APPROACH) {
           return {
             tc,
-            output: `[Skipped] Identical call to "${tc.name}" was already attempted this session.`,
+            output: `[Skipped] Identical call to "${tc.name}" was already attempted ${callCount} times this approach. Try a different approach.`,
             isError: true,
           };
         }
-        executionContext.attemptedCalls.add(callHash);
+        executionContext.attemptedCalls.set(callHash, callCount + 1);
 
         try {
           const output = await executeToolFn(tc.name, tc.input);
@@ -748,14 +751,15 @@ async function executeSingleTool(
   validation?: ToolValidationResult;
 }> {
   const callHash = hashToolCall(tc.name, tc.input);
-  if (executionContext.attemptedCalls.has(callHash)) {
+  const callCount = executionContext.attemptedCalls.get(callHash) || 0;
+  if (callCount >= MAX_IDENTICAL_CALLS_PER_APPROACH) {
     return {
       tc,
-      output: `[Skipped] Identical call to "${tc.name}" was already attempted this session. Try a different approach.`,
+      output: `[Skipped] Identical call to "${tc.name}" was already attempted ${callCount} times this approach. Try a different approach.`,
       isError: true,
     };
   }
-  executionContext.attemptedCalls.add(callHash);
+  executionContext.attemptedCalls.set(callHash, callCount + 1);
 
   let output: string;
   let isError = false;
@@ -1443,7 +1447,7 @@ export async function runOrchestrator(
   const executionContext: ToolExecutionContext = {
     failedTools: new Map(),
     lastToolOutputs: new Map(),
-    attemptedCalls: new Set(),
+    attemptedCalls: new Map(),
     tokenEstimate: 0,
     tokenBudget: 500000,
     consecutiveFailures: 0,
@@ -1484,6 +1488,26 @@ export async function runOrchestrator(
 
     if (callbacks.onIteration) {
       callbacks.onIteration(iterations, maxIterations);
+    }
+
+    const remainingIterations = maxIterations - iterations;
+    if (remainingIterations <= 3 && remainingIterations > 0) {
+      const urgencyMessage = `⚠️ ITERATION BUDGET WARNING: Only ${remainingIterations} iteration(s) remaining!
+You MUST call task_complete NOW with a summary of what you've accomplished.
+If the task is incomplete, summarize what was done and what remains.
+Do NOT continue working - call task_complete immediately.`;
+
+      const lastMessage = messages[messages.length - 1];
+      const lastContent =
+        typeof lastMessage?.content === "string" ? lastMessage.content : "";
+      const alreadyUrgent = lastContent.includes("ITERATION BUDGET WARNING");
+
+      if (lastMessage?.role !== "user" || !alreadyUrgent) {
+        messages.push({ role: "user", content: urgencyMessage });
+        callbacks.onThinking?.(
+          `\n⏰ Approaching iteration limit (${iterations}/${maxIterations}). Urging task completion...`
+        );
+      }
     }
 
     executionContext.progressTracker.stage =
@@ -1699,6 +1723,7 @@ export async function runOrchestrator(
               const failedApproach = summarizeFailedApproach(toolCalls, errors);
               executionContext.failedApproaches.push(failedApproach);
               executionContext.approachPivots++;
+              executionContext.attemptedCalls.clear();
 
               const backoffMs = calculateBackoffDelay(
                 executionContext.consecutiveFailures
@@ -1802,31 +1827,88 @@ Do NOT repeat the same tool calls with the same inputs.`;
   }
 
   if (!isComplete) {
-    executionContext.progressTracker.stage = "error";
-    callbacks.onProgress?.(
-      buildProgress(
-        executionContext.progressTracker,
-        executionContext,
-        iterations,
-        maxIterations,
-        "Max iterations exceeded"
-      )
-    );
+    const toolsUsed = executionContext.evolutionTracker.toolsUsed;
+    const toolsFailed = executionContext.evolutionTracker.toolsFailed;
+    const hasSubstantialWork = toolsUsed.size >= 2;
+    const hasPositiveOutputs = executionContext.lastToolOutputs.size >= 1;
 
-    const taskOutcome: TaskOutcome = {
-      success: false,
-      query: task,
-      error: "Max iterations exceeded",
-      toolsUsed: Array.from(executionContext.evolutionTracker.toolsUsed),
-      toolsFailed: Array.from(executionContext.evolutionTracker.toolsFailed),
-      iterationsUsed: iterations,
-      tokensUsed: executionContext.tokenEstimate,
-      durationMs: Date.now() - executionContext.evolutionTracker.startTime,
-    };
-    postTaskEvolution(taskOutcome, options.userId).catch(() => {});
+    if (hasSubstantialWork && hasPositiveOutputs) {
+      executionContext.progressTracker.stage = "complete";
 
-    callbacks.onError(
-      "Task exceeded maximum iterations. Please try breaking it into smaller steps."
-    );
+      const lastOutputs = Array.from(
+        executionContext.lastToolOutputs.entries()
+      ).slice(-5);
+      const outputSummary = lastOutputs
+        .map(([tool, output]) => {
+          const truncated =
+            output.length > 200 ? output.slice(0, 200) + "..." : output;
+          return `- ${tool}: ${truncated}`;
+        })
+        .join("\n");
+
+      const autoSummary = `Task completed (auto-finalized at iteration limit).
+Tools used: ${Array.from(toolsUsed).join(", ")}
+
+Recent outputs:
+${outputSummary}`;
+
+      callbacks.onProgress?.(
+        buildProgress(
+          executionContext.progressTracker,
+          executionContext,
+          iterations,
+          maxIterations,
+          "Auto-completed at iteration limit"
+        )
+      );
+
+      const taskOutcome: TaskOutcome = {
+        success: true,
+        query: task,
+        toolsUsed: Array.from(toolsUsed),
+        toolsFailed: Array.from(toolsFailed),
+        iterationsUsed: iterations,
+        tokensUsed: executionContext.tokenEstimate,
+        durationMs: Date.now() - executionContext.evolutionTracker.startTime,
+      };
+      postTaskEvolution(taskOutcome, options.userId).catch(() => {});
+
+      recordModelPerformance(
+        routingDecision.selectedModel,
+        routingDecision.taskClassification.type,
+        true,
+        Date.now() - executionContext.evolutionTracker.startTime,
+        executionContext.tokenEstimate
+      );
+
+      callbacks.onComplete(autoSummary, []);
+    } else {
+      executionContext.progressTracker.stage = "error";
+      callbacks.onProgress?.(
+        buildProgress(
+          executionContext.progressTracker,
+          executionContext,
+          iterations,
+          maxIterations,
+          "Max iterations exceeded"
+        )
+      );
+
+      const taskOutcome: TaskOutcome = {
+        success: false,
+        query: task,
+        error: "Max iterations exceeded",
+        toolsUsed: Array.from(toolsUsed),
+        toolsFailed: Array.from(toolsFailed),
+        iterationsUsed: iterations,
+        tokensUsed: executionContext.tokenEstimate,
+        durationMs: Date.now() - executionContext.evolutionTracker.startTime,
+      };
+      postTaskEvolution(taskOutcome, options.userId).catch(() => {});
+
+      callbacks.onError(
+        "Task exceeded maximum iterations. Please try breaking it into smaller steps."
+      );
+    }
   }
 }

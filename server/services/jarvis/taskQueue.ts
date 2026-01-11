@@ -555,7 +555,7 @@ class TaskQueueService {
           return executeTool(name, { ...input, userId: task.userId });
         },
         {
-          maxIterations: 15,
+          maxIterations: 20,
           memoryContext: "",
           procedureGuidance: "",
           conversationHistory: [],

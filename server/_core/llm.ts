@@ -320,11 +320,19 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     output_schema,
   });
 
-  if (normalizedResponseFormat) {
-    payload.response_format = normalizedResponseFormat;
+  // Non-OpenAI APIs (Gemini via Forge) may not support json_schema with strict mode
+  // Downgrade to json_object for compatibility
+  const supportsJsonSchema = isOpenAiApi;
+  const effectiveResponseFormat =
+    !supportsJsonSchema && normalizedResponseFormat?.type === "json_schema"
+      ? { type: "json_object" as const }
+      : normalizedResponseFormat;
+
+  if (effectiveResponseFormat) {
+    payload.response_format = effectiveResponseFormat;
   }
 
-  const response = await fetch(resolveApiUrl(), {
+  let response = await fetch(resolveApiUrl(), {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -332,6 +340,27 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     },
     body: JSON.stringify(payload),
   });
+
+  // If we get a 400 error with json_schema, retry with json_object as fallback
+  if (
+    response.status === 400 &&
+    payload.response_format &&
+    (payload.response_format as ResponseFormat).type === "json_schema"
+  ) {
+    console.info(
+      "[LLM] json_schema format failed with 400, retrying with json_object"
+    );
+    payload.response_format = { type: "json_object" };
+
+    response = await fetch(resolveApiUrl(), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${ENV.forgeApiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
