@@ -195,10 +195,9 @@ For GIT OPERATIONS:
   7. git_create_pr - Create GitHub pull request
 
 For SELF-INTROSPECTION (status, capabilities, skills):
-  1. self_comprehensive_introspection - ALWAYS USE THIS FIRST
-     - Returns status, capabilities, skills, and memory stats in ONE call
-     - Much faster than calling multiple self_* tools separately
-  2. Only use individual self_* tools if you need SPECIFIC deep details
+  - self_comprehensive_introspection - Get status, capabilities, skills, memory stats in ONE call
+  - Individual self_* tools available if you need specific deep details
+  - Note: If introspection tools fail, summarize your known capabilities from context
 `;
 
 const FAILURE_RECOVERY_PROTOCOL = `
