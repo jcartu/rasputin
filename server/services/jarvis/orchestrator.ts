@@ -38,6 +38,12 @@ import {
   getPerformanceGuidance,
   formatPerformanceReport,
 } from "./performanceTracking";
+import {
+  routeTask,
+  recordModelPerformance,
+  formatRoutingReport,
+  type RoutingDecision,
+} from "./modelRouter";
 
 // Get API keys from environment - Direct connections, no OpenRouter middleman
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
@@ -1406,6 +1412,9 @@ export async function runOrchestrator(
   const executionPlan = createExecutionPlan(task);
   const planPrompt = formatPlanForPrompt(executionPlan);
 
+  const routingDecision = routeTask(task);
+  callbacks.onThinking?.(formatRoutingReport(routingDecision));
+
   let taskWithContext = task;
   if (procedureGuidance) {
     taskWithContext += `\n\n${procedureGuidance}`;
@@ -1600,6 +1609,14 @@ export async function runOrchestrator(
             }
           }
 
+          recordModelPerformance(
+            routingDecision.selectedModel,
+            routingDecision.taskClassification.type,
+            true,
+            taskDuration,
+            executionContext.tokenEstimate
+          );
+
           callbacks.onComplete(input.summary, input.artifacts);
           isComplete = true;
         } else {
@@ -1770,6 +1787,14 @@ Do NOT repeat the same tool calls with the same inputs.`;
         durationMs: Date.now() - executionContext.evolutionTracker.startTime,
       };
       postTaskEvolution(taskOutcome, options.userId).catch(() => {});
+
+      recordModelPerformance(
+        routingDecision.selectedModel,
+        routingDecision.taskClassification.type,
+        false,
+        Date.now() - executionContext.evolutionTracker.startTime,
+        executionContext.tokenEstimate
+      );
 
       callbacks.onError(`Orchestrator error: ${errorMsg}`);
       throw error;
