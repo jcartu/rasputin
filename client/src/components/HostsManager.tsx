@@ -319,7 +319,7 @@ export function HostsManager() {
               SSH Hosts
             </h2>
             <p className="text-sm text-muted-foreground">
-              Manage remote servers for JARVIS to access
+              Manage remote servers for RASPUTIN to access
             </p>
           </div>
           <Dialog
@@ -346,7 +346,7 @@ export function HostsManager() {
                 <DialogDescription>
                   {editingHost
                     ? "Update the host configuration"
-                    : "Configure a new SSH host for JARVIS to access"}
+                    : "Configure a new SSH host for RASPUTIN to access"}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -792,7 +792,7 @@ export function HostsManager() {
                       Permissions
                     </CardTitle>
                     <CardDescription>
-                      Control what JARVIS can do on this host
+                      Control what RASPUTIN can do on this host
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -802,7 +802,7 @@ export function HostsManager() {
                           <div>
                             <Label>Require Approval for All Commands</Label>
                             <p className="text-xs text-muted-foreground">
-                              JARVIS will ask before executing any command
+                              RASPUTIN will ask before executing any command
                             </p>
                           </div>
                           <Switch

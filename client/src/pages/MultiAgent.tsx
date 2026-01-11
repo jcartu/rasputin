@@ -85,7 +85,7 @@ export default function MultiAgent() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const [taskPrompt, setTaskPrompt] = useState("");
-  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [_taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [taskResult, setTaskResult] = useState<TaskResult | null>(null);
   const [isRunningTask, setIsRunningTask] = useState(false);
 

@@ -740,7 +740,7 @@ function WorkspaceTab({
             <DialogHeader>
               <DialogTitle>Create Workspace</DialogTitle>
               <DialogDescription>
-                Create a persistent development environment for JARVIS.
+                Create a persistent development environment for RASPUTIN.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -853,7 +853,7 @@ function WorkspaceTab({
         <div className="text-center py-8">
           <FolderOpen className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
           <p className="text-sm text-muted-foreground">
-            No workspaces yet. Create one to give JARVIS a persistent
+            No workspaces yet. Create one to give RASPUTIN a persistent
             environment.
           </p>
         </div>
@@ -929,7 +929,7 @@ function ScheduleTab() {
             <DialogHeader>
               <DialogTitle>Create Scheduled Task</DialogTitle>
               <DialogDescription>
-                Set up a recurring task for JARVIS to execute automatically.
+                Set up a recurring task for RASPUTIN to execute automatically.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -1098,7 +1098,7 @@ function exportTaskAsMarkdown(task: AgentTask): string {
     if (msg.role === "user") {
       md += `## User\n\n${msg.content}\n\n`;
     } else {
-      md += `## JARVIS\n\n`;
+      md += `## RASPUTIN\n\n`;
       if (msg.steps) {
         for (const step of msg.steps) {
           if (step.type === "thinking") {
@@ -1145,11 +1145,10 @@ export default function AgentPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Voice mode state
-  const [voiceMode, setVoiceMode] = useState(false);
+  const [voiceMode, _setVoiceMode] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [voiceMuted, setVoiceMuted] = useState(false);
+  const [_isSpeaking, setIsSpeaking] = useState(false);
+  const [voiceMuted, _setVoiceMuted] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(false);
 
   const jarvisStream = useJarvisStream();
@@ -1187,7 +1186,6 @@ export default function AgentPage() {
     }
   }, [selectedTaskMessages]);
 
-  // Merge local and DB tasks
   const tasks = [
     ...localTasks,
     ...(dbTasks?.map(t => ({
@@ -1201,8 +1199,22 @@ export default function AgentPage() {
       errorMessage: t.errorMessage || undefined,
       pendingApprovalId: t.pendingApprovalId,
       errorType: undefined as AgentTask["errorType"],
+      summary: t.summary,
     })) || []),
   ].sort((a, b) => b.createdAt - a.createdAt);
+
+  useEffect(() => {
+    if (dbTasks && dbTasks.length > 0) {
+      const recentCompletedTasks = dbTasks
+        .filter(t => t.status === "completed" && t.summary)
+        .slice(0, 5)
+        .map(t => ({ query: t.query, summary: t.summary }));
+
+      if (recentCompletedTasks.length > 0) {
+        jarvisStream.loadConversationHistory(recentCompletedTasks);
+      }
+    }
+  }, [dbTasks, jarvisStream.loadConversationHistory]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -1248,7 +1260,7 @@ export default function AgentPage() {
     [currentTask, deleteTaskMutation, refetchTasks]
   );
 
-  const handleExportTask = useCallback((task: AgentTask) => {
+  const _handleExportTask = useCallback((task: AgentTask) => {
     const markdown = exportTaskAsMarkdown(task);
     const blob = new Blob([markdown], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
@@ -1556,27 +1568,52 @@ export default function AgentPage() {
           onValueChange={v => setActiveTab(v as typeof activeTab)}
           className="flex-1 flex flex-col"
         >
-          <TabsList className="grid grid-cols-7 mx-4 mt-2">
-            <TabsTrigger value="tasks" className="text-xs">
+          <TabsList className="flex flex-wrap gap-1 mx-3 mt-2 h-auto bg-transparent p-0">
+            <TabsTrigger
+              value="tasks"
+              className="text-xs px-2.5 py-1.5 h-auto data-[state=active]:bg-muted"
+            >
               Tasks
             </TabsTrigger>
-            <TabsTrigger value="templates" className="text-xs">
+            <TabsTrigger
+              value="templates"
+              className="text-xs px-2.5 py-1.5 h-auto data-[state=active]:bg-muted"
+            >
               Templates
             </TabsTrigger>
-            <TabsTrigger value="stats" className="text-xs">
+            <TabsTrigger
+              value="stats"
+              className="text-xs px-2.5 py-1.5 h-auto data-[state=active]:bg-muted"
+            >
               Stats
             </TabsTrigger>
-            <TabsTrigger value="workspace" className="text-xs">
-              <FolderOpen className="h-3 w-3" />
+            <TabsTrigger
+              value="workspace"
+              className="text-xs px-2 py-1.5 h-auto data-[state=active]:bg-muted"
+              title="Workspaces"
+            >
+              <FolderOpen className="h-3.5 w-3.5" />
             </TabsTrigger>
-            <TabsTrigger value="schedule" className="text-xs">
-              <Calendar className="h-3 w-3" />
+            <TabsTrigger
+              value="schedule"
+              className="text-xs px-2 py-1.5 h-auto data-[state=active]:bg-muted"
+              title="Schedule"
+            >
+              <Calendar className="h-3.5 w-3.5" />
             </TabsTrigger>
-            <TabsTrigger value="voice" className="text-xs">
-              <Mic className="h-3 w-3" />
+            <TabsTrigger
+              value="voice"
+              className="text-xs px-2 py-1.5 h-auto data-[state=active]:bg-muted"
+              title="Voice"
+            >
+              <Mic className="h-3.5 w-3.5" />
             </TabsTrigger>
-            <TabsTrigger value="hosts" className="text-xs">
-              <Server className="h-3 w-3" />
+            <TabsTrigger
+              value="hosts"
+              className="text-xs px-2 py-1.5 h-auto data-[state=active]:bg-muted"
+              title="SSH Hosts"
+            >
+              <Server className="h-3.5 w-3.5" />
             </TabsTrigger>
           </TabsList>
 
@@ -1595,12 +1632,12 @@ export default function AgentPage() {
                   >
                     <button
                       onClick={() => setCurrentTask(task)}
-                      className="w-full text-left p-3"
+                      className="w-full text-left p-2.5"
                     >
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-start gap-2">
                         <span
                           className={cn(
-                            "text-sm font-medium truncate flex-1 line-clamp-2",
+                            "text-sm font-medium flex-1 line-clamp-2 leading-snug break-words",
                             currentTask?.id === task.id && "text-purple-400"
                           )}
                           title={task.title}
@@ -1610,7 +1647,7 @@ export default function AgentPage() {
                         <Badge
                           variant="outline"
                           className={cn(
-                            "ml-2 text-xs",
+                            "shrink-0 text-[10px] px-1.5",
                             task.status === "completed" &&
                               "text-green-400 border-green-400/30",
                             task.status === "running" &&
@@ -1622,11 +1659,11 @@ export default function AgentPage() {
                           )}
                         >
                           {task.status === "waiting_approval"
-                            ? "awaiting approval"
+                            ? "approval"
                             : task.status}
                         </Badge>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="text-[10px] text-muted-foreground mt-1">
                         {new Date(task.createdAt).toLocaleDateString()}
                       </p>
                       {task.status === "failed" && task.errorMessage && (
@@ -1677,7 +1714,7 @@ export default function AgentPage() {
                               content: exportTaskAsMarkdown(task as AgentTask),
                               metadata: {
                                 date: new Date(task.createdAt).toLocaleString(),
-                                mode: "JARVIS Agent",
+                                mode: "RASPUTIN Agent",
                                 duration:
                                   "durationMs" in task && task.durationMs
                                     ? `${(task.durationMs / 1000).toFixed(1)}s`
@@ -1773,7 +1810,7 @@ export default function AgentPage() {
               <div className="text-center">
                 <h3 className="font-semibold mb-2">Voice Mode</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Press the microphone to talk to JARVIS
+                  Press the microphone to talk to RASPUTIN
                 </p>
               </div>
 
@@ -1811,7 +1848,7 @@ export default function AgentPage() {
                       toast.success(
                         autoSpeak
                           ? "Auto-speak disabled"
-                          : "JARVIS will speak results automatically"
+                          : "RASPUTIN will speak results automatically"
                       );
                     }}
                     className={cn(
@@ -1851,8 +1888,11 @@ export default function AgentPage() {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <Bot className="h-6 w-6 text-purple-400" />
-              <span className="text-xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
-                JARVIS
+              <span
+                className="text-xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent tracking-wider"
+                style={{ fontFamily: "ui-monospace, monospace" }}
+              >
+                RASPUTIN
               </span>
             </div>
             <div
@@ -1940,7 +1980,7 @@ export default function AgentPage() {
                 <DialogHeader>
                   <DialogTitle>Pending Approvals</DialogTitle>
                   <DialogDescription>
-                    Review and approve commands that JARVIS wants to execute
+                    Review and approve commands that RASPUTIN wants to execute
                   </DialogDescription>
                 </DialogHeader>
                 <ApprovalWorkflow />
@@ -1966,19 +2006,19 @@ export default function AgentPage() {
           />
         ) : useStreamingMode &&
           (jarvisStream.isStreaming || jarvisStream.steps.length > 0) ? (
-          <div className="flex-1 flex">
-            <ScrollArea className="flex-1 p-4">
-              <div className="max-w-3xl mx-auto">
+          <div className="flex-1 flex min-h-0 overflow-hidden">
+            <ScrollArea className="flex-1 min-h-0 min-w-0">
+              <div className="max-w-3xl mx-auto p-4">
                 <JarvisStreamView state={jarvisStream} autoSpeak={autoSpeak} />
                 <div ref={messagesEndRef} />
               </div>
             </ScrollArea>
-            <div className="w-96 border-l border-border">
+            <div className="w-80 xl:w-96 shrink-0 border-l border-border overflow-hidden">
               <JarvisThinkingPanel state={jarvisStream} />
             </div>
           </div>
         ) : (
-          <ScrollArea className="flex-1 p-4">
+          <ScrollArea className="flex-1 min-h-0 p-4">
             {currentTask ? (
               <div className="max-w-4xl mx-auto space-y-6">
                 {currentTask.messages.map((message, idx) => (
@@ -1997,7 +2037,7 @@ export default function AgentPage() {
                     <div className="flex items-center gap-2 text-muted-foreground animate-pulse">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       <span className="text-sm">
-                        JARVIS is analyzing your request...
+                        RASPUTIN is analyzing your request...
                       </span>
                     </div>
                   )}
@@ -2009,7 +2049,15 @@ export default function AgentPage() {
                   <Bot className="h-20 w-20 text-purple-400 mb-4" />
                   <Sparkles className="h-6 w-6 text-cyan-400 absolute -top-1 -right-1 animate-pulse" />
                 </div>
-                <h2 className="text-2xl font-bold mb-2">Welcome to JARVIS</h2>
+                <h2 className="text-2xl font-bold mb-2">
+                  Welcome to{" "}
+                  <span
+                    className="tracking-wider"
+                    style={{ fontFamily: "ui-monospace, monospace" }}
+                  >
+                    RASPUTIN
+                  </span>
+                </h2>
                 <p className="text-muted-foreground max-w-md mb-6">
                   Your autonomous AI agent. I can browse the web, execute code,
                   generate images, and complete complex tasks.
@@ -2141,7 +2189,7 @@ export default function AgentPage() {
                     handleSubmit();
                   }
                 }}
-                placeholder="Give JARVIS a task... (e.g., 'Research the latest AI news and summarize')"
+                placeholder="Give RASPUTIN a task... (e.g., 'Research the latest AI news and summarize')"
                 className="flex-1 bg-muted/30 border-border focus:border-purple-500/50"
                 disabled={isProcessing || jarvisStream.isStreaming}
               />
@@ -2201,7 +2249,7 @@ export default function AgentPage() {
             <div className="flex items-center justify-between mt-2">
               <div className="flex items-center gap-3">
                 <p className="text-xs text-muted-foreground">
-                  JARVIS will autonomously use tools to complete your task
+                  RASPUTIN will autonomously use tools to complete your task
                 </p>
                 <button
                   onClick={() => setUseStreamingMode(!useStreamingMode)}

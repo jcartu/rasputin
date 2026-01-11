@@ -241,7 +241,7 @@ export default function Login() {
           <div className="grid grid-cols-3 gap-4 pt-6">
             <div className="text-center p-3 rounded-lg bg-white/5 border border-white/5">
               <div className="text-2xl mb-1">🤖</div>
-              <p className="text-xs text-gray-500">JARVIS Agent</p>
+              <p className="text-xs text-gray-500">AI Agent</p>
             </div>
             <div className="text-center p-3 rounded-lg bg-white/5 border border-white/5">
               <div className="text-2xl mb-1">🧠</div>

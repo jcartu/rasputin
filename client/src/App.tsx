@@ -1,9 +1,11 @@
+import { useState, useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import SplashScreen from "./components/SplashScreen";
 import Chat from "./pages/Chat";
 import Login from "./pages/Login";
 import Agent from "./pages/Agent";
@@ -32,11 +34,27 @@ function Router() {
   );
 }
 
-// RASPUTIN uses dark theme with cyan accents
 function App() {
+  const [showSplash, setShowSplash] = useState(() => {
+    const hasSeenSplash = sessionStorage.getItem("rasputin-splash-seen");
+    return !hasSeenSplash;
+  });
+
+  useEffect(() => {
+    if (!showSplash) {
+      sessionStorage.setItem("rasputin-splash-seen", "true");
+    }
+  }, [showSplash]);
+
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
+        {showSplash && (
+          <SplashScreen
+            onComplete={() => setShowSplash(false)}
+            duration={3500}
+          />
+        )}
         <TooltipProvider>
           <Toaster
             position="top-right"

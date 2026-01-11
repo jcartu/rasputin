@@ -115,7 +115,7 @@ function FlyingLogs({
   }, [logs, autoScroll]);
 
   return (
-    <div className="relative h-64 bg-black/80 rounded-lg border border-border overflow-hidden font-mono text-xs shadow-inner">
+    <div className="relative h-56 bg-black/80 rounded-lg border border-border overflow-hidden font-mono text-[11px] shadow-inner">
       <div className="flex items-center gap-2 px-3 py-2 bg-secondary/50 border-b border-border">
         <Terminal className="h-3 w-3 text-primary" />
         <span className="text-muted-foreground font-medium">System Logs</span>
@@ -129,7 +129,7 @@ function FlyingLogs({
 
       <div
         ref={scrollRef}
-        className="h-[calc(100%-32px)] overflow-y-auto p-3 space-y-1"
+        className="h-[calc(100%-32px)] overflow-y-auto p-2 space-y-0.5"
         onScroll={e => {
           const target = e.target as HTMLDivElement;
           const isAtBottom =
@@ -139,18 +139,18 @@ function FlyingLogs({
       >
         {logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground/40">
-            <Terminal className="h-8 w-8 mb-2 opacity-20" />
-            <p>Waiting for output...</p>
+            <Terminal className="h-6 w-6 mb-2 opacity-20" />
+            <p className="text-[10px]">Waiting for output...</p>
           </div>
         ) : (
           logs.map(log => (
             <div
               key={log.id}
-              className={`flex gap-2 animate-in slide-in-from-bottom-1 duration-150 ${getLogColor(
+              className={`flex gap-1.5 animate-in slide-in-from-bottom-1 duration-150 leading-tight ${getLogColor(
                 log.type
               )}`}
             >
-              <span className="text-muted-foreground/40 shrink-0 select-none">
+              <span className="text-muted-foreground/40 shrink-0 select-none text-[10px]">
                 {new Date(log.timestamp).toLocaleTimeString("en-US", {
                   hour12: false,
                   hour: "2-digit",
@@ -158,10 +158,10 @@ function FlyingLogs({
                   second: "2-digit",
                 })}
               </span>
-              <span className="text-muted-foreground/60 shrink-0 select-none">
+              <span className="text-muted-foreground/60 shrink-0 select-none text-[10px]">
                 [{getLogPrefix(log.type)}]
               </span>
-              <span className="break-all font-medium opacity-90">
+              <span className="break-words font-medium opacity-90 min-w-0 overflow-hidden">
                 {log.message}
               </span>
             </div>
@@ -192,8 +192,8 @@ function ToolExecutionCard({ step }: { step: StreamingStep }) {
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
       className={`
-        group relative flex items-center gap-3 p-2.5 rounded-md border text-sm
-        transition-all duration-200
+        group relative flex items-center gap-2 p-2 rounded-md border text-xs
+        transition-all duration-200 overflow-hidden
         ${
           isRunning
             ? "bg-primary/5 border-primary/20 shadow-[0_0_10px_-5px_var(--primary)]"
@@ -205,7 +205,7 @@ function ToolExecutionCard({ step }: { step: StreamingStep }) {
     >
       <div
         className={`
-        p-1.5 rounded-md flex items-center justify-center
+        p-1 rounded flex items-center justify-center shrink-0
         ${
           isRunning
             ? "bg-primary/10 text-primary"
@@ -218,10 +218,10 @@ function ToolExecutionCard({ step }: { step: StreamingStep }) {
         {isRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : Icon}
       </div>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between">
-          <span className="font-medium truncate">{tool.name}</span>
-          <span className="text-[10px] text-muted-foreground font-mono">
+      <div className="flex-1 min-w-0 overflow-hidden">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-medium truncate text-sm">{tool.name}</span>
+          <span className="text-[10px] text-muted-foreground font-mono shrink-0">
             {tool.durationMs
               ? `${(tool.durationMs / 1000).toFixed(2)}s`
               : tool.startTime
@@ -230,7 +230,7 @@ function ToolExecutionCard({ step }: { step: StreamingStep }) {
           </span>
         </div>
         {Object.keys(tool.input).length > 0 && (
-          <div className="text-xs text-muted-foreground truncate opacity-70 mt-0.5 font-mono">
+          <div className="text-[10px] text-muted-foreground opacity-70 mt-0.5 font-mono break-all line-clamp-2">
             {JSON.stringify(tool.input)}
           </div>
         )}
@@ -330,42 +330,45 @@ export function JarvisThinkingPanel({ state }: JarvisThinkingPanelProps) {
 
   return (
     <div className="h-full flex flex-col bg-background/50 backdrop-blur-sm">
-      <div className="p-4 border-b border-border bg-background/80">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-primary" />
-            <h3 className="font-medium text-foreground tracking-tight">
+      <div className="p-3 border-b border-border bg-background/80">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <Zap className="h-3.5 w-3.5 text-primary" />
+            <h3 className="font-medium text-sm text-foreground tracking-tight">
               Mission Control
             </h3>
           </div>
-          <div className="flex items-center gap-2 text-xs font-mono">
+          <div className="flex items-center gap-1.5 text-[10px] font-mono">
             {state.isStreaming ? (
               <Badge
                 variant="outline"
-                className="border-primary/50 text-primary animate-pulse gap-1"
+                className="border-primary/50 text-primary animate-pulse gap-1 text-[10px] px-1.5 py-0"
               >
-                <Activity className="h-3 w-3" />
+                <Activity className="h-2.5 w-2.5" />
                 RUNNING
               </Badge>
             ) : state.success ? (
               <Badge
                 variant="outline"
-                className="border-green-500/50 text-green-500 gap-1"
+                className="border-green-500/50 text-green-500 gap-1 text-[10px] px-1.5 py-0"
               >
-                <CheckCircle2 className="h-3 w-3" />
+                <CheckCircle2 className="h-2.5 w-2.5" />
                 COMPLETE
               </Badge>
             ) : state.error ? (
               <Badge
                 variant="outline"
-                className="border-red-500/50 text-red-500 gap-1"
+                className="border-red-500/50 text-red-500 gap-1 text-[10px] px-1.5 py-0"
               >
-                <XCircle className="h-3 w-3" />
+                <XCircle className="h-2.5 w-2.5" />
                 FAILED
               </Badge>
             ) : (
-              <Badge variant="outline" className="text-muted-foreground gap-1">
-                <Clock className="h-3 w-3" />
+              <Badge
+                variant="outline"
+                className="text-muted-foreground gap-1 text-[10px] px-1.5 py-0"
+              >
+                <Clock className="h-2.5 w-2.5" />
                 IDLE
               </Badge>
             )}
@@ -375,8 +378,8 @@ export function JarvisThinkingPanel({ state }: JarvisThinkingPanelProps) {
           </div>
         </div>
 
-        <div className="space-y-1.5">
-          <div className="flex justify-between text-xs text-muted-foreground">
+        <div className="space-y-1">
+          <div className="flex justify-between text-[10px] text-muted-foreground">
             <span>Progress</span>
             <span>
               Iteration {state.currentIteration} / {state.maxIterations}
@@ -384,35 +387,35 @@ export function JarvisThinkingPanel({ state }: JarvisThinkingPanelProps) {
           </div>
           <Progress
             value={(state.currentIteration / state.maxIterations) * 100}
-            className="h-1.5"
+            className="h-1"
           />
         </div>
       </div>
 
       <ScrollArea className="flex-1">
-        <div className="p-4 space-y-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="p-3 space-y-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
               <Terminal className="h-3 w-3" />
               Flying Logs
             </div>
             <FlyingLogs logs={logs} isActive={state.isStreaming} />
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
               <Play className="h-3 w-3" />
               Recent Execution
             </div>
             {recentTools.length === 0 ? (
-              <div className="text-center py-6 border border-dashed border-border rounded-lg">
-                <Zap className="h-6 w-6 mx-auto mb-2 text-muted-foreground/30" />
-                <p className="text-xs text-muted-foreground">
+              <div className="text-center py-4 border border-dashed border-border rounded-lg">
+                <Zap className="h-5 w-5 mx-auto mb-1.5 text-muted-foreground/30" />
+                <p className="text-[10px] text-muted-foreground">
                   No tools executed yet
                 </p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <AnimatePresence mode="popLayout">
                   {recentTools.map(step => (
                     <ToolExecutionCard key={step.id} step={step} />
@@ -424,28 +427,28 @@ export function JarvisThinkingPanel({ state }: JarvisThinkingPanelProps) {
         </div>
       </ScrollArea>
 
-      <div className="p-3 border-t border-border bg-secondary/20">
-        <div className="grid grid-cols-3 gap-2 text-[10px] text-muted-foreground">
-          <div className="flex flex-col items-center justify-center p-2 rounded bg-background border border-border">
-            <Hash className="h-3 w-3 mb-1 opacity-50" />
-            <span className="font-mono text-foreground font-medium text-lg leading-none">
+      <div className="p-2 border-t border-border bg-secondary/20">
+        <div className="grid grid-cols-3 gap-1.5 text-[9px] text-muted-foreground">
+          <div className="flex flex-col items-center justify-center p-1.5 rounded bg-background border border-border">
+            <Hash className="h-2.5 w-2.5 mb-0.5 opacity-50" />
+            <span className="font-mono text-foreground font-medium text-base leading-none">
               {stats.totalTools}
             </span>
-            <span>Tools Called</span>
+            <span className="mt-0.5">Tools</span>
           </div>
-          <div className="flex flex-col items-center justify-center p-2 rounded bg-background border border-border">
-            <Brain className="h-3 w-3 mb-1 opacity-50" />
-            <span className="font-mono text-foreground font-medium text-lg leading-none">
+          <div className="flex flex-col items-center justify-center p-1.5 rounded bg-background border border-border">
+            <Brain className="h-2.5 w-2.5 mb-0.5 opacity-50" />
+            <span className="font-mono text-foreground font-medium text-base leading-none">
               {stats.thinkingSteps}
             </span>
-            <span>Thinking Steps</span>
+            <span className="mt-0.5">Thinking</span>
           </div>
-          <div className="flex flex-col items-center justify-center p-2 rounded bg-background border border-border">
-            <CheckCircle2 className="h-3 w-3 mb-1 opacity-50" />
-            <span className="font-mono text-foreground font-medium text-lg leading-none">
+          <div className="flex flex-col items-center justify-center p-1.5 rounded bg-background border border-border">
+            <CheckCircle2 className="h-2.5 w-2.5 mb-0.5 opacity-50" />
+            <span className="font-mono text-foreground font-medium text-base leading-none">
               {stats.completedTools}
             </span>
-            <span>Success Rate</span>
+            <span className="mt-0.5">Success</span>
           </div>
         </div>
       </div>

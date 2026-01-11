@@ -181,7 +181,7 @@ export default function Events() {
         webhookId: parseInt(selectedWebhookId),
         payload,
       });
-    } catch (e) {
+    } catch (_e) {
       toast.error("Invalid JSON payload");
     }
   };

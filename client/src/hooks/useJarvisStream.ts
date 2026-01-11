@@ -89,7 +89,10 @@ export function useJarvisStream() {
 
       return {
         ...prev,
+        taskId: null,
         isStreaming: true,
+        steps: [],
+        currentIteration: 0,
         exchanges: [
           ...prev.exchanges,
           { userQuery: task, assistantSummary: null, timestamp: Date.now() },
@@ -119,6 +122,29 @@ export function useJarvisStream() {
     setState(initialState);
     activeTaskIdRef.current = null;
   }, []);
+
+  const loadConversationHistory = useCallback(
+    (tasks: Array<{ query: string; summary?: string | null }>) => {
+      setState(prev => {
+        if (prev.exchanges.length > 0) return prev;
+
+        const exchanges: TaskExchange[] = tasks
+          .slice(0, 5)
+          .reverse()
+          .map(task => ({
+            userQuery: task.query,
+            assistantSummary: task.summary || null,
+            timestamp: Date.now(),
+          }));
+
+        return {
+          ...prev,
+          exchanges,
+        };
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     const socket = getSocket();
@@ -315,5 +341,6 @@ export function useJarvisStream() {
     startTask,
     cancelTask,
     reset,
+    loadConversationHistory,
   };
 }

@@ -510,6 +510,7 @@ export const appRouter = router({
           pendingApprovalId: task.pendingApprovalId,
           iterationCount: task.iterationCount,
           errorMessage: task.errorMessage,
+          summary: task.result,
           createdAt: task.createdAt,
           updatedAt: task.updatedAt,
           completedAt: task.completedAt,

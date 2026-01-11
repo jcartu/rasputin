@@ -5,7 +5,13 @@ import { createServer } from "http";
 import net from "net";
 import path from "path";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerAuthRoutes, ensureDefaultUser } from "./auth";
+import {
+  registerAuthRoutes,
+  ensureDefaultUser,
+  ensureSilvsUser,
+  ensureDirkUser,
+  ensureAlakazamUser,
+} from "./auth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -44,6 +50,9 @@ async function startServer() {
 
   registerAuthRoutes(app);
   await ensureDefaultUser();
+  await ensureSilvsUser();
+  await ensureDirkUser();
+  await ensureAlakazamUser();
 
   // Serve JARVIS workspace files for download
   app.use(

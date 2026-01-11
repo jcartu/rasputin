@@ -6,7 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { ChatSidebar } from "@/components/ChatSidebar";
 import { ChatMain } from "@/components/ChatMain";
 import { StreamingThinkingPanel } from "@/components/StreamingThinkingPanel";
-import { SplashScreen as _SplashScreen } from "@/components/SplashScreen";
+import _SplashScreen from "@/components/SplashScreen";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -721,7 +721,7 @@ export default function Chat() {
                 <DialogHeader>
                   <DialogTitle>Pending Approvals</DialogTitle>
                   <DialogDescription>
-                    Review and approve commands that JARVIS wants to execute
+                    Review and approve commands that RASPUTIN wants to execute
                   </DialogDescription>
                 </DialogHeader>
                 <ApprovalWorkflow />

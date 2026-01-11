@@ -319,7 +319,7 @@ export function WorkspaceIDE({ workspaceId, onBack }: WorkspaceIDEProps) {
                 <ScrollArea className="flex-1 bg-black p-2">
                   <pre className="font-mono text-xs text-green-400">
                     {terminalOutput.join("\n") ||
-                      "Terminal ready. Run commands from JARVIS."}
+                      "Terminal ready. Run commands from RASPUTIN."}
                   </pre>
                 </ScrollArea>
                 <div className="border-t p-2">
@@ -400,7 +400,7 @@ export function WorkspaceIDE({ workspaceId, onBack }: WorkspaceIDEProps) {
                   <FolderOpen className="mx-auto h-12 w-12 opacity-50" />
                   <p className="mt-4">Select a file to edit</p>
                   <p className="text-sm">
-                    Or let JARVIS create and edit files for you
+                    Or let RASPUTIN create and edit files for you
                   </p>
                 </div>
               </div>

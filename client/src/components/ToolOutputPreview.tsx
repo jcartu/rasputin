@@ -168,77 +168,143 @@ function detectFileType(
   return { type: "text" };
 }
 
-// Image Preview Component
 function ImagePreview({ src }: { src: string }) {
   const [fullscreen, setFullscreen] = useState(false);
   const [error, setError] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   if (error) {
     return (
-      <div className="flex items-center gap-2 p-3 rounded bg-muted/50 text-muted-foreground">
-        <ImageIcon className="h-4 w-4" />
-        <span className="text-sm">Failed to load image</span>
-        <a
-          href={src}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-cyan-400 hover:underline text-sm ml-2"
-        >
-          Open URL
-        </a>
+      <div className="flex flex-col items-center gap-3 p-6 rounded-lg bg-muted/30 border border-border">
+        <ImageIcon className="h-8 w-8 text-muted-foreground" />
+        <span className="text-sm text-muted-foreground">
+          Failed to load image
+        </span>
+        <Button variant="outline" size="sm" asChild>
+          <a href={src} target="_blank" rel="noopener noreferrer">
+            <ExternalLink className="h-3 w-3 mr-2" />
+            Open URL
+          </a>
+        </Button>
       </div>
     );
   }
 
   return (
     <>
-      <div className="relative group">
-        <img
-          src={src}
-          alt="Generated image"
-          className="mt-2 rounded max-w-full max-h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity"
-          onClick={() => setFullscreen(true)}
-          onError={() => setError(true)}
-        />
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-          <Button
-            variant="secondary"
-            size="sm"
-            className="h-7 px-2"
+      <div className="rounded-lg border border-border bg-gradient-to-b from-muted/30 to-muted/10 overflow-hidden">
+        <div className="relative group">
+          {!loaded && (
+            <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
+              <div className="animate-pulse flex flex-col items-center gap-2">
+                <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">
+                  Loading image...
+                </span>
+              </div>
+            </div>
+          )}
+          <img
+            src={src}
+            alt="Generated image"
+            className={cn(
+              "w-full max-h-[400px] object-contain cursor-pointer transition-all duration-200",
+              loaded ? "opacity-100" : "opacity-0",
+              "hover:scale-[1.02]"
+            )}
             onClick={() => setFullscreen(true)}
-          >
-            <Maximize2 className="h-3 w-3" />
-          </Button>
-          <Button variant="secondary" size="sm" className="h-7 px-2" asChild>
-            <a href={src} target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          </Button>
-          <Button variant="secondary" size="sm" className="h-7 px-2" asChild>
-            <a href={src} download>
-              <Download className="h-3 w-3" />
-            </a>
-          </Button>
+            onError={() => setError(true)}
+            onLoad={() => setLoaded(true)}
+          />
+          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-8 px-3 bg-black/60 hover:bg-black/80 text-white border-0"
+              onClick={() => setFullscreen(true)}
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="p-3 border-t border-border bg-muted/20 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <ImageIcon className="h-4 w-4 text-cyan-400 shrink-0" />
+            <span className="text-xs text-muted-foreground truncate">
+              {src.split("/").pop() || "Generated Image"}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              asChild
+            >
+              <a href={src} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-3 w-3 mr-1.5" />
+                Open
+              </a>
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              className="h-7 px-3 text-xs bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600"
+              asChild
+            >
+              <a href={src} download>
+                <Download className="h-3 w-3 mr-1.5" />
+                Download
+              </a>
+            </Button>
+          </div>
         </div>
       </div>
 
       <Dialog open={fullscreen} onOpenChange={setFullscreen}>
-        <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 bg-black/90">
+        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95 border-border">
           <DialogTitle className="sr-only">Image Preview</DialogTitle>
-          <div className="relative flex items-center justify-center p-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="absolute top-2 right-2 text-white hover:bg-white/20"
-              onClick={() => setFullscreen(false)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-            <img
-              src={src}
-              alt="Generated image fullscreen"
-              className="max-w-full max-h-[85vh] object-contain"
-            />
+          <div className="relative flex flex-col h-full">
+            <div className="absolute top-3 right-3 z-10 flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-8 bg-black/60 hover:bg-black/80 text-white border-0"
+                asChild
+              >
+                <a href={src} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                  Open
+                </a>
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-8 bg-black/60 hover:bg-black/80 text-white border-0"
+                asChild
+              >
+                <a href={src} download>
+                  <Download className="h-3.5 w-3.5 mr-1.5" />
+                  Download
+                </a>
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-8 w-8 p-0 bg-black/60 hover:bg-black/80 text-white border-0"
+                onClick={() => setFullscreen(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex-1 flex items-center justify-center p-6">
+              <img
+                src={src}
+                alt="Generated image fullscreen"
+                className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+              />
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -166,7 +166,7 @@ export function WorkspaceManager({ onSelectWorkspace }: WorkspaceManagerProps) {
         <div>
           <h2 className="text-2xl font-bold">Workspaces</h2>
           <p className="text-muted-foreground">
-            Persistent development environments for JARVIS
+            Persistent development environments for RASPUTIN
           </p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -180,7 +180,7 @@ export function WorkspaceManager({ onSelectWorkspace }: WorkspaceManagerProps) {
             <DialogHeader>
               <DialogTitle>Create New Workspace</DialogTitle>
               <DialogDescription>
-                Create a new persistent development environment for JARVIS to
+                Create a new persistent development environment for RASPUTIN to
                 work in.
               </DialogDescription>
             </DialogHeader>
@@ -379,7 +379,7 @@ export function WorkspaceManager({ onSelectWorkspace }: WorkspaceManagerProps) {
             <Folder className="h-12 w-12 text-muted-foreground/50" />
             <h3 className="mt-4 text-lg font-semibold">No workspaces yet</h3>
             <p className="mt-2 text-center text-sm text-muted-foreground">
-              Create your first workspace to get started with JARVIS
+              Create your first workspace to get started with RASPUTIN
               development.
             </p>
             <Button

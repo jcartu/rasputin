@@ -75,7 +75,7 @@ export function ApprovalWorkflow({
   const handleApprovalNew = useCallback(() => {
     refetch();
     toast.info("New command approval required", {
-      description: "A JARVIS task is waiting for your approval",
+      description: "A RASPUTIN task is waiting for your approval",
     });
   }, [refetch]);
 
@@ -316,7 +316,7 @@ export function ApprovalWorkflow({
               <CheckCircle2 className="h-12 w-12 mb-4 opacity-50" />
               <p className="text-sm">No pending approvals</p>
               <p className="text-xs mt-1">
-                JARVIS will request approval for sensitive operations
+                RASPUTIN will request approval for sensitive operations
               </p>
             </div>
           ) : (
@@ -367,7 +367,7 @@ export function ApprovalWorkflow({
             </DialogTitle>
             <DialogDescription>
               {selectedApproval?.status === "pending"
-                ? "JARVIS is requesting permission to execute a potentially sensitive command"
+                ? "RASPUTIN is requesting permission to execute a potentially sensitive command"
                 : `This command was ${selectedApproval?.status}`}
             </DialogDescription>
           </DialogHeader>

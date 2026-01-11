@@ -587,10 +587,10 @@ function CompletionCard({
       if (!summary) return;
 
       const timestamp = new Date().toISOString().split("T")[0];
-      const filename = `jarvis-report-${timestamp}`;
+      const filename = `rasputin-report-${timestamp}`;
 
       if (format === "markdown") {
-        const content = `# JARVIS Task Report\n\n**Date:** ${new Date().toLocaleString()}\n**Status:** ${success ? "Completed" : "Failed"}\n**Duration:** ${durationMs ? (durationMs / 1000).toFixed(1) + "s" : "N/A"}\n\n## Summary\n\n${summary}`;
+        const content = `# RASPUTIN Task Report\n\n**Date:** ${new Date().toLocaleString()}\n**Status:** ${success ? "Completed" : "Failed"}\n**Duration:** ${durationMs ? (durationMs / 1000).toFixed(1) + "s" : "N/A"}\n\n## Summary\n\n${summary}`;
         const blob = new Blob([content], { type: "text/markdown" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -600,7 +600,7 @@ function CompletionCard({
         URL.revokeObjectURL(url);
         toast.success("Exported as Markdown");
       } else if (format === "html") {
-        const content = `<!DOCTYPE html><html><head><title>JARVIS Report</title><style>body{font-family:system-ui;max-width:800px;margin:40px auto;padding:20px;background:#0a0a0a;color:#e5e5e5}h1{color:#22d3ee}pre{background:#1a1a1a;padding:15px;border-radius:8px;overflow-x:auto}.meta{color:#888;margin-bottom:20px}</style></head><body><h1>JARVIS Task Report</h1><div class="meta"><p>Date: ${new Date().toLocaleString()}</p><p>Status: ${success ? "✅ Completed" : "❌ Failed"}</p><p>Duration: ${durationMs ? (durationMs / 1000).toFixed(1) + "s" : "N/A"}</p></div><div>${summary.replace(/\n/g, "<br>")}</div></body></html>`;
+        const content = `<!DOCTYPE html><html><head><title>RASPUTIN Report</title><style>body{font-family:system-ui;max-width:800px;margin:40px auto;padding:20px;background:#0a0a0a;color:#e5e5e5}h1{color:#22d3ee}pre{background:#1a1a1a;padding:15px;border-radius:8px;overflow-x:auto}.meta{color:#888;margin-bottom:20px}</style></head><body><h1>RASPUTIN Task Report</h1><div class="meta"><p>Date: ${new Date().toLocaleString()}</p><p>Status: ${success ? "✅ Completed" : "❌ Failed"}</p><p>Duration: ${durationMs ? (durationMs / 1000).toFixed(1) + "s" : "N/A"}</p></div><div>${summary.replace(/\n/g, "<br>")}</div></body></html>`;
         const blob = new Blob([content], { type: "text/html" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -610,7 +610,7 @@ function CompletionCard({
         URL.revokeObjectURL(url);
         toast.success("Exported as HTML");
       } else if (format === "pdf") {
-        const htmlContent = `<h1>JARVIS Task Report</h1><div class="meta"><p><strong>Date:</strong> ${new Date().toLocaleString()}</p><p><strong>Status:</strong> ${success ? "Completed" : "Failed"}</p><p><strong>Duration:</strong> ${durationMs ? (durationMs / 1000).toFixed(1) + "s" : "N/A"}</p></div><h2>Summary</h2><div>${summary.replace(/\n/g, "<br>")}</div>`;
+        const htmlContent = `<h1>RASPUTIN Task Report</h1><div class="meta"><p><strong>Date:</strong> ${new Date().toLocaleString()}</p><p><strong>Status:</strong> ${success ? "Completed" : "Failed"}</p><p><strong>Duration:</strong> ${durationMs ? (durationMs / 1000).toFixed(1) + "s" : "N/A"}</p></div><h2>Summary</h2><div>${summary.replace(/\n/g, "<br>")}</div>`;
         fetch("/api/files/export-pdf", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -748,96 +748,113 @@ function CompletionCard({
                 </div>
               )}
               {artifacts && artifacts.length > 0 && (
-                <div className="mt-4 space-y-3">
-                  <h4 className="text-sm font-medium text-muted-foreground">
-                    Artifacts
+                <div className="mt-6 pt-4 border-t border-border/50">
+                  <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                    <Download className="h-4 w-4" />
+                    Downloads & Files
                   </h4>
-                  <div className="grid gap-3">
+                  <div className="grid gap-2">
                     {artifacts.map((artifact, idx) => (
                       <div
                         key={idx}
-                        className="p-3 rounded-lg bg-muted/30 border border-border/50"
+                        className="flex items-center gap-3 p-3 rounded-lg bg-gradient-to-r from-muted/40 to-muted/20 border border-border/50 hover:border-primary/30 transition-colors"
                       >
-                        {artifact.type === "image" && artifact.url && (
-                          <img
-                            src={artifact.url}
-                            alt="Generated artifact"
-                            className="max-w-full rounded-lg"
-                          />
+                        {artifact.type === "image" && (
+                          <div className="shrink-0 w-12 h-12 rounded-md overflow-hidden bg-muted">
+                            <img
+                              src={artifact.url}
+                              alt="Preview"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
                         )}
-                        {artifact.type === "html" && artifact.content && (
-                          <iframe
-                            srcDoc={artifact.content}
-                            className="w-full h-96 rounded-lg border-0"
-                            sandbox="allow-scripts"
-                          />
+                        {artifact.type === "video" && (
+                          <div className="shrink-0 w-12 h-12 rounded-md bg-purple-500/20 flex items-center justify-center">
+                            <FileText className="h-6 w-6 text-purple-400" />
+                          </div>
                         )}
-                        {artifact.type === "video" && artifact.url && (
-                          <video
-                            src={artifact.url}
-                            controls
-                            className="max-w-full rounded-lg"
-                          />
-                        )}
-                        {artifact.type === "pdf" && artifact.downloadUrl && (
-                          <div className="flex items-center gap-3 p-2">
-                            <File className="h-8 w-8 text-red-400" />
-                            <span className="text-sm font-medium">
-                              {artifact.filename || "document.pdf"}
-                            </span>
+                        {artifact.type === "pdf" && (
+                          <div className="shrink-0 w-12 h-12 rounded-md bg-red-500/20 flex items-center justify-center">
+                            <File className="h-6 w-6 text-red-400" />
                           </div>
                         )}
                         {artifact.type === "file" && (
-                          <div className="flex items-center gap-3 p-2">
-                            <FileText className="h-8 w-8 text-muted-foreground" />
-                            <span className="text-sm font-medium">
-                              {artifact.filename || "file"}
-                            </span>
+                          <div className="shrink-0 w-12 h-12 rounded-md bg-cyan-500/20 flex items-center justify-center">
+                            <FileText className="h-6 w-6 text-cyan-400" />
                           </div>
                         )}
-                        {artifact.downloadUrl && (
-                          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-2"
-                              onClick={() => {
-                                const a = document.createElement("a");
-                                a.href = artifact.downloadUrl!;
-                                a.download = artifact.filename || "download";
-                                a.click();
-                                toast.success("Download started");
-                              }}
-                            >
-                              <Download className="h-4 w-4" />
-                              Download
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-2"
-                              onClick={() => {
-                                const url = `${window.location.origin}${artifact.downloadUrl}`;
-                                navigator.clipboard.writeText(url);
-                                toast.success("Link copied to clipboard");
-                              }}
-                            >
-                              <Link className="h-4 w-4" />
-                              Copy Link
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-2"
-                              onClick={() => {
-                                window.open(artifact.downloadUrl!, "_blank");
-                              }}
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                              Open
-                            </Button>
+                        {artifact.type === "html" && (
+                          <div className="shrink-0 w-12 h-12 rounded-md bg-orange-500/20 flex items-center justify-center">
+                            <Code className="h-6 w-6 text-orange-400" />
                           </div>
                         )}
+
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {artifact.filename ||
+                              artifact.path?.split("/").pop() ||
+                              `${artifact.type} file`}
+                          </p>
+                          <p className="text-xs text-muted-foreground capitalize">
+                            {artifact.type}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {artifact.url && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2 text-xs"
+                              onClick={() =>
+                                window.open(artifact.url!, "_blank")
+                              }
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {artifact.downloadUrl && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-2 text-xs"
+                                onClick={() => {
+                                  const url = `${window.location.origin}${artifact.downloadUrl}`;
+                                  navigator.clipboard.writeText(url);
+                                  toast.success("Link copied");
+                                }}
+                              >
+                                <Link className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-2 text-xs"
+                                onClick={() =>
+                                  window.open(artifact.downloadUrl!, "_blank")
+                                }
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
+                          <Button
+                            size="sm"
+                            className="h-8 px-3 text-xs bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600"
+                            onClick={() => {
+                              const a = document.createElement("a");
+                              a.href =
+                                artifact.downloadUrl || artifact.url || "";
+                              a.download = artifact.filename || "download";
+                              a.click();
+                              toast.success("Download started");
+                            }}
+                          >
+                            <Download className="h-3.5 w-3.5 mr-1.5" />
+                            Download
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -848,6 +865,48 @@ function CompletionCard({
         </CardContent>
       </Card>
     </motion.div>
+  );
+}
+
+function PastExchangeCard({
+  userQuery,
+  assistantSummary,
+}: {
+  userQuery: string;
+  assistantSummary: string | null;
+}) {
+  return (
+    <div className="space-y-3 opacity-80">
+      <div className="flex gap-3">
+        <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center">
+          <span className="text-xs font-medium text-white">You</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <Card className="bg-muted/30 border-border/50">
+            <CardContent className="p-3">
+              <p className="text-sm">{userQuery}</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {assistantSummary && (
+        <div className="flex gap-3">
+          <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-green-500 flex items-center justify-center">
+            <Brain className="h-4 w-4 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <Card className="bg-green-500/5 border-green-500/20">
+              <CardContent className="p-3">
+                <div className="prose prose-invert prose-sm max-w-none">
+                  <Streamdown>{assistantSummary}</Streamdown>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -891,7 +950,14 @@ export function JarvisStreamView({
         })
         .catch(() => {});
     }
-  }, [autoSpeak, isComplete, state.summary, hasAutoSpoken, state.success]);
+  }, [
+    autoSpeak,
+    isComplete,
+    state.summary,
+    hasAutoSpoken,
+    state.success,
+    ttsMutation,
+  ]);
 
   useEffect(() => {
     if (state.isStreaming) {
@@ -912,25 +978,12 @@ export function JarvisStreamView({
     .filter(
       t =>
         t.status === "completed" &&
-        (t.name === "generate_image" ||
-          t.name === "write_file" ||
+        (t.name === "write_file" ||
           t.name === "write_xlsx" ||
           t.name === "write_docx" ||
-          t.name === "write_pptx" ||
-          t.name === "screenshot")
+          t.name === "write_pptx")
     )
     .map(t => {
-      if (t.name === "generate_image" && t.output) {
-        const urlMatch = t.output.match(
-          /https?:\/\/[^\s]+\.(png|jpg|jpeg|gif|webp)/i
-        );
-        if (urlMatch) return { type: "image", url: urlMatch[0] };
-      }
-      if (t.name === "screenshot" && t.output) {
-        const urlMatch = t.output.match(/https?:\/\/[^\s]+/);
-        if (urlMatch) return { type: "image", url: urlMatch[0] };
-      }
-
       // Handle document generation tools (write_xlsx, write_docx, write_pptx)
       if (
         (t.name === "write_xlsx" ||
@@ -1029,8 +1082,34 @@ export function JarvisStreamView({
     .filter(s => s.type === "thinking" && s.content)
     .pop()?.content;
 
+  const pastExchanges = state.exchanges.slice(0, -1);
+  const currentExchange = state.exchanges[state.exchanges.length - 1];
+
   return (
     <div className="space-y-4">
+      {pastExchanges.map((exchange, idx) => (
+        <PastExchangeCard
+          key={`exchange-${idx}-${exchange.timestamp}`}
+          userQuery={exchange.userQuery}
+          assistantSummary={exchange.assistantSummary}
+        />
+      ))}
+
+      {currentExchange && (
+        <div className="flex gap-3 mb-4">
+          <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center">
+            <span className="text-xs font-medium text-white">You</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <Card className="bg-muted/30 border-border/50">
+              <CardContent className="p-3">
+                <p className="text-sm">{currentExchange.userQuery}</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
       <ProgressIndicator
         current={state.currentIteration}
         max={state.maxIterations}
@@ -1038,7 +1117,6 @@ export function JarvisStreamView({
         success={state.success}
       />
 
-      {/* Consolidated tool execution panel */}
       {(tools.length > 0 || latestThinking) && (
         <ToolExecutionPanel
           tools={tools}

@@ -113,3 +113,66 @@ export async function ensureDefaultUser() {
 
   console.log("[Auth] Created default user 'josh'");
 }
+
+export async function ensureSilvsUser() {
+  const existingUser = await db.getUserByUsername("silvs");
+  if (existingUser) {
+    console.log("[Auth] User 'silvs' already exists");
+    return;
+  }
+
+  const passwordHash = hashPassword("fhp394fhq3p");
+
+  await db.createUserWithPassword({
+    openId: "silvs_local",
+    username: "silvs",
+    passwordHash,
+    name: "Silvs",
+    email: "silvs@rasputin.studio",
+    role: "user",
+  });
+
+  console.log("[Auth] Created user 'silvs'");
+}
+
+export async function ensureDirkUser() {
+  const existingUser = await db.getUserByUsername("dirk");
+  if (existingUser) {
+    console.log("[Auth] User 'dirk' already exists");
+    return;
+  }
+
+  const passwordHash = hashPassword("fhp394fhq38");
+
+  await db.createUserWithPassword({
+    openId: "dirk_local",
+    username: "dirk",
+    passwordHash,
+    name: "Dirk",
+    email: "dirk@rasputin.studio",
+    role: "user",
+  });
+
+  console.log("[Auth] Created user 'dirk'");
+}
+
+export async function ensureAlakazamUser() {
+  const existingUser = await db.getUserByUsername("alakazam");
+  if (existingUser) {
+    console.log("[Auth] User 'alakazam' already exists");
+    return;
+  }
+
+  const passwordHash = hashPassword("3dfh9723fd");
+
+  await db.createUserWithPassword({
+    openId: "alakazam_local",
+    username: "alakazam",
+    passwordHash,
+    name: "Alakazam",
+    email: "alakazam@rasputin.studio",
+    role: "user",
+  });
+
+  console.log("[Auth] Created user 'alakazam'");
+}
