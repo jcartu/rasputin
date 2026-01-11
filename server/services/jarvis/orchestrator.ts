@@ -33,6 +33,11 @@ import {
   shouldForceComplete,
   type StrategyState,
 } from "./strategySwitching";
+import {
+  recordTaskPerformance,
+  getPerformanceGuidance,
+  formatPerformanceReport,
+} from "./performanceTracking";
 
 // Get API keys from environment - Direct connections, no OpenRouter middleman
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
@@ -1411,6 +1416,14 @@ export async function runOrchestrator(
       `Task complexity: ${complexity}. Created ${executionPlan.phases.length}-phase execution plan.`
     );
   }
+
+  if (options.userId) {
+    const perfGuidance = await getPerformanceGuidance(options.userId, task);
+    if (perfGuidance) {
+      taskWithContext += perfGuidance;
+    }
+  }
+
   messages.push({ role: "user", content: taskWithContext });
 
   let iterations = 0;
@@ -1556,6 +1569,9 @@ export async function runOrchestrator(
             )
           );
 
+          const taskDuration =
+            Date.now() - executionContext.evolutionTracker.startTime;
+
           const taskOutcome: TaskOutcome = {
             success: true,
             query: task,
@@ -1565,10 +1581,24 @@ export async function runOrchestrator(
             ),
             iterationsUsed: iterations,
             tokensUsed: executionContext.tokenEstimate,
-            durationMs:
-              Date.now() - executionContext.evolutionTracker.startTime,
+            durationMs: taskDuration,
           };
           postTaskEvolution(taskOutcome, options.userId).catch(() => {});
+
+          if (options.userId) {
+            const perfComparison = await recordTaskPerformance(
+              options.userId,
+              task,
+              taskDuration,
+              true,
+              iterations
+            );
+            if (perfComparison.previousDuration) {
+              callbacks.onThinking?.(
+                `\n📊 ${formatPerformanceReport(perfComparison)}`
+              );
+            }
+          }
 
           callbacks.onComplete(input.summary, input.artifacts);
           isComplete = true;
