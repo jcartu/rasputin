@@ -26,6 +26,15 @@ import {
   createProcedureFromTask,
   findMatchingProcedure,
 } from "./memoryIntegration";
+import {
+  generateSearchQueries,
+  scoreSourceCredibility,
+  extractCitations,
+  detectConflicts,
+  formatResearchReport,
+  type ResearchSource,
+  type DeepResearchResult,
+} from "./deepResearch";
 import { getMemoryService } from "../memory";
 import {
   connectMCPServer,
@@ -385,6 +394,103 @@ export async function browseUrl(url: string): Promise<string> {
   } catch (error) {
     return `Error browsing URL: ${error instanceof Error ? error.message : String(error)}`;
   }
+}
+
+export async function deepResearch(
+  topic: string,
+  depth: number = 2
+): Promise<string> {
+  const startTime = Date.now();
+  const sources: ResearchSource[] = [];
+  const queries = generateSearchQueries(topic);
+  const maxQueries = Math.min(queries.length, depth + 2);
+
+  for (let i = 0; i < maxQueries; i++) {
+    const query = queries[i];
+    try {
+      const searchResult = await webSearch(query);
+      const urlMatches = searchResult.match(/https?:\/\/[^\s\]]+/g) || [];
+
+      for (const url of urlMatches.slice(0, 3)) {
+        const { score, reason } = scoreSourceCredibility(url);
+        sources.push({
+          url,
+          title: url.split("/").slice(2, 3).join(""),
+          snippet: searchResult.slice(0, 200),
+          domain: new URL(url).hostname,
+          credibilityScore: score,
+          credibilityReason: reason,
+          retrievedAt: Date.now(),
+        });
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  const uniqueSources = sources.filter(
+    (s, i, arr) => arr.findIndex(x => x.url === s.url) === i
+  );
+
+  let synthesis = "";
+  try {
+    const SONAR_API_KEY = process.env.SONAR_API_KEY || "";
+    const synthesisResponse = await fetch(
+      "https://api.perplexity.ai/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SONAR_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "sonar-pro",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a research synthesizer. Provide a comprehensive summary with citations to sources. Note any conflicting information between sources.",
+            },
+            {
+              role: "user",
+              content: `Synthesize research on: ${topic}\n\nSources consulted:\n${uniqueSources.map(s => `- ${s.url} (${s.credibilityReason})`).join("\n")}`,
+            },
+          ],
+          max_tokens: 4096,
+        }),
+      }
+    );
+
+    const data = await synthesisResponse.json();
+    synthesis = data.choices?.[0]?.message?.content || "Unable to synthesize";
+  } catch {
+    synthesis =
+      `Research found ${uniqueSources.length} sources on "${topic}". Top sources by credibility:\n` +
+      uniqueSources
+        .sort((a, b) => b.credibilityScore - a.credibilityScore)
+        .slice(0, 5)
+        .map(
+          s =>
+            `- ${s.url} (${(s.credibilityScore * 100).toFixed(0)}% credibility)`
+        )
+        .join("\n");
+  }
+
+  const citations = extractCitations(synthesis, uniqueSources);
+  const conflicts = detectConflicts(citations);
+
+  const result: DeepResearchResult = {
+    query: topic,
+    sources: uniqueSources,
+    citations,
+    conflicts,
+    synthesis,
+    depth,
+    totalQueries: maxQueries,
+    researchTimeMs: Date.now() - startTime,
+  };
+
+  return formatResearchReport(result);
 }
 
 export async function executePython(code: string): Promise<string> {
@@ -5573,6 +5679,8 @@ export async function executeTool(
       );
     case "web_search":
       return webSearch(input.query as string);
+    case "deep_research":
+      return deepResearch(input.topic as string, (input.depth as number) || 2);
     case "searxng_search":
       return searxngSearch(input.query as string, {
         engines: input.engines as string | undefined,
@@ -7678,6 +7786,24 @@ export function getAvailableTools(): Array<{
           type: "string",
           description:
             "Voice to use (default: 'alloy'). Options: alloy, echo, fable, onyx, nova, shimmer",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "deep_research",
+      description:
+        "Perform multi-source deep research on a topic. Runs multiple search queries, tracks citations with URLs, scores source credibility, and identifies conflicting information. Use this for comprehensive research tasks instead of single web_search calls.",
+      parameters: {
+        topic: {
+          type: "string",
+          description: "The research topic or question",
+          required: true,
+        },
+        depth: {
+          type: "number",
+          description:
+            "Research depth (1=quick, 2=standard, 3=thorough). Default: 2",
           required: false,
         },
       },
