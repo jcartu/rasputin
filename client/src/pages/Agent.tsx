@@ -1154,6 +1154,7 @@ export default function AgentPage() {
 
   const jarvisStream = useJarvisStream();
   const [useStreamingMode, setUseStreamingMode] = useState(true);
+  const [researchMode, setResearchMode] = useState(false);
 
   // Fetch persisted tasks from database
   const { data: dbTasks, refetch: refetchTasks } =
@@ -1284,14 +1285,24 @@ export default function AgentPage() {
   const handleSubmitStreaming = useCallback(() => {
     if (!input.trim() || jarvisStream.isStreaming || !user?.id) return;
 
-    const taskInput = input.trim();
+    let taskInput = input.trim();
+
+    if (researchMode) {
+      taskInput = `[RESEARCH MODE - Use query_synthesis for comprehensive multi-model analysis with web search, or query_consensus if comparing perspectives. Provide thorough, well-researched response.]\n\n${taskInput}`;
+    }
+
     setInput("");
     setCurrentTask(null);
     jarvisStream.startTask(taskInput, user.id);
-  }, [input, jarvisStream, user?.id]);
+  }, [input, jarvisStream, user?.id, researchMode]);
 
   const handleSubmitLegacy = useCallback(async () => {
     if (!input.trim() || isProcessing) return;
+
+    let taskInput = input.trim();
+    if (researchMode) {
+      taskInput = `[RESEARCH MODE - Use query_synthesis for comprehensive multi-model analysis with web search, or query_consensus if comparing perspectives. Provide thorough, well-researched response.]\n\n${taskInput}`;
+    }
 
     const userMessage: AgentMessage = {
       id: crypto.randomUUID(),
@@ -1305,7 +1316,7 @@ export default function AgentPage() {
       task = {
         id: crypto.randomUUID(),
         title: input.trim().slice(0, 50) + (input.length > 50 ? "..." : ""),
-        query: input.trim(),
+        query: taskInput,
         status: "running",
         messages: [userMessage],
         createdAt: Date.now(),
@@ -1350,7 +1361,7 @@ export default function AgentPage() {
         }));
 
       const result = await jarvisExecute.mutateAsync({
-        task: input.trim(),
+        task: taskInput,
         conversationHistory,
       });
 
@@ -1479,7 +1490,14 @@ export default function AgentPage() {
     }
 
     setIsProcessing(false);
-  }, [input, isProcessing, currentTask, jarvisExecute, refetchTasks]);
+  }, [
+    input,
+    isProcessing,
+    currentTask,
+    jarvisExecute,
+    refetchTasks,
+    researchMode,
+  ]);
 
   const handleSubmit = useCallback(() => {
     if (useStreamingMode) {
@@ -1837,12 +1855,31 @@ export default function AgentPage() {
                 JARVIS
               </span>
             </div>
-            <Badge
-              variant="outline"
-              className="text-purple-400 border-purple-400/50"
+            <div
+              className="flex items-center gap-1 px-2 py-1 rounded-full border border-border/50 bg-muted/30 cursor-pointer select-none"
+              onClick={() => setResearchMode(!researchMode)}
             >
-              Agent Mode
-            </Badge>
+              <span
+                className={cn(
+                  "text-xs font-medium px-2 py-0.5 rounded-full transition-all",
+                  !researchMode
+                    ? "bg-purple-500/20 text-purple-400"
+                    : "text-muted-foreground"
+                )}
+              >
+                Agent
+              </span>
+              <span
+                className={cn(
+                  "text-xs font-medium px-2 py-0.5 rounded-full transition-all",
+                  researchMode
+                    ? "bg-cyan-500/20 text-cyan-400"
+                    : "text-muted-foreground"
+                )}
+              >
+                Research
+              </span>
+            </div>
             {isProcessing && (
               <Badge
                 variant="outline"
