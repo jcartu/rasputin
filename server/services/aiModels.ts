@@ -206,10 +206,10 @@ async function queryGoogleDirect(
   }
 
   const geminiModelMap: Record<string, string> = {
-    "gemini-3-flash": "gemini-2.5-flash",
-    "gemini-3-pro": "gemini-2.5-pro",
+    "gemini-3-flash": "gemini-3-flash-preview",
+    "gemini-3-pro": "gemini-3-pro-preview",
   };
-  const geminiModel = geminiModelMap[model.id] || "gemini-2.5-flash";
+  const geminiModel = geminiModelMap[model.id] || "gemini-3-flash-preview";
 
   const contents = options.messages
     .filter(m => m.role !== "system")
@@ -602,13 +602,13 @@ async function queryCerebrasDirect(
 
 const OPENROUTER_MODEL_MAP: Record<string, string> = {
   "gpt-5": "openai/gpt-5.2",
-  "gpt-5.2-pro": "openai/gpt-5.2",
-  "claude-sonnet-4.5": "anthropic/claude-4-sonnet",
-  "claude-opus-4.5": "anthropic/claude-4-opus",
-  "gemini-3-flash": "google/gemini-2.5-flash",
-  "gemini-3-pro": "google/gemini-2.5-pro",
+  "gpt-5.2-pro": "openai/gpt-5.2-pro",
+  "claude-sonnet-4.5": "anthropic/claude-sonnet-4.5",
+  "claude-opus-4.5": "anthropic/claude-opus-4.5",
+  "gemini-3-flash": "google/gemini-3-flash",
+  "gemini-3-pro": "google/gemini-3-pro",
   "grok-4.1": "x-ai/grok-4.1",
-  "grok-4.1-pro": "x-ai/grok-4.2",
+  "grok-4.1-pro": "x-ai/grok-4.1-pro",
   "sonar-pro": "perplexity/sonar-pro",
 };
 
@@ -629,7 +629,7 @@ async function queryOpenRouter(
   const openRouterId =
     OPENROUTER_MODEL_MAP[model.id] ||
     model.openRouterId ||
-    "anthropic/claude-3.5-sonnet";
+    "anthropic/claude-sonnet-4.5";
 
   // Use non-streaming for OpenRouter to avoid SSE parsing issues
   const body: Record<string, unknown> = {

@@ -624,21 +624,29 @@ async function handleJarvisTask(
         try {
           const enrichedInput = { ...toolInput, userId };
           const result = await executeTool(toolName, enrichedInput);
-          await db.incrementUsage(userId, today, "totalApiCalls");
-          await db.updateAgentToolCall(toolCallRecord.id, {
+          // Non-blocking DB logging - don't let logging failures break tool execution
+          db.incrementUsage(userId, today, "totalApiCalls").catch(e =>
+            console.warn("[WebSocket] Failed to increment usage:", e)
+          );
+          db.updateAgentToolCall(toolCallRecord.id, {
             output: result,
             status: "completed",
             durationMs: Date.now() - toolStartTime,
-          });
+          }).catch(e =>
+            console.warn("[WebSocket] Failed to update tool call record:", e)
+          );
           return result;
         } catch (error) {
           const errorMsg =
             error instanceof Error ? error.message : String(error);
-          await db.updateAgentToolCall(toolCallRecord.id, {
+          // Non-blocking DB logging - don't let logging failures mask the actual error
+          db.updateAgentToolCall(toolCallRecord.id, {
             status: "error",
             errorMessage: errorMsg,
             durationMs: Date.now() - toolStartTime,
-          });
+          }).catch(e =>
+            console.warn("[WebSocket] Failed to update tool call error:", e)
+          );
           throw error;
         }
       },

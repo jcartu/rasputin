@@ -841,7 +841,7 @@ interface SlideDefinition {
  */
 export async function writePptx(
   filePath: string,
-  slides: SlideDefinition[],
+  slides: SlideDefinition[] | unknown,
   options?: { title?: string; author?: string; subject?: string }
 ): Promise<string> {
   await ensureSandbox();
@@ -851,6 +851,23 @@ export async function writePptx(
   const finalPath = resolvedPath.endsWith(".pptx")
     ? resolvedPath
     : resolvedPath + ".pptx";
+
+  let slideArray: SlideDefinition[];
+  if (typeof slides === "string") {
+    try {
+      slideArray = JSON.parse(slides) as SlideDefinition[];
+    } catch {
+      return `Error: slides must be a valid array. Received string that couldn't be parsed as JSON.`;
+    }
+  } else if (!Array.isArray(slides)) {
+    return `Error: slides must be an array. Received: ${typeof slides}`;
+  } else {
+    slideArray = slides as SlideDefinition[];
+  }
+
+  if (slideArray.length === 0) {
+    return `Error: slides array cannot be empty. Provide at least one slide.`;
+  }
 
   try {
     await fs.mkdir(path.dirname(finalPath), { recursive: true });
@@ -897,8 +914,8 @@ export async function writePptx(
       ],
     });
 
-    for (let i = 0; i < slides.length; i++) {
-      const slideData = slides[i];
+    for (let i = 0; i < slideArray.length; i++) {
+      const slideData = slideArray[i];
       const slide = pptx.addSlide();
 
       // Determine slide layout and styling
@@ -1050,7 +1067,7 @@ export async function writePptx(
     await pptx.writeFile({ fileName: finalPath });
 
     const stats = await fs.stat(finalPath);
-    return `PowerPoint presentation created: ${finalPath} (${stats.size} bytes, ${slides.length} slides)`;
+    return `PowerPoint presentation created: ${finalPath} (${stats.size} bytes, ${slideArray.length} slides)`;
   } catch (error) {
     return `Error creating PowerPoint: ${error instanceof Error ? error.message : String(error)}`;
   }
@@ -1082,7 +1099,7 @@ interface SheetDefinition {
  */
 export async function writeXlsx(
   filePath: string,
-  sheets: SheetDefinition[],
+  sheets: SheetDefinition[] | unknown,
   options?: { creator?: string; title?: string }
 ): Promise<string> {
   await ensureSandbox();
@@ -1092,6 +1109,23 @@ export async function writeXlsx(
   const finalPath = resolvedPath.endsWith(".xlsx")
     ? resolvedPath
     : resolvedPath + ".xlsx";
+
+  let sheetArray: SheetDefinition[];
+  if (typeof sheets === "string") {
+    try {
+      sheetArray = JSON.parse(sheets) as SheetDefinition[];
+    } catch {
+      return `Error: sheets must be a valid array. Received string that couldn't be parsed as JSON.`;
+    }
+  } else if (!Array.isArray(sheets)) {
+    return `Error: sheets must be an array. Received: ${typeof sheets}`;
+  } else {
+    sheetArray = sheets as SheetDefinition[];
+  }
+
+  if (sheetArray.length === 0) {
+    return `Error: sheets array cannot be empty. Provide at least one sheet.`;
+  }
 
   try {
     await fs.mkdir(path.dirname(finalPath), { recursive: true });
@@ -1106,7 +1140,7 @@ export async function writeXlsx(
       workbook.title = options.title;
     }
 
-    for (const sheetDef of sheets) {
+    for (const sheetDef of sheetArray) {
       const worksheet = workbook.addWorksheet(sheetDef.name);
 
       // Set column widths if provided
@@ -1207,13 +1241,13 @@ export async function writeXlsx(
     await workbook.xlsx.writeFile(finalPath);
 
     const stats = await fs.stat(finalPath);
-    const sheetNames = sheets.map(s => s.name).join(", ");
-    const totalRows = sheets.reduce(
+    const sheetNames = sheetArray.map(s => s.name).join(", ");
+    const totalRows = sheetArray.reduce(
       (sum, s) => sum + (s.data?.length || 0) + (s.headers ? 1 : 0),
       0
     );
 
-    return `Excel spreadsheet created: ${finalPath} (${stats.size} bytes, ${sheets.length} sheet(s): ${sheetNames}, ${totalRows} total rows)`;
+    return `Excel spreadsheet created: ${finalPath} (${stats.size} bytes, ${sheetArray.length} sheet(s): ${sheetNames}, ${totalRows} total rows)`;
   } catch (error) {
     return `Error creating Excel spreadsheet: ${error instanceof Error ? error.message : String(error)}`;
   }

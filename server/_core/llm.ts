@@ -286,7 +286,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
   // Use OpenAI model when using OpenAI API, otherwise use Forge model
   const isOpenAiApi = resolveApiUrl().includes("api.openai.com");
-  const defaultModel = isOpenAiApi ? "gpt-4.1-mini" : "gemini-2.5-flash";
+  const defaultModel = isOpenAiApi ? "gpt-5.2" : "gemini-3-flash-preview";
 
   const payload: Record<string, unknown> = {
     model: defaultModel,

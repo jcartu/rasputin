@@ -789,18 +789,28 @@ export const appRouter = router({
               });
 
               const toolStartTime = Date.now();
+              const logToolCall = (
+                updates: Parameters<typeof db.updateAgentToolCall>[1]
+              ) => {
+                db.updateAgentToolCall(toolCallRecord.id, updates).catch(e =>
+                  console.warn("[Router] Failed to update tool call:", e)
+                );
+              };
+
               try {
                 const enrichedInput = {
                   ...toolInput,
                   userId: ctx.user.id,
                 };
                 const result = await executeTool(toolName, enrichedInput);
-                await db.incrementUsage(ctx.user.id, today, "totalApiCalls");
+                db.incrementUsage(ctx.user.id, today, "totalApiCalls").catch(
+                  e => console.warn("[Router] Failed to increment usage:", e)
+                );
 
                 if (result.startsWith("APPROVAL_REQUIRED:")) {
                   const parts = result.split(":");
                   const approvalId = parseInt(parts[1], 10);
-                  await db.updateAgentToolCall(toolCallRecord.id, {
+                  logToolCall({
                     output: result,
                     status: "completed",
                     durationMs: Date.now() - toolStartTime,
@@ -816,7 +826,7 @@ export const appRouter = router({
                   throw pauseError;
                 }
 
-                await db.updateAgentToolCall(toolCallRecord.id, {
+                logToolCall({
                   output: result,
                   status: "completed",
                   durationMs: Date.now() - toolStartTime,
@@ -831,7 +841,7 @@ export const appRouter = router({
                 ) {
                   throw error;
                 }
-                await db.updateAgentToolCall(toolCallRecord.id, {
+                logToolCall({
                   status: "error",
                   errorMessage: errorMsg,
                   durationMs: Date.now() - toolStartTime,
