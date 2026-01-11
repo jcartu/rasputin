@@ -13,6 +13,8 @@ import {
   AGENT_CONFIGS,
 } from "./types";
 import { invokeLLM } from "../../_core/llm";
+import { getDb } from "../../db";
+import { agentTasks } from "../../../drizzle/schema";
 
 interface OrchestrationPlan {
   analysis: string;
@@ -85,7 +87,12 @@ export class MultiAgentOrchestrator {
 
       // Execute based on execution order
       if (plan.executionOrder === "parallel") {
-        // Execute all subtasks in parallel
+        // Execute all subtasks in parallel (no dependencies)
+        console.log(
+          `[MultiAgent] Executing ${subtasks.length} subtasks in PARALLEL`
+        );
+        const parallelStart = Date.now();
+
         const results = await Promise.all(
           subtasks.map(async subtask => {
             const result = await agentManager.executeAgent(
@@ -101,17 +108,123 @@ export class MultiAgentOrchestrator {
           })
         );
 
+        console.log(
+          `[MultiAgent] Parallel execution completed in ${Date.now() - parallelStart}ms`
+        );
+
         for (const { subtaskId, result } of results) {
           subtaskResults.set(subtaskId, result);
           totalTokensUsed += result.tokensUsed;
         }
+      } else if (plan.executionOrder === "mixed") {
+        // Mixed mode: Execute in waves based on dependencies
+        // Subtasks with no dependencies run in parallel first,
+        // then subtasks whose dependencies are met, etc.
+        console.log(
+          `[MultiAgent] Executing ${subtasks.length} subtasks in MIXED mode (parallel with dependencies)`
+        );
+        const mixedStart = Date.now();
+
+        // Build dependency map: subtaskId -> array of subtask indices it depends on
+        const subtaskIdToIndex = new Map<number, number>();
+        subtasks.forEach((s, idx) => subtaskIdToIndex.set(s.id, idx));
+
+        const completed = new Set<number>();
+        const failed = new Set<number>();
+        let remainingSubtasks = [...subtasks];
+
+        while (remainingSubtasks.length > 0) {
+          // Find all subtasks that can run now (no unmet dependencies)
+          const readyToRun = remainingSubtasks.filter(subtask => {
+            if (!subtask.dependsOn || subtask.dependsOn.length === 0)
+              return true;
+            // All dependencies must be completed (not failed)
+            return subtask.dependsOn.every(depIdx => {
+              const depSubtask = subtasks[depIdx];
+              return depSubtask && completed.has(depSubtask.id);
+            });
+          });
+
+          // Check for subtasks with failed dependencies
+          const failedDeps = remainingSubtasks.filter(subtask => {
+            if (!subtask.dependsOn || subtask.dependsOn.length === 0)
+              return false;
+            return subtask.dependsOn.some(depIdx => {
+              const depSubtask = subtasks[depIdx];
+              return depSubtask && failed.has(depSubtask.id);
+            });
+          });
+
+          // Cancel subtasks with failed dependencies
+          for (const subtask of failedDeps) {
+            await agentManager.updateSubtask(subtask.id, "cancelled");
+            failed.add(subtask.id);
+          }
+
+          if (readyToRun.length === 0) {
+            // No more subtasks can run, we're done
+            break;
+          }
+
+          console.log(
+            `[MultiAgent] Running wave of ${readyToRun.length} subtasks in parallel`
+          );
+
+          // Execute ready subtasks in parallel
+          const waveResults = await Promise.all(
+            readyToRun.map(async subtask => {
+              await agentManager.updateSubtask(subtask.id, "in_progress");
+              const result = await agentManager.executeAgent(
+                subtask.assignedAgentId,
+                subtask.description || subtask.title
+              );
+              await agentManager.updateSubtask(
+                subtask.id,
+                result.success ? "completed" : "failed",
+                { result: result.output, error: result.error }
+              );
+              return { subtaskId: subtask.id, result };
+            })
+          );
+
+          // Record results
+          for (const { subtaskId, result } of waveResults) {
+            subtaskResults.set(subtaskId, result);
+            totalTokensUsed += result.tokensUsed;
+            if (result.success) {
+              completed.add(subtaskId);
+            } else {
+              failed.add(subtaskId);
+            }
+          }
+
+          // Remove processed subtasks from remaining
+          const processedIds = new Set([
+            ...readyToRun.map(s => s.id),
+            ...failedDeps.map(s => s.id),
+          ]);
+          remainingSubtasks = remainingSubtasks.filter(
+            s => !processedIds.has(s.id)
+          );
+        }
+
+        console.log(
+          `[MultiAgent] Mixed execution completed in ${Date.now() - mixedStart}ms`
+        );
       } else {
-        // Execute sequentially (respecting dependencies)
+        // Sequential execution (respecting dependencies)
+        console.log(
+          `[MultiAgent] Executing ${subtasks.length} subtasks SEQUENTIALLY`
+        );
+        const seqStart = Date.now();
+
         for (const subtask of subtasks) {
           // Check dependencies
           if (subtask.dependsOn && subtask.dependsOn.length > 0) {
-            const allDependenciesMet = subtask.dependsOn.every(depId => {
-              const depResult = subtaskResults.get(depId);
+            const allDependenciesMet = subtask.dependsOn.every(depIdx => {
+              const depSubtask = subtasks[depIdx];
+              if (!depSubtask) return false;
+              const depResult = subtaskResults.get(depSubtask.id);
               return depResult && depResult.success;
             });
 
@@ -137,6 +250,10 @@ export class MultiAgentOrchestrator {
           subtaskResults.set(subtask.id, result);
           totalTokensUsed += result.tokensUsed;
         }
+
+        console.log(
+          `[MultiAgent] Sequential execution completed in ${Date.now() - seqStart}ms`
+        );
       }
 
       // Aggregate results
@@ -247,6 +364,7 @@ If the task is simple and doesn't need decomposition, return an empty subtasks a
                       "description",
                       "targetAgentType",
                       "priority",
+                      "dependsOn",
                     ],
                     additionalProperties: false,
                   },
@@ -366,11 +484,22 @@ Please provide a comprehensive final answer that:
   async runTask(
     userId: number,
     task: string,
-    coordinatorId?: number
+    _coordinatorId?: number
   ): Promise<OrchestrationResult> {
-    // Generate a task ID
-    const taskId = Date.now();
-    return this.executeTask(userId, taskId, task);
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    const [inserted] = await db
+      .insert(agentTasks)
+      .values({
+        userId,
+        title: task.substring(0, 100),
+        query: task,
+        status: "running",
+      })
+      .$returningId();
+
+    return this.executeTask(userId, inserted.id, task);
   }
 
   /**
