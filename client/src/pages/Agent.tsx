@@ -204,6 +204,27 @@ const TASK_TEMPLATES = [
       },
     ],
   },
+  {
+    category: "Multi-Model",
+    icon: <Users className="h-4 w-4" />,
+    templates: [
+      {
+        title: "Get Consensus",
+        prompt:
+          "Get consensus from multiple AI models (GPT-5, Claude, Gemini, Grok) on [topic]",
+      },
+      {
+        title: "Deep Synthesis",
+        prompt:
+          "Run deep synthesis research on [topic] using web search and multi-model analysis",
+      },
+      {
+        title: "Model Comparison",
+        prompt:
+          "Compare how different AI models approach [problem or question]",
+      },
+    ],
+  },
 ];
 
 // Tool icon mapping
@@ -1956,7 +1977,7 @@ export default function AgentPage() {
                   Your autonomous AI agent. I can browse the web, execute code,
                   generate images, and complete complex tasks.
                 </p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-2xl">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-3xl">
                   <Card
                     className="bg-muted/30 border-border/50 hover:border-cyan-500/50 transition-colors cursor-pointer"
                     onClick={() =>
@@ -2023,6 +2044,42 @@ export default function AgentPage() {
                         <h3 className="font-medium text-sm">Images</h3>
                         <p className="text-xs text-muted-foreground">
                           AI generation
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card
+                    className="bg-muted/30 border-border/50 hover:border-purple-500/50 transition-colors cursor-pointer"
+                    onClick={() =>
+                      handleUseTemplate(
+                        "Get consensus from multiple AI models on [topic]"
+                      )
+                    }
+                  >
+                    <CardContent className="p-4 flex flex-col items-center gap-2 text-center">
+                      <Users className="h-6 w-6 text-purple-400" />
+                      <div>
+                        <h3 className="font-medium text-sm">Consensus</h3>
+                        <p className="text-xs text-muted-foreground">
+                          Multi-model query
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card
+                    className="bg-muted/30 border-border/50 hover:border-orange-500/50 transition-colors cursor-pointer"
+                    onClick={() =>
+                      handleUseTemplate(
+                        "Run deep synthesis research on [topic]"
+                      )
+                    }
+                  >
+                    <CardContent className="p-4 flex flex-col items-center gap-2 text-center">
+                      <Brain className="h-6 w-6 text-orange-400" />
+                      <div>
+                        <h3 className="font-medium text-sm">Synthesis</h3>
+                        <p className="text-xs text-muted-foreground">
+                          Deep analysis
                         </p>
                       </div>
                     </CardContent>

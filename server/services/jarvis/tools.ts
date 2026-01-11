@@ -26,6 +26,9 @@ import {
   createProcedureFromTask,
   findMatchingProcedure,
 } from "./memoryIntegration";
+import { generateConsensus } from "../consensus";
+import { generateSynthesis } from "../synthesis";
+import { SpeedTier } from "../../../shared/rasputin";
 import {
   generateSearchQueries,
   scoreSourceCredibility,
@@ -507,6 +510,102 @@ export async function deepResearch(
   };
 
   return formatResearchReport(result);
+}
+
+/**
+ * Query multiple AI models in parallel and get a consensus answer.
+ * Uses RASPUTIN's consensus mode to gather perspectives from GPT-5, Claude, Gemini, Grok, etc.
+ */
+export async function queryConsensus(
+  query: string,
+  speedTier: SpeedTier = "normal"
+): Promise<string> {
+  const startTime = Date.now();
+
+  try {
+    const result = await generateConsensus({
+      query,
+      speedTier,
+      conversationHistory: [],
+    });
+
+    const modelSummaries = result.modelResponses
+      .filter(r => r.status === "completed")
+      .map(r => `**${r.modelName}**: ${r.content?.slice(0, 500)}...`)
+      .join("\n\n");
+
+    const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
+
+    return `# Consensus Query Result
+
+## Summary
+${result.summary}
+
+## Agreement Level
+${result.agreementPercentage.toFixed(0)}% agreement across ${result.modelResponses.length} models
+
+## Individual Model Responses
+${modelSummaries}
+
+## Stats
+- Duration: ${durationSec}s
+- Total tokens: ${result.totalTokens}
+- Cost: $${result.totalCost.toFixed(4)}
+- Speed tier: ${speedTier}`;
+  } catch (error) {
+    return `Error running consensus query: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Run a deep synthesis pipeline that gathers web data, queries multiple models,
+ * extracts information, detects gaps, and produces a comprehensive synthesis.
+ */
+export async function querySynthesis(
+  query: string,
+  speedTier: SpeedTier = "normal"
+): Promise<string> {
+  const startTime = Date.now();
+
+  try {
+    const result = await generateSynthesis({
+      query,
+      speedTier,
+      conversationHistory: [],
+    });
+
+    const stagesSummary = result.stages
+      .map(s => `- ${s.stageName}: ${s.status} (${s.durationMs || 0}ms)`)
+      .join("\n");
+
+    const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
+
+    return `# Synthesis Pipeline Result
+
+## Final Synthesis
+${result.finalSynthesis}
+
+## Pipeline Stages
+${stagesSummary}
+
+## Web Search Results
+${result.webSearchResults?.slice(0, 1000) || "No web search performed"}...
+
+## Gaps Identified
+${result.gapsIdentified?.length ? result.gapsIdentified.join("\n- ") : "None identified"}
+
+## Conflicts Resolved
+${result.conflictsResolved?.length ? result.conflictsResolved.join("\n- ") : "None identified"}
+
+## Stats
+- Duration: ${durationSec}s
+- Total tokens: ${result.totalTokens}
+- Cost: $${result.totalCost.toFixed(4)}
+- Models queried: ${result.proposerResponses?.length || 0}
+- Speed tier: ${speedTier}`;
+  } catch (error) {
+    return `Error running synthesis pipeline: ${error instanceof Error ? error.message : String(error)}`;
+  }
 }
 
 export async function executePython(code: string): Promise<string> {
@@ -6116,6 +6215,16 @@ export async function executeTool(
       return webSearch(input.query as string);
     case "deep_research":
       return deepResearch(input.topic as string, (input.depth as number) || 2);
+    case "query_consensus":
+      return queryConsensus(
+        input.query as string,
+        (input.speed_tier as SpeedTier) || "normal"
+      );
+    case "query_synthesis":
+      return querySynthesis(
+        input.query as string,
+        (input.speed_tier as SpeedTier) || "normal"
+      );
     case "searxng_search":
       return searxngSearch(input.query as string, {
         engines: input.engines as string | undefined,
@@ -8324,6 +8433,42 @@ export function getAvailableTools(): Array<{
           type: "number",
           description:
             "Research depth (1=quick, 2=standard, 3=thorough). Default: 2",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "query_consensus",
+      description:
+        "Query multiple frontier AI models (GPT-5, Claude, Gemini, Grok, etc.) in parallel and get a synthesized consensus answer. Use this when you need diverse perspectives, want to verify accuracy across models, or when the question is complex/controversial. Returns individual model responses plus an agreement percentage and unified summary.",
+      parameters: {
+        query: {
+          type: "string",
+          description: "The question or topic to get consensus on",
+          required: true,
+        },
+        speed_tier: {
+          type: "string",
+          description:
+            "Speed/quality tier: 'fast' (Gemini Flash, Cerebras), 'normal' (GPT-5, Claude Sonnet, Grok), or 'max' (GPT-5.2 Pro, Claude Opus, Gemini Pro). Default: 'normal'",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "query_synthesis",
+      description:
+        "Run a comprehensive 5-stage synthesis pipeline: (1) web search for current data, (2) parallel model queries, (3) information extraction, (4) gap detection, (5) meta-synthesis. Use this for research questions requiring thorough analysis, current information, and identification of knowledge gaps. More comprehensive than deep_research or query_consensus alone.",
+      parameters: {
+        query: {
+          type: "string",
+          description: "The research question or topic for synthesis",
+          required: true,
+        },
+        speed_tier: {
+          type: "string",
+          description:
+            "Speed/quality tier: 'fast', 'normal', or 'max'. Higher tiers use more capable models. Default: 'normal'",
           required: false,
         },
       },

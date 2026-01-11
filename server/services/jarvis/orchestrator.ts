@@ -269,6 +269,22 @@ ADVANCED CAPABILITIES:
 - MCP Integration: connect_mcp_server for external tools (Slack, Jira, databases)
 - Self-Review: Use self_review for important tasks before delivering final response
 
+MULTI-MODEL INTELLIGENCE (query_consensus, query_synthesis):
+- query_consensus: Query GPT-5, Claude, Gemini, Grok in PARALLEL, get agreement % and unified answer
+  USE WHEN: Need diverse perspectives, verifying accuracy, complex/controversial topics, comparing viewpoints
+  EXAMPLE: "What are the pros and cons of microservices?" → Get 5+ model perspectives
+  
+- query_synthesis: Full 5-stage pipeline (web search → parallel models → extract → gaps → synthesize)
+  USE WHEN: Research requiring current web data, comprehensive analysis, identifying knowledge gaps
+  EXAMPLE: "Latest developments in quantum computing 2026" → Web + multi-model + gap analysis
+  
+DECISION GUIDE for multi-model tools:
+- Simple factual question → web_search or single API call
+- Need current + verified data → query_synthesis (includes web search)
+- Need multiple expert opinions → query_consensus
+- Deep dive research → deep_research (multi-source) OR query_synthesis (multi-model + web)
+- Controversial/subjective topics → query_consensus (see where models agree/disagree)
+
 ${TOOL_SELECTION_GUIDE}
 
 ${FAILURE_RECOVERY_PROTOCOL}
