@@ -899,6 +899,13 @@ export function JarvisStreamView({
     }
   }, [state.isStreaming]);
 
+  // Helper to extract file path from tool output like "Excel spreadsheet created: /tmp/jarvis-workspace/file.xlsx (123 bytes...)"
+  const extractPathFromOutput = (output: string): string | null => {
+    // Match patterns like "created: /path/file.ext" or "written to: /path/file.ext"
+    const match = output.match(/(?:created|written)[^:]*:\s*([^\s(]+)/i);
+    return match ? match[1] : null;
+  };
+
   const artifacts = state.steps
     .filter(s => s.type === "tool" && s.tool)
     .map(s => s.tool!)
@@ -907,6 +914,9 @@ export function JarvisStreamView({
         t.status === "completed" &&
         (t.name === "generate_image" ||
           t.name === "write_file" ||
+          t.name === "write_xlsx" ||
+          t.name === "write_docx" ||
+          t.name === "write_pptx" ||
           t.name === "screenshot")
     )
     .map(t => {
@@ -920,6 +930,42 @@ export function JarvisStreamView({
         const urlMatch = t.output.match(/https?:\/\/[^\s]+/);
         if (urlMatch) return { type: "image", url: urlMatch[0] };
       }
+
+      // Handle document generation tools (write_xlsx, write_docx, write_pptx)
+      if (
+        (t.name === "write_xlsx" ||
+          t.name === "write_docx" ||
+          t.name === "write_pptx") &&
+        t.output
+      ) {
+        const filePath = extractPathFromOutput(t.output);
+        if (filePath) {
+          const filename = filePath.split("/").pop() || filePath;
+          const relativePath = filePath.startsWith("/tmp/jarvis-workspace/")
+            ? filePath.replace("/tmp/jarvis-workspace/", "")
+            : filePath.startsWith("/tmp/")
+              ? filePath.replace("/tmp/", "")
+              : filePath.startsWith("/")
+                ? filePath.substring(1)
+                : filePath;
+          const downloadUrl = `/api/files/workspace/${relativePath}`;
+
+          const fileType =
+            t.name === "write_xlsx"
+              ? "xlsx"
+              : t.name === "write_docx"
+                ? "docx"
+                : "pptx";
+          return {
+            type: "file",
+            path: filePath,
+            filename,
+            downloadUrl,
+            fileType,
+          };
+        }
+      }
+
       if (
         t.name === "write_file" &&
         t.input &&
@@ -931,9 +977,11 @@ export function JarvisStreamView({
         const filename = filePath.split("/").pop() || filePath;
         const relativePath = filePath.startsWith("/tmp/jarvis-workspace/")
           ? filePath.replace("/tmp/jarvis-workspace/", "")
-          : filePath.startsWith("/")
-            ? filePath.substring(1)
-            : filePath;
+          : filePath.startsWith("/tmp/")
+            ? filePath.replace("/tmp/", "")
+            : filePath.startsWith("/")
+              ? filePath.substring(1)
+              : filePath;
         const downloadUrl = `/api/files/workspace/${relativePath}`;
 
         if (filePath.endsWith(".html")) {

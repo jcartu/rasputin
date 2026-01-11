@@ -639,7 +639,102 @@ function FileWritePreview({
   );
 }
 
-// Main Preview Component
+function DocumentWritePreview({
+  output,
+  toolName,
+}: {
+  output: string;
+  toolName: string;
+}) {
+  const pathMatch = output.match(/(?:created|written)[^:]*:\s*([^\s(]+)/i);
+  const filePath = pathMatch?.[1];
+
+  if (!filePath) {
+    return (
+      <pre className="mt-1 p-2 rounded bg-muted/50 text-xs overflow-x-auto max-h-48 whitespace-pre-wrap">
+        {output}
+      </pre>
+    );
+  }
+
+  const filename = filePath.split("/").pop() || filePath;
+  const relativePath = filePath.startsWith("/tmp/jarvis-workspace/")
+    ? filePath.replace("/tmp/jarvis-workspace/", "")
+    : filePath.startsWith("/tmp/")
+      ? filePath.replace("/tmp/", "")
+      : filePath.startsWith("/")
+        ? filePath.substring(1)
+        : filePath;
+  const downloadUrl = `/api/files/workspace/${relativePath}`;
+
+  const isXlsx = toolName === "write_xlsx" || filename.endsWith(".xlsx");
+  const isDocx = toolName === "write_docx" || filename.endsWith(".docx");
+  const isPptx = toolName === "write_pptx" || filename.endsWith(".pptx");
+
+  const iconColor = isXlsx
+    ? "text-green-400"
+    : isDocx
+      ? "text-blue-400"
+      : isPptx
+        ? "text-orange-400"
+        : "text-cyan-400";
+  const bgColor = isXlsx
+    ? "bg-green-500/10 border-green-500/20"
+    : isDocx
+      ? "bg-blue-500/10 border-blue-500/20"
+      : isPptx
+        ? "bg-orange-500/10 border-orange-500/20"
+        : "bg-cyan-500/10 border-cyan-500/20";
+
+  const fileTypeLabel = isXlsx
+    ? "Excel Spreadsheet"
+    : isDocx
+      ? "Word Document"
+      : isPptx
+        ? "PowerPoint Presentation"
+        : "Document";
+
+  return (
+    <div className={`mt-2 p-3 rounded ${bgColor} border space-y-3`}>
+      <div className="flex items-center gap-2">
+        <FileText className={`h-5 w-5 ${iconColor}`} />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate">{filename}</p>
+          <p className="text-xs text-muted-foreground">{fileTypeLabel}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="sm" className="gap-1.5" asChild>
+          <a href={downloadUrl} download={filename}>
+            <Download className="h-3.5 w-3.5" />
+            Download
+          </a>
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => {
+            navigator.clipboard.writeText(
+              `${window.location.origin}${downloadUrl}`
+            );
+          }}
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          Copy Link
+        </Button>
+        <Button variant="outline" size="sm" className="gap-1.5" asChild>
+          <a href={downloadUrl} target="_blank" rel="noopener noreferrer">
+            <Maximize2 className="h-3.5 w-3.5" />
+            Open
+          </a>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function ToolOutputPreview({
   toolName,
   output,
@@ -650,6 +745,16 @@ export function ToolOutputPreview({
     output.toLowerCase().includes("file written")
   ) {
     return <FileWritePreview output={output} input={input} />;
+  }
+
+  if (
+    (toolName === "write_xlsx" ||
+      toolName === "write_docx" ||
+      toolName === "write_pptx") &&
+    (output.toLowerCase().includes("created") ||
+      output.toLowerCase().includes("written"))
+  ) {
+    return <DocumentWritePreview output={output} toolName={toolName} />;
   }
 
   const fileInfo = detectFileType(output, toolName);
