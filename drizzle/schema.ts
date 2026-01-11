@@ -8,6 +8,7 @@ import {
   json,
   bigint,
   decimal,
+  boolean,
 } from "drizzle-orm/mysql-core";
 
 /**
@@ -2500,3 +2501,105 @@ export const knowledgeCache = mysqlTable("knowledgeCache", {
 
 export type KnowledgeCache = typeof knowledgeCache.$inferSelect;
 export type InsertKnowledgeCache = typeof knowledgeCache.$inferInsert;
+
+/**
+ * Async Task Queue - Background tasks that survive session disconnects and server restarts
+ */
+export const asyncTaskQueue = mysqlTable("asyncTaskQueue", {
+  id: int("id").autoincrement().primaryKey(),
+
+  userId: int("userId").notNull(),
+
+  taskType: mysqlEnum("taskType", [
+    "jarvis_task",
+    "agent_team",
+    "deep_research",
+    "code_generation",
+    "document_generation",
+    "scheduled_task",
+    "webhook_task",
+    "custom",
+  ]).notNull(),
+
+  status: mysqlEnum("status", [
+    "queued",
+    "running",
+    "completed",
+    "failed",
+    "cancelled",
+    "paused",
+  ])
+    .notNull()
+    .default("queued"),
+
+  priority: int("priority").notNull().default(5),
+
+  prompt: text("prompt").notNull(),
+
+  input: json("input").$type<Record<string, unknown>>(),
+
+  result: text("result"),
+
+  error: text("error"),
+
+  progress: int("progress").notNull().default(0),
+
+  progressMessage: varchar("progressMessage", { length: 500 }),
+
+  retryCount: int("retryCount").notNull().default(0),
+
+  maxRetries: int("maxRetries").notNull().default(3),
+
+  webhookUrl: varchar("webhookUrl", { length: 1000 }),
+
+  webhookDelivered: boolean("webhookDelivered").default(false),
+
+  webhookDeliveredAt: timestamp("webhookDeliveredAt"),
+
+  workerId: varchar("workerId", { length: 100 }),
+
+  startedAt: timestamp("startedAt"),
+
+  completedAt: timestamp("completedAt"),
+
+  estimatedDurationMs: int("estimatedDurationMs"),
+
+  actualDurationMs: int("actualDurationMs"),
+
+  tokensUsed: int("tokensUsed").default(0),
+
+  cost: decimal("cost", { precision: 10, scale: 6 }).default("0"),
+
+  metadata: json("metadata").$type<Record<string, unknown>>(),
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+
+  scheduledFor: timestamp("scheduledFor"),
+
+  expiresAt: timestamp("expiresAt"),
+});
+
+export type AsyncTaskQueue = typeof asyncTaskQueue.$inferSelect;
+export type InsertAsyncTaskQueue = typeof asyncTaskQueue.$inferInsert;
+
+/**
+ * Async Task Logs - Detailed execution logs for async tasks
+ */
+export const asyncTaskLogs = mysqlTable("asyncTaskLogs", {
+  id: int("id").autoincrement().primaryKey(),
+
+  taskId: int("taskId").notNull(),
+
+  level: mysqlEnum("level", ["debug", "info", "warn", "error"]).notNull(),
+
+  message: text("message").notNull(),
+
+  data: json("data").$type<Record<string, unknown>>(),
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AsyncTaskLog = typeof asyncTaskLogs.$inferSelect;
+export type InsertAsyncTaskLog = typeof asyncTaskLogs.$inferInsert;

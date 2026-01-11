@@ -1069,6 +1069,116 @@ export const appRouter = router({
           sessionName: info.sessionName,
         };
       }),
+
+    // ============================================================================
+    // Async Task Queue - Background tasks that survive session disconnects
+    // ============================================================================
+
+    submitAsyncTask: protectedProcedure
+      .input(
+        z.object({
+          taskType: z.enum([
+            "jarvis_task",
+            "agent_team",
+            "deep_research",
+            "code_generation",
+            "document_generation",
+            "scheduled_task",
+            "webhook_task",
+            "custom",
+          ]),
+          prompt: z.string(),
+          input: z.record(z.string(), z.unknown()).optional(),
+          priority: z.number().min(1).max(10).optional(),
+          webhookUrl: z.string().url().optional(),
+          scheduledFor: z.string().datetime().optional(),
+          maxRetries: z.number().min(0).max(10).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { taskQueue } = await import("./services/jarvis/taskQueue");
+        const taskId = await taskQueue.submitTask({
+          userId: ctx.user.id,
+          taskType: input.taskType,
+          prompt: input.prompt,
+          input: input.input,
+          priority: input.priority,
+          webhookUrl: input.webhookUrl,
+          scheduledFor: input.scheduledFor
+            ? new Date(input.scheduledFor)
+            : undefined,
+          maxRetries: input.maxRetries,
+        });
+        return { taskId, status: "queued" as const };
+      }),
+
+    getAsyncTaskStatus: protectedProcedure
+      .input(z.object({ taskId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const { taskQueue } = await import("./services/jarvis/taskQueue");
+        const status = await taskQueue.getTaskStatus(input.taskId);
+        if (!status) throw new Error("Task not found");
+        return status;
+      }),
+
+    listAsyncTasks: protectedProcedure
+      .input(
+        z
+          .object({
+            status: z
+              .enum([
+                "queued",
+                "running",
+                "completed",
+                "failed",
+                "cancelled",
+                "paused",
+              ])
+              .optional(),
+            limit: z.number().min(1).max(100).optional(),
+          })
+          .optional()
+      )
+      .query(async ({ ctx, input }) => {
+        const { taskQueue } = await import("./services/jarvis/taskQueue");
+        const tasks = await taskQueue.getUserTasks(ctx.user.id, {
+          status: input?.status,
+          limit: input?.limit,
+        });
+        return tasks.map(t => ({
+          id: t.id,
+          taskType: t.taskType,
+          status: t.status,
+          progress: t.progress,
+          progressMessage: t.progressMessage,
+          prompt: t.prompt.slice(0, 200),
+          createdAt: t.createdAt,
+          startedAt: t.startedAt,
+          completedAt: t.completedAt,
+          error: t.error,
+        }));
+      }),
+
+    cancelAsyncTask: protectedProcedure
+      .input(z.object({ taskId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { taskQueue } = await import("./services/jarvis/taskQueue");
+        const success = await taskQueue.cancelTask(input.taskId, ctx.user.id);
+        if (!success) throw new Error("Cannot cancel task");
+        return { success: true };
+      }),
+
+    getAsyncTaskLogs: protectedProcedure
+      .input(z.object({ taskId: z.number(), limit: z.number().optional() }))
+      .query(async ({ input }) => {
+        const { taskQueue } = await import("./services/jarvis/taskQueue");
+        return taskQueue.getTaskLogs(input.taskId, input.limit);
+      }),
+
+    getQueueStats: protectedProcedure.query(async () => {
+      const { taskQueue } = await import("./services/jarvis/taskQueue");
+      return taskQueue.getQueueStats();
+    }),
   }),
 
   // ============================================================================
