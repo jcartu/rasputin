@@ -17,6 +17,22 @@ import {
   type ToolValidationResult,
 } from "./toolValidation";
 import { postTaskEvolution, type TaskOutcome } from "./autoEvolution";
+import {
+  classifyError,
+  shouldRetry,
+  getRetryDelay,
+  formatErrorForLog,
+  type ClassifiedError,
+} from "./errorClassification";
+import { recordFailure, getFailureContext } from "./failureMemory";
+import { decideFallback } from "./fallbackPolicy";
+import {
+  createInitialState,
+  updateStrategy,
+  generateStrategyPrompt,
+  shouldForceComplete,
+  type StrategyState,
+} from "./strategySwitching";
 
 // Get API keys from environment - Direct connections, no OpenRouter middleman
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
@@ -347,6 +363,11 @@ interface ToolExecutionContext {
   failedApproaches: string[];
   progressTracker: ProgressTracker;
   evolutionTracker: EvolutionTracker;
+  strategyState: StrategyState;
+  signatureFailures: Map<string, number>;
+  lastClassifiedError?: ClassifiedError;
+  userId?: number;
+  taskId?: number;
 }
 
 interface EvolutionTracker {
@@ -736,14 +757,49 @@ async function executeSingleTool(
 
     if (isToolResultError(output) || isDefiniteError(output)) {
       isError = true;
+
+      const classified = classifyError({
+        toolName: tc.name,
+        output,
+      });
+
+      console.info(`[JARVIS] ${formatErrorForLog(classified)}`);
+
+      executionContext.lastClassifiedError = classified;
+      const sigCount =
+        (executionContext.signatureFailures.get(classified.signature) || 0) + 1;
+      executionContext.signatureFailures.set(classified.signature, sigCount);
+
+      executionContext.strategyState = updateStrategy(
+        executionContext.strategyState,
+        {
+          classified,
+          consecutiveFailures: executionContext.consecutiveFailures,
+          sameSignatureCount: sigCount,
+          lastToolName: tc.name,
+        }
+      );
+
       const failCount = (executionContext.failedTools.get(tc.name) || 0) + 1;
       executionContext.failedTools.set(tc.name, failCount);
 
       output = enhanceErrorOutput(tc.name, tc.input, output);
+      output += `\n\n[Error Class: ${classified.class.toUpperCase()}]`;
 
       const altTool = getAlternativeTool(tc.name, executionContext);
-      if (altTool && failCount <= 2) {
+      if (
+        altTool &&
+        failCount <= 2 &&
+        !executionContext.strategyState.toolBlacklist.has(altTool)
+      ) {
         output += `\n\n[JARVIS] Tool "${tc.name}" failed. Suggesting alternative: "${altTool}"`;
+      }
+
+      const strategyNote = generateStrategyPrompt(
+        executionContext.strategyState
+      );
+      if (strategyNote) {
+        output += `\n${strategyNote}`;
       }
     } else if (!validation.valid || validation.confidence < 50) {
       isError = true;
@@ -774,14 +830,47 @@ async function executeSingleTool(
     output = `Error: ${errorMsg}`;
     isError = true;
 
+    const classified = classifyError({
+      toolName: tc.name,
+      output,
+      error,
+    });
+
+    console.info(`[JARVIS] ${formatErrorForLog(classified)}`);
+
+    executionContext.lastClassifiedError = classified;
+    const sigCount =
+      (executionContext.signatureFailures.get(classified.signature) || 0) + 1;
+    executionContext.signatureFailures.set(classified.signature, sigCount);
+
+    executionContext.strategyState = updateStrategy(
+      executionContext.strategyState,
+      {
+        classified,
+        consecutiveFailures: executionContext.consecutiveFailures,
+        sameSignatureCount: sigCount,
+        lastToolName: tc.name,
+      }
+    );
+
     output = enhanceErrorOutput(tc.name, tc.input, output);
+    output += `\n\n[Error Class: ${classified.class.toUpperCase()}]`;
+
+    if (classified.retryable) {
+      output += ` (retryable after ${classified.retryAfterMs || 1000}ms)`;
+    }
 
     const failCount = (executionContext.failedTools.get(tc.name) || 0) + 1;
     executionContext.failedTools.set(tc.name, failCount);
 
     const altTool = getAlternativeTool(tc.name, executionContext);
-    if (altTool) {
+    if (altTool && !executionContext.strategyState.toolBlacklist.has(altTool)) {
       output += `\n\n[JARVIS] Consider using "${altTool}" as an alternative.`;
+    }
+
+    const strategyNote = generateStrategyPrompt(executionContext.strategyState);
+    if (strategyNote) {
+      output += `\n${strategyNote}`;
     }
   }
 
@@ -1345,6 +1434,8 @@ export async function runOrchestrator(
       toolsFailed: new Set(),
       startTime: Date.now(),
     },
+    strategyState: createInitialState(),
+    signatureFailures: new Map(),
   };
 
   while (!isComplete && iterations < maxIterations) {
