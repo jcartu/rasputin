@@ -59,6 +59,8 @@ import {
   HeadingLevel,
   AlignmentType,
 } from "docx";
+import PptxGenJS from "pptxgenjs";
+import ExcelJS from "exceljs";
 
 const execAsync = promisify(exec);
 const USE_DOCKER_SANDBOX = process.env.USE_SANDBOX !== "false";
@@ -812,6 +814,405 @@ export async function writeDocx(
     return `Word document created: ${finalPath} (${stats.size} bytes, ${lines.length} lines)`;
   } catch (error) {
     return `Error creating Word document: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Slide definition for PPTX generation
+ */
+interface SlideDefinition {
+  title?: string;
+  subtitle?: string;
+  content?: string | string[];
+  notes?: string;
+  layout?: "title" | "content" | "section" | "blank";
+  image?: { path: string; x?: number; y?: number; w?: number; h?: number };
+}
+
+/**
+ * Create a PowerPoint presentation (.pptx) from slide definitions
+ */
+export async function writePptx(
+  filePath: string,
+  slides: SlideDefinition[],
+  options?: { title?: string; author?: string; subject?: string }
+): Promise<string> {
+  await ensureSandbox();
+
+  const resolvedPath = filePath.startsWith("/")
+    ? filePath
+    : path.join(JARVIS_SANDBOX, filePath);
+
+  const finalPath = resolvedPath.endsWith(".pptx")
+    ? resolvedPath
+    : resolvedPath + ".pptx";
+
+  try {
+    await fs.mkdir(path.dirname(finalPath), { recursive: true });
+
+    const pptx = new PptxGenJS();
+
+    // Set presentation metadata
+    if (options?.title) pptx.title = options.title;
+    if (options?.author) pptx.author = options.author;
+    if (options?.subject) pptx.subject = options.subject;
+    pptx.company = "RASPUTIN JARVIS";
+
+    // Define master slide layouts
+    pptx.defineSlideMaster({
+      title: "TITLE_SLIDE",
+      background: { color: "1e3a5f" },
+      objects: [
+        {
+          placeholder: {
+            options: {
+              name: "title",
+              type: "title",
+              x: 0.5,
+              y: 2.5,
+              w: 9,
+              h: 1.5,
+            },
+            text: "(title)",
+          },
+        },
+        {
+          placeholder: {
+            options: {
+              name: "subtitle",
+              type: "body",
+              x: 0.5,
+              y: 4,
+              w: 9,
+              h: 1,
+            },
+            text: "(subtitle)",
+          },
+        },
+      ],
+    });
+
+    for (let i = 0; i < slides.length; i++) {
+      const slideData = slides[i];
+      const slide = pptx.addSlide();
+
+      // Determine slide layout and styling
+      const isFirstSlide = i === 0;
+      const isSectionSlide = slideData.layout === "section";
+      const isBlankSlide = slideData.layout === "blank";
+
+      if (isFirstSlide || slideData.layout === "title") {
+        // Title slide styling
+        slide.background = { color: "1e3a5f" };
+
+        if (slideData.title) {
+          slide.addText(slideData.title, {
+            x: 0.5,
+            y: 2.2,
+            w: 9,
+            h: 1.2,
+            fontSize: 44,
+            bold: true,
+            color: "FFFFFF",
+            align: "center",
+          });
+        }
+
+        if (slideData.subtitle) {
+          slide.addText(slideData.subtitle, {
+            x: 0.5,
+            y: 3.5,
+            w: 9,
+            h: 0.8,
+            fontSize: 24,
+            color: "B8D4E8",
+            align: "center",
+          });
+        }
+      } else if (isSectionSlide) {
+        // Section divider slide
+        slide.background = { color: "2d5a7b" };
+
+        if (slideData.title) {
+          slide.addText(slideData.title, {
+            x: 0.5,
+            y: 2.5,
+            w: 9,
+            h: 1,
+            fontSize: 36,
+            bold: true,
+            color: "FFFFFF",
+            align: "center",
+          });
+        }
+      } else if (!isBlankSlide) {
+        // Content slide
+        if (slideData.title) {
+          slide.addText(slideData.title, {
+            x: 0.5,
+            y: 0.3,
+            w: 9,
+            h: 0.8,
+            fontSize: 28,
+            bold: true,
+            color: "1e3a5f",
+          });
+        }
+
+        if (slideData.content) {
+          const contentItems = Array.isArray(slideData.content)
+            ? slideData.content
+            : slideData.content.split("\n").filter(line => line.trim());
+
+          // Check if content is bullet points
+          const hasBullets = contentItems.some(
+            item =>
+              item.trim().startsWith("-") ||
+              item.trim().startsWith("•") ||
+              item.trim().startsWith("*")
+          );
+
+          if (hasBullets || contentItems.length > 1) {
+            // Render as bullet list
+            const bulletItems = contentItems.map(item => {
+              const text = item
+                .trim()
+                .replace(/^[-•*]\s*/, "")
+                .trim();
+              return { text, options: { bullet: true, indentLevel: 0 } };
+            });
+
+            slide.addText(
+              bulletItems.map(item => ({
+                text: item.text,
+                options: {
+                  bullet: { type: "bullet" },
+                  fontSize: 18,
+                  color: "333333",
+                  paraSpaceBefore: 8,
+                  paraSpaceAfter: 8,
+                },
+              })),
+              {
+                x: 0.5,
+                y: 1.3,
+                w: 9,
+                h: 4.5,
+                valign: "top",
+              }
+            );
+          } else {
+            // Render as paragraph
+            slide.addText(contentItems.join("\n"), {
+              x: 0.5,
+              y: 1.3,
+              w: 9,
+              h: 4.5,
+              fontSize: 18,
+              color: "333333",
+              valign: "top",
+            });
+          }
+        }
+      }
+
+      // Add image if provided
+      if (slideData.image) {
+        try {
+          const imgPath = slideData.image.path.startsWith("/")
+            ? slideData.image.path
+            : path.join(JARVIS_SANDBOX, slideData.image.path);
+
+          slide.addImage({
+            path: imgPath,
+            x: slideData.image.x ?? 3,
+            y: slideData.image.y ?? 2,
+            w: slideData.image.w ?? 4,
+            h: slideData.image.h ?? 3,
+          });
+        } catch {
+          // Skip image if it can't be loaded
+        }
+      }
+
+      // Add speaker notes if provided
+      if (slideData.notes) {
+        slide.addNotes(slideData.notes);
+      }
+    }
+
+    // Write the file
+    await pptx.writeFile({ fileName: finalPath });
+
+    const stats = await fs.stat(finalPath);
+    return `PowerPoint presentation created: ${finalPath} (${stats.size} bytes, ${slides.length} slides)`;
+  } catch (error) {
+    return `Error creating PowerPoint: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Sheet definition for XLSX generation
+ */
+interface SheetDefinition {
+  name: string;
+  headers?: string[];
+  data?: (string | number | boolean | null)[][];
+  columnWidths?: number[];
+  formulas?: Array<{
+    cell: string;
+    formula: string;
+  }>;
+  styles?: {
+    headerStyle?: {
+      bold?: boolean;
+      fill?: string;
+      color?: string;
+    };
+  };
+}
+
+/**
+ * Create an Excel spreadsheet (.xlsx) from sheet definitions
+ */
+export async function writeXlsx(
+  filePath: string,
+  sheets: SheetDefinition[],
+  options?: { creator?: string; title?: string }
+): Promise<string> {
+  await ensureSandbox();
+
+  const resolvedPath = filePath.startsWith("/")
+    ? filePath
+    : path.join(JARVIS_SANDBOX, filePath);
+
+  const finalPath = resolvedPath.endsWith(".xlsx")
+    ? resolvedPath
+    : resolvedPath + ".xlsx";
+
+  try {
+    await fs.mkdir(path.dirname(finalPath), { recursive: true });
+
+    const workbook = new ExcelJS.Workbook();
+
+    // Set workbook metadata
+    workbook.creator = options?.creator || "RASPUTIN JARVIS";
+    workbook.created = new Date();
+    workbook.modified = new Date();
+    if (options?.title) {
+      workbook.title = options.title;
+    }
+
+    for (const sheetDef of sheets) {
+      const worksheet = workbook.addWorksheet(sheetDef.name);
+
+      // Set column widths if provided
+      if (sheetDef.columnWidths) {
+        sheetDef.columnWidths.forEach((width, index) => {
+          worksheet.getColumn(index + 1).width = width;
+        });
+      }
+
+      // Add headers if provided
+      if (sheetDef.headers && sheetDef.headers.length > 0) {
+        const headerRow = worksheet.addRow(sheetDef.headers);
+
+        // Style headers
+        headerRow.eachCell(cell => {
+          cell.font = {
+            bold: sheetDef.styles?.headerStyle?.bold ?? true,
+            color: {
+              argb: sheetDef.styles?.headerStyle?.color || "FFFFFFFF",
+            },
+          };
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: {
+              argb: sheetDef.styles?.headerStyle?.fill || "FF1e3a5f",
+            },
+          };
+          cell.alignment = { horizontal: "center", vertical: "middle" };
+          cell.border = {
+            top: { style: "thin" },
+            left: { style: "thin" },
+            bottom: { style: "thin" },
+            right: { style: "thin" },
+          };
+        });
+
+        // Auto-fit column widths based on headers if not specified
+        if (!sheetDef.columnWidths) {
+          sheetDef.headers.forEach((header, index) => {
+            const column = worksheet.getColumn(index + 1);
+            column.width = Math.max(header.length + 2, 10);
+          });
+        }
+      }
+
+      // Add data rows
+      if (sheetDef.data && sheetDef.data.length > 0) {
+        for (const rowData of sheetDef.data) {
+          const row = worksheet.addRow(rowData);
+
+          // Add light styling to data rows
+          row.eachCell(cell => {
+            cell.border = {
+              top: { style: "thin", color: { argb: "FFE0E0E0" } },
+              left: { style: "thin", color: { argb: "FFE0E0E0" } },
+              bottom: { style: "thin", color: { argb: "FFE0E0E0" } },
+              right: { style: "thin", color: { argb: "FFE0E0E0" } },
+            };
+          });
+        }
+
+        // Update column widths based on data if not specified
+        if (!sheetDef.columnWidths && !sheetDef.headers) {
+          const maxCols = Math.max(...sheetDef.data.map(row => row.length));
+          for (let i = 0; i < maxCols; i++) {
+            const maxLength = Math.max(
+              ...sheetDef.data.map(row =>
+                row[i] != null ? String(row[i]).length : 0
+              )
+            );
+            worksheet.getColumn(i + 1).width = Math.max(maxLength + 2, 10);
+          }
+        }
+      }
+
+      // Add formulas if provided
+      if (sheetDef.formulas && sheetDef.formulas.length > 0) {
+        for (const formulaDef of sheetDef.formulas) {
+          const cell = worksheet.getCell(formulaDef.cell);
+          cell.value = { formula: formulaDef.formula };
+          cell.font = { bold: true };
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFFF9C4" },
+          };
+        }
+      }
+
+      // Freeze the header row
+      if (sheetDef.headers && sheetDef.headers.length > 0) {
+        worksheet.views = [{ state: "frozen", ySplit: 1 }];
+      }
+    }
+
+    // Write the file
+    await workbook.xlsx.writeFile(finalPath);
+
+    const stats = await fs.stat(finalPath);
+    const sheetNames = sheets.map(s => s.name).join(", ");
+    const totalRows = sheets.reduce(
+      (sum, s) => sum + (s.data?.length || 0) + (s.headers ? 1 : 0),
+      0
+    );
+
+    return `Excel spreadsheet created: ${finalPath} (${stats.size} bytes, ${sheets.length} sheet(s): ${sheetNames}, ${totalRows} total rows)`;
+  } catch (error) {
+    return `Error creating Excel spreadsheet: ${error instanceof Error ? error.message : String(error)}`;
   }
 }
 
@@ -5706,6 +6107,25 @@ export async function executeTool(
         input.content as string,
         input.title as string | undefined
       );
+    case "write_pptx":
+      return writePptx(
+        input.path as string,
+        input.slides as SlideDefinition[],
+        {
+          title: input.title as string | undefined,
+          author: input.author as string | undefined,
+          subject: input.subject as string | undefined,
+        }
+      );
+    case "write_xlsx":
+      return writeXlsx(
+        input.path as string,
+        input.sheets as SheetDefinition[],
+        {
+          creator: input.creator as string | undefined,
+          title: input.title as string | undefined,
+        }
+      );
     case "list_files":
       return listFiles(input.path as string);
     case "calculate":
@@ -6203,6 +6623,69 @@ export function getAvailableTools(): Array<{
         title: {
           type: "string",
           description: "Optional document title (appears at top, centered)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "write_pptx",
+      description:
+        "Create a Microsoft PowerPoint presentation (.pptx) from slide definitions. Each slide can have a title, subtitle, content (text or bullet points), speaker notes, and images. Use this when the user needs a presentation.",
+      parameters: {
+        path: {
+          type: "string",
+          description: "Path for the .pptx file (extension added if missing)",
+          required: true,
+        },
+        slides: {
+          type: "array",
+          description:
+            "Array of slide objects. Each slide: {title?: string, subtitle?: string, content?: string|string[], notes?: string, layout?: 'title'|'content'|'section'|'blank', image?: {path, x?, y?, w?, h?}}",
+          required: true,
+          items: { type: "object" },
+        },
+        title: {
+          type: "string",
+          description: "Presentation title (metadata)",
+          required: false,
+        },
+        author: {
+          type: "string",
+          description: "Presentation author (metadata)",
+          required: false,
+        },
+        subject: {
+          type: "string",
+          description: "Presentation subject (metadata)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "write_xlsx",
+      description:
+        "Create a Microsoft Excel spreadsheet (.xlsx) with multiple sheets, headers, data, formulas, and styling. Use this when the user needs a spreadsheet for data analysis, reports, or structured data.",
+      parameters: {
+        path: {
+          type: "string",
+          description: "Path for the .xlsx file (extension added if missing)",
+          required: true,
+        },
+        sheets: {
+          type: "array",
+          description:
+            "Array of sheet definitions. Each sheet: {name: string, headers?: string[], data?: (string|number|boolean|null)[][], columnWidths?: number[], formulas?: [{cell: string, formula: string}], styles?: {headerStyle?: {bold?, fill?, color?}}}",
+          required: true,
+          items: { type: "object" },
+        },
+        creator: {
+          type: "string",
+          description: "Spreadsheet creator (metadata)",
+          required: false,
+        },
+        title: {
+          type: "string",
+          description: "Spreadsheet title (metadata)",
           required: false,
         },
       },
