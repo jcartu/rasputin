@@ -91,6 +91,7 @@ interface ToolCall {
   output?: string;
   startTime?: number;
   endTime?: number;
+  durationMs?: number | null;
 }
 
 interface AgentStep {
@@ -103,6 +104,7 @@ interface AgentStep {
   status?: "pending" | "running" | "success" | "error";
   toolCalls?: ToolCall[];
   timestamp: number;
+  durationMs?: number | null;
 }
 
 interface AgentMessage {
@@ -259,8 +261,9 @@ function AgentToolRow({
     failed: <XCircle className="h-3.5 w-3.5 text-red-400" />,
   };
 
-  const duration =
-    tool.endTime && tool.startTime
+  const duration = tool.durationMs
+    ? (tool.durationMs / 1000).toFixed(2)
+    : tool.endTime && tool.startTime
       ? ((tool.endTime - tool.startTime) / 1000).toFixed(2)
       : null;
 
@@ -383,7 +386,6 @@ function AgentStepsPanel({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [expandedToolId, setExpandedToolId] = useState<string | null>(null);
 
-  // Convert steps to tool calls
   const tools: ToolCall[] = steps
     .filter(s => s.type === "tool" || s.type === "tool_call")
     .map(s => ({
@@ -402,6 +404,7 @@ function AgentStepsPanel({
       startTime: s.timestamp,
       endTime:
         s.status === "success" || s.status === "error" ? Date.now() : undefined,
+      durationMs: s.durationMs,
     }));
 
   const thinkingSteps = steps.filter(s => s.type === "thinking" && s.content);

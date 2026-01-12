@@ -747,6 +747,31 @@ function CompletionCard({
                   <Streamdown>{summary}</Streamdown>
                 </div>
               )}
+
+              {artifacts?.some(a => a.type === "html" && a.content) && (
+                <div className="mt-6 pt-4 border-t border-border/50">
+                  <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                    <Code className="h-4 w-4" />
+                    Generated Report Preview
+                  </h4>
+                  {artifacts
+                    .filter(a => a.type === "html" && a.content)
+                    .map((artifact, idx) => (
+                      <div
+                        key={`html-preview-${idx}`}
+                        className="rounded-lg overflow-hidden border border-border/50 bg-white"
+                      >
+                        <iframe
+                          srcDoc={artifact.content}
+                          title={artifact.filename || "HTML Preview"}
+                          className="w-full h-[500px] border-0"
+                          sandbox="allow-scripts allow-same-origin"
+                        />
+                      </div>
+                    ))}
+                </div>
+              )}
+
               {artifacts && artifacts.length > 0 && (
                 <div className="mt-6 pt-4 border-t border-border/50">
                   <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">

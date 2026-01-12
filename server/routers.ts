@@ -529,7 +529,6 @@ export const appRouter = router({
         const toolCalls = await db.getAgentTaskToolCalls(task.id);
 
         return messages.map(m => {
-          // Build steps from tool calls for assistant messages
           const steps =
             m.role === "assistant"
               ? toolCalls.map(tc => ({
@@ -548,6 +547,7 @@ export const appRouter = router({
                         ? ("error" as const)
                         : ("running" as const),
                   timestamp: new Date(tc.createdAt).getTime(),
+                  durationMs: tc.durationMs,
                 }))
               : [];
 
