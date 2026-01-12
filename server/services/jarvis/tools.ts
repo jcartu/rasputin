@@ -217,19 +217,23 @@ async function ensureSandbox(): Promise<void> {
 }
 
 function resolveSandboxPath(filePath: string): string {
-  // Handle /workspace prefix
   if (filePath === "/workspace" || filePath.startsWith("/workspace/")) {
     return path.join(JARVIS_SANDBOX, filePath.replace(/^\/workspace\/?/, ""));
   }
-  // Handle /tmp paths - redirect to sandbox to ensure files are accessible
+  if (
+    filePath.startsWith(JARVIS_SANDBOX + "/") ||
+    filePath === JARVIS_SANDBOX
+  ) {
+    return filePath;
+  }
+  if (filePath.startsWith("/tmp/jarvis-workspace/")) {
+    return filePath;
+  }
   if (filePath.startsWith("/tmp/")) {
-    // Extract the relative part after /tmp/ and put it in sandbox
     const relativePath = filePath.replace(/^\/tmp\//, "");
     return path.join(JARVIS_SANDBOX, relativePath);
   }
-  // Any other absolute path - redirect to sandbox for security and accessibility
   if (filePath.startsWith("/")) {
-    // Strip leading slash and use as relative path in sandbox
     return path.join(JARVIS_SANDBOX, filePath.substring(1));
   }
   return path.join(JARVIS_SANDBOX, filePath);

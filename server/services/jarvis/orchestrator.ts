@@ -54,8 +54,8 @@ const XAI_API_KEY = process.env.XAI_API_KEY || "";
 // Inference provider type
 type InferenceProvider = "anthropic" | "cerebras" | "gemini" | "grok";
 
-// Current provider (can be changed at runtime)
-let currentProvider: InferenceProvider = "anthropic";
+// Current provider - default to Cerebras for speed, fallback to Anthropic for complex tasks
+let currentProvider: InferenceProvider = "cerebras";
 
 // OpenRouter API types
 interface OpenRouterMessage {
@@ -1046,7 +1046,7 @@ async function callAnthropic(
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-opus-4-5-20251101",
+      model: "claude-sonnet-4-5-20250514",
       max_tokens: 8192,
       system: systemPrompt,
       messages: anthropicMessages,
