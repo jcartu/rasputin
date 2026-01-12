@@ -563,6 +563,25 @@ export const appRouter = router({
         });
       }),
 
+    // Get the currently active (running) task for the user
+    getActiveTask: protectedProcedure.query(async ({ ctx }) => {
+      const tasks = await db.getUserAgentTasks(ctx.user.id, 10);
+      const activeTask = tasks.find(
+        t => t.status === "running" || t.status === "waiting_approval"
+      );
+      if (!activeTask) return null;
+      return {
+        id: activeTask.id,
+        title: activeTask.title,
+        query: activeTask.query,
+        status: activeTask.status,
+        pendingApprovalId: activeTask.pendingApprovalId,
+        iterationCount: activeTask.iterationCount,
+        createdAt: activeTask.createdAt,
+        updatedAt: activeTask.updatedAt,
+      };
+    }),
+
     // Get a specific task with messages
     getTask: protectedProcedure
       .input(z.object({ taskId: z.number() }))

@@ -225,11 +225,18 @@ Step 3: If all alternatives fail
 `;
 
 const VERIFICATION_PROTOCOL = `
-VERIFICATION (before marking task complete):
+MANDATORY VERIFICATION PROTOCOL (BLOCKING - task_complete will be REJECTED without this):
+
+CRITICAL: If user requested FILE OUTPUT (MD, document, report, etc.):
+  1. You MUST call write_file to save the content - execute_python creating strings does NOT save files!
+  2. You MUST call list_files or read_file to VERIFY the file exists BEFORE calling task_complete
+  3. Failure to verify = task_complete will be REJECTED and you must redo the verification
 
 For FILE tasks:
-  - read_file to confirm content is correct
-  - list_files to confirm file exists
+  - FIRST: write_file to create the file (execute_python alone does NOT create files!)
+  - THEN: read_file to confirm content is correct
+  - THEN: list_files to confirm file exists in expected location
+  - ONLY THEN: task_complete
 
 For CODE tasks:
   - Execute the code to verify it runs
@@ -244,7 +251,8 @@ For SEARCH tasks:
   - Verify the information answers the question
   - Cross-reference if critical
 
-NEVER mark complete without verification!
+WARNING: Calling task_complete without verification when files were requested = TASK FAILURE.
+The user will receive nothing. You MUST save files with write_file, not just generate content in memory.
 `;
 
 function getJarvisSystemPrompt(): string {
@@ -378,6 +386,7 @@ const TOOL_ALTERNATIVES: Record<string, string[]> = {
 };
 
 const MAX_IDENTICAL_CALLS_PER_APPROACH = 2;
+export const MAX_ITERATIONS = 15;
 
 interface ToolExecutionContext {
   failedTools: Map<string, number>;
@@ -1416,7 +1425,7 @@ export async function runOrchestrator(
   options: OrchestratorOptions = {}
 ): Promise<void> {
   const {
-    maxIterations = 15,
+    maxIterations = MAX_ITERATIONS,
     memoryContext = "",
     procedureGuidance = "",
     conversationHistory = [],
@@ -1596,6 +1605,42 @@ Do NOT continue working - call task_complete immediately.`;
           tc => tc.name === "task_complete"
         );
         if (taskCompleteCall) {
+          // Validate file deliverables before accepting completion
+          const fileKeywords =
+            /\b(file|md|markdown|document|report|save|write|create.*file|output.*file|kick.*out|give.*me)\b/i;
+          const taskRequestsFiles = fileKeywords.test(task);
+          const fileWriteTools = [
+            "write_file",
+            "write_docx",
+            "write_pptx",
+            "write_xlsx",
+          ];
+          const usedFileWrite = fileWriteTools.some(tool =>
+            executionContext.evolutionTracker.toolsUsed.has(tool)
+          );
+
+          if (taskRequestsFiles && !usedFileWrite) {
+            // Reject premature completion - files were requested but not written
+            const rejectMessage = `⚠️ TASK COMPLETION REJECTED: You were asked to create file output but never called write_file.
+Creating content in execute_python does NOT save files! You must:
+1. Call write_file with the content and a path like /tmp/jarvis-workspace/filename.md
+2. Call list_files to verify the file was created
+3. THEN call task_complete
+
+Please save the files now using write_file.`;
+
+            callbacks.onThinking?.(rejectMessage);
+
+            messages.push({
+              role: "tool",
+              content: rejectMessage,
+              tool_call_id: taskCompleteCall.id,
+            });
+
+            // Don't mark complete - continue the loop
+            continue;
+          }
+
           executionContext.progressTracker.stage = "complete";
           const input = taskCompleteCall.input as {
             summary: string;

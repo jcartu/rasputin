@@ -267,3 +267,125 @@ Optional:
 - **Handover Doc**: `/home/josh/rasputin/HANDOVER.md` - Comprehensive project overview
 - **Todo**: `/home/josh/rasputin/todo.md` - Detailed task tracking
 - **Package Manager**: pnpm (v10.4.1+)
+
+## Known Failure Patterns & Anti-Patterns
+
+These patterns have caused issues in production. **AVOID THEM.**
+
+### JARVIS Task Looping
+
+**Problem**: JARVIS can get stuck in infinite loops generating reports or iterating without progress.
+
+**Root Cause**: No hard enforcement of `MAX_ITERATIONS` constant; orchestrator relies on soft limit.
+
+**Prevention**:
+
+- The orchestrator enforces `MAX_ITERATIONS = 15` as a hard limit (see `orchestrator.ts`)
+- Always include exit conditions in multi-step tasks
+- Monitor iteration count and force `task_complete` when approaching limit
+- Use the `onIteration` callback to track progress
+
+### Missing tRPC Procedures
+
+**Problem**: Client calling procedures that don't exist in the router (e.g., `jarvis.getActiveTask`).
+
+**Prevention**:
+
+- Before adding client-side tRPC calls, verify the procedure exists in `server/routers.ts`
+- Use TypeScript - the tRPC client will error if procedure doesn't exist
+- Test API endpoints before deploying UI that depends on them
+
+### LLM Format Fallback Latency
+
+**Problem**: `json_schema` format fails with 400, silently falls back to `json_object`, adding latency.
+
+**Prevention**:
+
+- Use `json_object` format directly for OpenRouter calls when strict schema isn't required
+- Log format fallbacks for visibility
+- Monitor LLM call latency in production
+
+### Sandbox Path Consistency
+
+**Problem**: Files written to wrong directories (e.g., `/tmp/bitcoin_report/` vs `/tmp/jarvis-workspace/`).
+
+**Prevention**:
+
+- Always use the `JARVIS_WORKSPACE` constant from `tools.ts`
+- Validate paths before file operations
+- Use `path.join(JARVIS_WORKSPACE, ...)` for all sandbox file operations
+
+### Duration Calculation Bugs
+
+**Problem**: Tool durations showing incorrect values (e.g., 45,375 seconds).
+
+**Root Cause**: Using `Date.now()` instead of stored `durationMs` field.
+
+**Prevention**:
+
+- Always use the `durationMs` field stored in database records
+- Don't recalculate durations from timestamps in the UI
+- Verify duration display matches expected ranges (tools rarely exceed 60 seconds)
+
+### Cron Scheduler Spam
+
+**Problem**: System status checks running too frequently, cluttering logs.
+
+**Prevention**:
+
+- Set reasonable cron intervals (minimum 5 minutes for non-critical tasks)
+- Deduplicate cron jobs by checking if a similar task is already running
+- Use rate limiting for automated tasks
+
+### WebSocket Connection Churn
+
+**Problem**: Frequent client disconnects/reconnects causing state loss and duplicate messages.
+
+**Prevention**:
+
+- Implement client-side reconnection with exponential backoff
+- Use message deduplication based on message IDs
+- Maintain server-side session state that survives reconnects
+
+## Performance Guidelines
+
+### JARVIS Task Optimization
+
+1. **Iteration Budget**: Default is 15 iterations. Complex tasks should be broken into subtasks.
+2. **Token Budget**: Default is 500,000 tokens. Monitor `tokenEstimate` in execution context.
+3. **Parallel Tool Execution**: Tools in `PARALLELIZABLE_TOOLS` set run concurrently.
+4. **Early Exit**: Use `task_complete` as soon as the task is done - don't iterate unnecessarily.
+
+### Database Query Performance
+
+1. Use indexes for frequently queried columns
+2. Limit result sets with `.limit()`
+3. Use `db.select()` with specific columns instead of `SELECT *`
+4. Cache expensive queries where appropriate
+
+### Frontend Performance
+
+1. Use React Query's `staleTime` to prevent unnecessary refetches
+2. Implement pagination for long lists
+3. Debounce search inputs
+4. Use `useMemo` and `useCallback` for expensive computations
+
+## JARVIS-Specific Rules
+
+### Tool Execution
+
+- **Max identical calls per approach**: 2 (defined in `MAX_IDENTICAL_CALLS_PER_APPROACH`)
+- **Consecutive failures before pivot**: 3 (triggers approach change)
+- **Backoff delay**: Exponential, base 500ms, max 10s
+
+### Memory Management
+
+- Always call `search_memory` before starting complex tasks
+- Store important learnings with `store_memory` after task completion
+- Self-reflection triggers after tasks with >2 iterations or failures
+
+### Error Recovery
+
+- Use `TOOL_ALTERNATIVES` map for automatic fallback suggestions
+- Classified errors include: `transient`, `permanent`, `resource`, `auth`, `rate_limit`
+- Retryable errors should wait `retryAfterMs` before retry
