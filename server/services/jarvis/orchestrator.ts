@@ -44,6 +44,18 @@ import {
   formatRoutingReport,
   type RoutingDecision,
 } from "./modelRouter";
+import {
+  validateTaskQuality,
+  generateQualityImprovementPrompt,
+  determineEscalationStrategy,
+  type TaskContext,
+  type FileInfo,
+} from "./qualityAssurance";
+import { getEventLogger, getSharedMemoryBus, connectRedis } from "../bus";
+import {
+  routeRequest as routeToProvider,
+  type RoutingContext,
+} from "./intelligentRouter";
 
 // Get API keys from environment - Direct connections, no OpenRouter middleman
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
@@ -309,6 +321,21 @@ EXECUTION PATTERN:
 7. Review: For critical tasks, use self_review before completing
 8. Complete: Only when verified, use task_complete
 
+CRITICAL - DELIVERABLE WRITING STRATEGY:
+When the user requests MULTIPLE FILES or DELIVERABLES:
+- Write EACH file as soon as you have enough information for it
+- Do NOT wait until all research is complete to start writing
+- Example: If asked for "2 MD files", write File 1 after initial research, then continue for File 2
+- NEVER spend 80% of iterations researching and only 20% writing
+- Target: 3-4 research iterations MAX before writing the first deliverable
+
+SPEED OPTIMIZATION:
+- For self-analysis tasks (analyzing your own code/capabilities): Use self_introspection and self_index_code directly
+- AVOID query_synthesis for tasks about YOUR OWN CODE - you already have direct access
+- query_synthesis is for EXTERNAL research requiring web data + multi-model consensus
+- For code analysis: self_search_code → self_index_code → write_file (fast path)
+- For capability audits: self_comprehensive_introspection → write_file (fast path)
+
 You have access to a sandboxed environment for code execution.
 Work autonomously until verified complete, then use task_complete.
 Always provide a comprehensive summary of what you accomplished AND verified.`;
@@ -405,6 +432,8 @@ interface ToolExecutionContext {
   lastClassifiedError?: ClassifiedError;
   userId?: number;
   taskId?: number;
+  qaRetryCount: number;
+  wasEscalated: boolean;
 }
 
 interface EvolutionTracker {
@@ -569,16 +598,29 @@ function getAlternativeTool(
 }
 
 function isToolResultError(output: string): boolean {
+  const successIndicators = [
+    /successfully/i,
+    /completed/i,
+    /created:/i,
+    /written/i,
+    /\d+ files indexed/i,
+    /## .+ Report/i,
+  ];
+  if (successIndicators.some(p => p.test(output))) {
+    return false;
+  }
+
   const errorPatterns = [
-    /^Error:/i,
-    /error:/i,
-    /failed/i,
-    /exception/i,
-    /ENOENT/,
-    /ECONNREFUSED/,
-    /timeout/i,
-    /not found/i,
-    /permission denied/i,
+    /^Error:/im,
+    /^failed to /im,
+    /^ENOENT/m,
+    /^ECONNREFUSED/m,
+    /^permission denied/im,
+    /Traceback \(most recent call last\)/,
+    /SyntaxError:/,
+    /TypeError:/,
+    /ReferenceError:/,
+    /fatal error/i,
   ];
   return errorPatterns.some(p => p.test(output));
 }
@@ -1046,7 +1088,7 @@ async function callAnthropic(
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-5-20250514",
+      model: "claude-sonnet-4-5-20250929",
       max_tokens: 8192,
       system: systemPrompt,
       messages: anthropicMessages,
@@ -1412,6 +1454,8 @@ export interface OrchestratorOptions {
   procedureGuidance?: string;
   conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
   userId?: number;
+  taskId?: number;
+  sessionId?: string;
   enableMemoryInjection?: boolean;
 }
 
@@ -1432,6 +1476,22 @@ export async function runOrchestrator(
   } = options;
   const messages: OpenRouterMessage[] = [];
 
+  const eventLogger = getEventLogger();
+  const taskId = options.taskId || Date.now();
+  const userId = options.userId || 0;
+  const sessionId = options.sessionId || `session-${Date.now()}`;
+
+  try {
+    await connectRedis();
+  } catch (err) {
+    console.warn(
+      "[JARVIS] Redis connection failed, continuing without event bus:",
+      err
+    );
+  }
+
+  await eventLogger.logTaskStart(taskId, task, { userId, sessionId });
+
   for (const msg of conversationHistory) {
     messages.push({ role: msg.role, content: msg.content });
   }
@@ -1442,6 +1502,42 @@ export async function runOrchestrator(
 
   const routingDecision = routeTask(task);
   callbacks.onThinking?.(formatRoutingReport(routingDecision));
+
+  // Route to appropriate provider based on model selection
+  // Complex tasks need smarter models, not fast Cerebras
+  const selectedModel = routingDecision.selectedModel.toLowerCase();
+  if (
+    selectedModel.includes("claude") ||
+    selectedModel.includes("opus") ||
+    selectedModel.includes("sonnet")
+  ) {
+    setInferenceProvider("anthropic");
+  } else if (selectedModel.includes("gemini")) {
+    setInferenceProvider("gemini");
+  } else if (selectedModel.includes("grok")) {
+    setInferenceProvider("grok");
+  } else if (
+    selectedModel.includes("cerebras") ||
+    selectedModel.includes("llama") ||
+    selectedModel.includes("qwen")
+  ) {
+    setInferenceProvider("cerebras");
+  } else {
+    // Default to Anthropic for complex/unknown tasks
+    setInferenceProvider("anthropic");
+  }
+
+  // Override: Complex tasks ALWAYS use Anthropic for quality
+  if (complexity === "complex") {
+    setInferenceProvider("anthropic");
+    console.info(
+      `[JARVIS] Complex task detected - forcing Anthropic for quality`
+    );
+  }
+
+  console.info(
+    `[JARVIS] Routed to ${currentProvider} based on selected model: ${routingDecision.selectedModel}`
+  );
 
   let taskWithContext = task;
   if (procedureGuidance) {
@@ -1486,6 +1582,8 @@ export async function runOrchestrator(
     },
     strategyState: createInitialState(),
     signatureFailures: new Map(),
+    qaRetryCount: 0,
+    wasEscalated: false,
   };
 
   while (!isComplete && iterations < maxIterations) {
@@ -1637,18 +1735,99 @@ Please save the files now using write_file.`;
               tool_call_id: taskCompleteCall.id,
             });
 
-            // Don't mark complete - continue the loop
             continue;
           }
 
-          executionContext.progressTracker.stage = "complete";
-          const input = taskCompleteCall.input as {
+          const taskCompleteInput = taskCompleteCall.input as {
             summary: string;
             artifacts?: unknown[];
           };
+
+          const filesWritten: FileInfo[] = [];
+          const toolOutputEntries = Array.from(
+            executionContext.lastToolOutputs.entries()
+          );
+          for (const [toolName, output] of toolOutputEntries) {
+            if (toolName === "write_file" && typeof output === "string") {
+              const pathMatch = output.match(
+                /(?:wrote|created|saved).*?([\/\w.-]+\.\w+)/i
+              );
+              if (pathMatch) {
+                filesWritten.push({
+                  path: pathMatch[1],
+                  size: output.length,
+                  type: pathMatch[1].split(".").pop() || "unknown",
+                });
+              }
+            }
+          }
+
+          const qaContext: TaskContext = {
+            task,
+            complexity,
+            iterations,
+            toolsUsed: Array.from(executionContext.evolutionTracker.toolsUsed),
+            filesWritten,
+            summary: taskCompleteInput.summary,
+            userId: options.userId,
+          };
+
+          const qualityCheck = await validateTaskQuality(qaContext);
+
+          if (!qualityCheck.passed && iterations < maxIterations - 1) {
+            executionContext.qaRetryCount++;
+
+            const escalationStrategy = determineEscalationStrategy(
+              qualityCheck,
+              qaContext,
+              executionContext.qaRetryCount
+            );
+
+            if (
+              escalationStrategy.escalateModel &&
+              !executionContext.wasEscalated
+            ) {
+              setInferenceProvider("anthropic");
+              executionContext.wasEscalated = true;
+              console.info(
+                `[QA] ESCALATING to Anthropic after ${executionContext.qaRetryCount} QA failures`
+              );
+              callbacks.onThinking?.(
+                `\n⚡ Escalating to enhanced model for quality improvement...`
+              );
+            }
+
+            const qaRejectMessage = generateQualityImprovementPrompt(
+              qualityCheck,
+              escalationStrategy
+            );
+            callbacks.onThinking?.(`\n${qaRejectMessage}`);
+            console.info(
+              `[QA] Task completion REJECTED (attempt ${executionContext.qaRetryCount}): ` +
+                `score=${qualityCheck.score}, issues=${qualityCheck.issues.length}, ` +
+                `escalated=${executionContext.wasEscalated}`
+            );
+
+            messages.push({
+              role: "tool",
+              content: qaRejectMessage,
+              tool_call_id: taskCompleteCall.id,
+            });
+
+            continue;
+          }
+
+          if (qualityCheck.score < 100) {
+            callbacks.onThinking?.(
+              `\n📊 Quality Score: ${qualityCheck.score}/100 ` +
+                `(${qualityCheck.issues.filter(i => i.severity === "warning").length} warnings)`
+            );
+          }
+
+          executionContext.progressTracker.stage = "complete";
           const result: ToolResult = {
             toolCallId: taskCompleteCall.id,
-            output: input.summary,
+            output: taskCompleteInput.summary,
             isError: false,
           };
           callbacks.onToolResult(result);
@@ -1701,8 +1880,17 @@ Please save the files now using write_file.`;
             executionContext.tokenEstimate
           );
 
-          callbacks.onComplete(input.summary, input.artifacts);
+          callbacks.onComplete(
+            taskCompleteInput.summary,
+            taskCompleteInput.artifacts
+          );
           isComplete = true;
+
+          await eventLogger.logTaskEnd(
+            taskId,
+            { success: true, summary: taskCompleteInput.summary },
+            { userId, sessionId }
+          );
         } else {
           executionContext.progressTracker.toolsCompletedThisIteration = 0;
           executionContext.progressTracker.toolsTotalThisIteration =
@@ -1847,6 +2035,15 @@ Do NOT repeat the same tool calls with the same inputs.`;
         );
         callbacks.onComplete(assistantMessage.content || "Task completed.", []);
         isComplete = true;
+
+        await eventLogger.logTaskEnd(
+          taskId,
+          {
+            success: true,
+            summary: assistantMessage.content || "Task completed",
+          },
+          { userId, sessionId }
+        );
       }
     } catch (error) {
       executionContext.progressTracker.stage = "error";
@@ -1882,6 +2079,13 @@ Do NOT repeat the same tool calls with the same inputs.`;
       );
 
       callbacks.onError(`Orchestrator error: ${errorMsg}`);
+
+      await eventLogger.logTaskEnd(
+        taskId,
+        { success: false, error: errorMsg },
+        { userId, sessionId }
+      );
+
       throw error;
     }
   }
@@ -1942,6 +2146,12 @@ ${outputSummary}`;
       );
 
       callbacks.onComplete(autoSummary, []);
+
+      await eventLogger.logTaskEnd(
+        taskId,
+        { success: true, summary: "Auto-completed at iteration limit" },
+        { userId, sessionId }
+      );
     } else {
       executionContext.progressTracker.stage = "error";
       callbacks.onProgress?.(
@@ -1968,6 +2178,12 @@ ${outputSummary}`;
 
       callbacks.onError(
         "Task exceeded maximum iterations. Please try breaking it into smaller steps."
+      );
+
+      await eventLogger.logTaskEnd(
+        taskId,
+        { success: false, error: "Max iterations exceeded" },
+        { userId, sessionId }
       );
     }
   }
