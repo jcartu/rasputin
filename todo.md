@@ -10,12 +10,12 @@
 - [ ] Mobile responsive testing
 - [ ] Samsung Tri-Fold layout testing
 
-### Computer Control / Self-Evolution (P0 - Critical) - MOSTLY COMPLETE
+### Computer Control / Self-Evolution (P0 - Critical) - COMPLETE
 
 - [x] Activate self_propose_change, self_validate_change, self_apply_change tools - Working
 - [x] Create first self-modification (add a new tool) - check_url_status created via self_generate_tool
 - [x] Implement procedural memory extraction from successful tasks - 32 procedural memories stored
-- [ ] Test procedure replay on similar tasks
+- [x] Test procedure replay on similar tasks - VERIFIED: findMatchingProcedure() in routers.ts/websocket.ts searches before each task, generateProcedureGuidance() injects when successRate >= 70%
 - [x] True parallel agent execution (Promise.all refactor) - VERIFIED: Already implemented in multiAgentOrchestrator.ts with parallel, sequential, and mixed modes. Added parallelization to markMessagesRead and cancelOrchestration.
 
 ### Intelligent Self-Correction (P0) - COMPLETE
