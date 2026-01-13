@@ -71,6 +71,202 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
   task_complete: <CheckCircle2 className="h-4 w-4 text-green-400" />,
 };
 
+function getFileIcon(
+  filename: string,
+  type: string
+): { icon: React.ReactNode; gradient: string; ring: string } {
+  const ext = filename?.split(".").pop()?.toLowerCase() || "";
+
+  const iconMap: Record<
+    string,
+    { icon: React.ReactNode; gradient: string; ring: string }
+  > = {
+    md: {
+      icon: <FileText className="h-7 w-7 text-slate-400" />,
+      gradient: "from-slate-500/30 to-gray-500/30",
+      ring: "ring-slate-500/20 hover:ring-slate-500/40",
+    },
+    py: {
+      icon: <Code className="h-7 w-7 text-yellow-400" />,
+      gradient: "from-yellow-500/30 to-blue-500/30",
+      ring: "ring-yellow-500/20 hover:ring-yellow-500/40",
+    },
+    js: {
+      icon: <Code className="h-7 w-7 text-yellow-300" />,
+      gradient: "from-yellow-400/30 to-yellow-600/30",
+      ring: "ring-yellow-400/20 hover:ring-yellow-400/40",
+    },
+    ts: {
+      icon: <Code className="h-7 w-7 text-blue-400" />,
+      gradient: "from-blue-500/30 to-blue-700/30",
+      ring: "ring-blue-500/20 hover:ring-blue-500/40",
+    },
+    tsx: {
+      icon: <Code className="h-7 w-7 text-blue-400" />,
+      gradient: "from-blue-500/30 to-cyan-500/30",
+      ring: "ring-blue-500/20 hover:ring-blue-500/40",
+    },
+    json: {
+      icon: <FileJson className="h-7 w-7 text-amber-400" />,
+      gradient: "from-amber-500/30 to-orange-500/30",
+      ring: "ring-amber-500/20 hover:ring-amber-500/40",
+    },
+    css: {
+      icon: <Code className="h-7 w-7 text-blue-500" />,
+      gradient: "from-blue-500/30 to-purple-500/30",
+      ring: "ring-blue-500/20 hover:ring-blue-500/40",
+    },
+    html: {
+      icon: <Code className="h-7 w-7 text-orange-400" />,
+      gradient: "from-orange-500/30 to-amber-500/30",
+      ring: "ring-orange-500/20 hover:ring-orange-500/40",
+    },
+    xlsx: {
+      icon: <FileText className="h-7 w-7 text-green-500" />,
+      gradient: "from-green-500/30 to-emerald-500/30",
+      ring: "ring-green-500/20 hover:ring-green-500/40",
+    },
+    docx: {
+      icon: <FileText className="h-7 w-7 text-blue-600" />,
+      gradient: "from-blue-600/30 to-blue-800/30",
+      ring: "ring-blue-600/20 hover:ring-blue-600/40",
+    },
+    pptx: {
+      icon: <FileText className="h-7 w-7 text-orange-500" />,
+      gradient: "from-orange-500/30 to-red-500/30",
+      ring: "ring-orange-500/20 hover:ring-orange-500/40",
+    },
+    pdf: {
+      icon: <File className="h-7 w-7 text-red-400" />,
+      gradient: "from-red-500/30 to-orange-500/30",
+      ring: "ring-red-500/20 hover:ring-red-500/40",
+    },
+    sh: {
+      icon: <Terminal className="h-7 w-7 text-green-400" />,
+      gradient: "from-green-500/30 to-teal-500/30",
+      ring: "ring-green-500/20 hover:ring-green-500/40",
+    },
+    txt: {
+      icon: <FileText className="h-7 w-7 text-gray-400" />,
+      gradient: "from-gray-500/30 to-slate-500/30",
+      ring: "ring-gray-500/20 hover:ring-gray-500/40",
+    },
+    sql: {
+      icon: <FileText className="h-7 w-7 text-indigo-400" />,
+      gradient: "from-indigo-500/30 to-purple-500/30",
+      ring: "ring-indigo-500/20 hover:ring-indigo-500/40",
+    },
+    yaml: {
+      icon: <FileText className="h-7 w-7 text-pink-400" />,
+      gradient: "from-pink-500/30 to-rose-500/30",
+      ring: "ring-pink-500/20 hover:ring-pink-500/40",
+    },
+    yml: {
+      icon: <FileText className="h-7 w-7 text-pink-400" />,
+      gradient: "from-pink-500/30 to-rose-500/30",
+      ring: "ring-pink-500/20 hover:ring-pink-500/40",
+    },
+    png: {
+      icon: <ImageIcon className="h-7 w-7 text-pink-400" />,
+      gradient: "from-pink-500/20 to-purple-500/20",
+      ring: "ring-pink-500/20 hover:ring-pink-500/40",
+    },
+    jpg: {
+      icon: <ImageIcon className="h-7 w-7 text-pink-400" />,
+      gradient: "from-pink-500/20 to-purple-500/20",
+      ring: "ring-pink-500/20 hover:ring-pink-500/40",
+    },
+    jpeg: {
+      icon: <ImageIcon className="h-7 w-7 text-pink-400" />,
+      gradient: "from-pink-500/20 to-purple-500/20",
+      ring: "ring-pink-500/20 hover:ring-pink-500/40",
+    },
+    svg: {
+      icon: <ImageIcon className="h-7 w-7 text-emerald-400" />,
+      gradient: "from-emerald-500/20 to-green-500/20",
+      ring: "ring-emerald-500/20 hover:ring-emerald-500/40",
+    },
+    gif: {
+      icon: <ImageIcon className="h-7 w-7 text-purple-400" />,
+      gradient: "from-purple-500/20 to-pink-500/20",
+      ring: "ring-purple-500/20 hover:ring-purple-500/40",
+    },
+    webp: {
+      icon: <ImageIcon className="h-7 w-7 text-indigo-400" />,
+      gradient: "from-indigo-500/20 to-purple-500/20",
+      ring: "ring-indigo-500/20 hover:ring-indigo-500/40",
+    },
+  };
+
+  if (iconMap[ext]) return iconMap[ext];
+
+  if (type === "image")
+    return {
+      icon: <ImageIcon className="h-7 w-7 text-pink-400" />,
+      gradient: "from-pink-500/20 to-purple-500/20",
+      ring: "ring-pink-500/20 hover:ring-pink-500/40",
+    };
+  if (type === "video")
+    return {
+      icon: <FileText className="h-7 w-7 text-purple-400" />,
+      gradient: "from-purple-500/30 to-pink-500/30",
+      ring: "ring-purple-500/20 hover:ring-purple-500/40",
+    };
+  if (type === "pdf")
+    return {
+      icon: <File className="h-7 w-7 text-red-400" />,
+      gradient: "from-red-500/30 to-orange-500/30",
+      ring: "ring-red-500/20 hover:ring-red-500/40",
+    };
+  if (type === "html")
+    return {
+      icon: <Code className="h-7 w-7 text-orange-400" />,
+      gradient: "from-orange-500/30 to-amber-500/30",
+      ring: "ring-orange-500/20 hover:ring-orange-500/40",
+    };
+
+  return {
+    icon: <FileText className="h-7 w-7 text-cyan-400" />,
+    gradient: "from-cyan-500/30 to-blue-500/30",
+    ring: "ring-cyan-500/20 hover:ring-cyan-500/40",
+  };
+}
+
+function getFileTypeLabel(filename: string, type: string): string {
+  const ext = filename?.split(".").pop()?.toLowerCase() || "";
+  const labels: Record<string, string> = {
+    md: "Markdown",
+    py: "Python",
+    js: "JavaScript",
+    ts: "TypeScript",
+    tsx: "React",
+    json: "JSON",
+    css: "Stylesheet",
+    html: "HTML",
+    xlsx: "Excel",
+    docx: "Word",
+    pptx: "PowerPoint",
+    pdf: "PDF",
+    sh: "Shell Script",
+    txt: "Text",
+    sql: "SQL",
+    yaml: "YAML",
+    yml: "YAML",
+    png: "PNG Image",
+    jpg: "JPEG Image",
+    jpeg: "JPEG Image",
+    svg: "SVG Image",
+    gif: "GIF Image",
+    webp: "WebP Image",
+  };
+  if (labels[ext]) return labels[ext];
+  if (type === "image") return "Image";
+  if (type === "video") return "Video";
+  if (type === "pdf") return "PDF Document";
+  if (type === "html") return "HTML Document";
+  return "File";
+}
+
 function extractErrorMessage(output: string): string | null {
   if (!output) return null;
   const lowerOutput = output.toLowerCase();
@@ -276,11 +472,9 @@ function ToolRow({
 
 function ToolExecutionPanel({
   tools,
-  thinking,
   isStreaming,
 }: {
   tools: StreamingToolCall[];
-  thinking?: string;
   isStreaming: boolean;
 }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -317,7 +511,7 @@ function ToolExecutionPanel({
     return acc + d;
   }, 0);
 
-  if (tools.length === 0 && !thinking) return null;
+  if (tools.length === 0) return null;
 
   return (
     <motion.div
@@ -428,24 +622,6 @@ function ToolExecutionPanel({
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ duration: 0.2 }}
               >
-                {/* Thinking section */}
-                {thinking && (
-                  <div className="px-4 py-3 border-b border-border/20 bg-purple-500/5">
-                    <div className="flex items-start gap-3">
-                      <motion.div
-                        animate={{ scale: [1, 1.1, 1] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                        className="p-1.5 rounded-full bg-purple-500/20 flex-shrink-0"
-                      >
-                        <Brain className="h-4 w-4 text-purple-400" />
-                      </motion.div>
-                      <div className="flex-1 min-w-0 prose prose-invert prose-sm max-w-none prose-p:text-purple-200/90 prose-p:my-1">
-                        <Streamdown>{thinking}</Streamdown>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 {/* Tool list */}
                 <div className="py-1">
                   {tools.map((tool, index) => (
@@ -800,66 +976,64 @@ function CompletionCard({
                         transition={{ delay: 0.1 * idx }}
                         className="group relative flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-muted/50 via-muted/30 to-transparent border border-border/50 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300"
                       >
-                        <button
-                          onClick={() => {
-                            const a = document.createElement("a");
-                            a.href = artifact.downloadUrl || artifact.url || "";
-                            a.download = artifact.filename || "download";
-                            a.click();
-                            toast.success("Download started");
-                          }}
-                          className="shrink-0 cursor-pointer hover:scale-105 active:scale-95 transition-transform"
-                          title="Click to download"
-                        >
-                          {artifact.type === "image" && (
-                            <div className="w-14 h-14 rounded-xl overflow-hidden bg-gradient-to-br from-pink-500/20 to-purple-500/20 ring-2 ring-pink-500/20 hover:ring-pink-500/40">
-                              <img
-                                src={artifact.url}
-                                alt="Preview"
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                          )}
-                          {artifact.type === "video" && (
-                            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500/30 to-pink-500/30 flex items-center justify-center ring-2 ring-purple-500/20 hover:ring-purple-500/40">
-                              <FileText className="h-7 w-7 text-purple-400" />
-                            </div>
-                          )}
-                          {artifact.type === "pdf" && (
-                            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-red-500/30 to-orange-500/30 flex items-center justify-center ring-2 ring-red-500/20 hover:ring-red-500/40">
-                              <File className="h-7 w-7 text-red-400" />
-                            </div>
-                          )}
-                          {artifact.type === "file" && (
-                            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan-500/30 to-blue-500/30 flex items-center justify-center ring-2 ring-cyan-500/20 hover:ring-cyan-500/40">
-                              <FileText className="h-7 w-7 text-cyan-400" />
-                            </div>
-                          )}
-                          {artifact.type === "html" && (
-                            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-orange-500/30 to-amber-500/30 flex items-center justify-center ring-2 ring-orange-500/20 hover:ring-orange-500/40">
-                              <Code className="h-7 w-7 text-orange-400" />
-                            </div>
-                          )}
-                        </button>
+                        {(() => {
+                          const filename =
+                            artifact.filename ||
+                            artifact.path?.split("/").pop() ||
+                            "";
+                          const fileInfo = getFileIcon(filename, artifact.type);
+                          return (
+                            <>
+                              <button
+                                onClick={() => {
+                                  const a = document.createElement("a");
+                                  a.href =
+                                    artifact.downloadUrl || artifact.url || "";
+                                  a.download = filename || "download";
+                                  a.click();
+                                  toast.success("Download started");
+                                }}
+                                className="shrink-0 cursor-pointer hover:scale-105 active:scale-95 transition-transform"
+                                title="Click to download"
+                              >
+                                {artifact.type === "image" && artifact.url ? (
+                                  <div
+                                    className={cn(
+                                      "w-14 h-14 rounded-xl overflow-hidden bg-gradient-to-br ring-2",
+                                      fileInfo.gradient,
+                                      fileInfo.ring
+                                    )}
+                                  >
+                                    <img
+                                      src={artifact.url}
+                                      alt="Preview"
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div
+                                    className={cn(
+                                      "w-14 h-14 rounded-xl bg-gradient-to-br flex items-center justify-center ring-2",
+                                      fileInfo.gradient,
+                                      fileInfo.ring
+                                    )}
+                                  >
+                                    {fileInfo.icon}
+                                  </div>
+                                )}
+                              </button>
 
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold truncate group-hover:text-purple-300 transition-colors">
-                            {artifact.filename ||
-                              artifact.path?.split("/").pop() ||
-                              `${artifact.type} file`}
-                          </p>
-                          <p className="text-xs text-muted-foreground capitalize mt-0.5">
-                            {artifact.type === "html"
-                              ? "HTML Document"
-                              : artifact.type === "pdf"
-                                ? "PDF Document"
-                                : artifact.type === "image"
-                                  ? "Image"
-                                  : artifact.type === "video"
-                                    ? "Video"
-                                    : "File"}
-                          </p>
-                        </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold truncate group-hover:text-purple-300 transition-colors">
+                                  {filename || `${artifact.type} file`}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {getFileTypeLabel(filename, artifact.type)}
+                                </p>
+                              </div>
+                            </>
+                          );
+                        })()}
 
                         <div className="flex items-center gap-2 shrink-0">
                           {artifact.url && (
@@ -1082,7 +1256,7 @@ export function JarvisStreamView({
         if (!filePath) return null;
 
         const filename = filePath.split("/").pop() || filePath;
-        let relativePath = filePath
+        const relativePath = filePath
           .replace(/^\/tmp\/jarvis-workspace\//, "")
           .replace(/^jarvis-workspace\//, "")
           .replace(/^\/tmp\//, "")
@@ -1211,12 +1385,8 @@ export function JarvisStreamView({
         </motion.div>
       )}
 
-      {(tools.length > 0 || latestThinking) && (
-        <ToolExecutionPanel
-          tools={tools}
-          thinking={state.isStreaming ? latestThinking : undefined}
-          isStreaming={state.isStreaming}
-        />
+      {tools.length > 0 && (
+        <ToolExecutionPanel tools={tools} isStreaming={state.isStreaming} />
       )}
 
       {state.error && !isComplete && (

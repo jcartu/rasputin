@@ -1,4 +1,36 @@
 import { storagePut } from "server/storage";
+import * as fs from "fs/promises";
+import * as path from "path";
+import * as crypto from "crypto";
+
+const PUBLIC_DIR = path.join(process.cwd(), "public", "generated");
+const SERVER_BASE_URL = process.env.SERVER_BASE_URL || "http://localhost:3000";
+
+async function saveImageLocally(
+  buffer: Buffer,
+  filename: string
+): Promise<string> {
+  await fs.mkdir(PUBLIC_DIR, { recursive: true });
+  const filePath = path.join(PUBLIC_DIR, filename);
+  await fs.writeFile(filePath, buffer);
+  return `${SERVER_BASE_URL}/generated/${filename}`;
+}
+
+async function saveImage(buffer: Buffer, prefix: string): Promise<string> {
+  const filename = `${prefix}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.png`;
+
+  try {
+    const { url } = await storagePut(
+      `generated/${filename}`,
+      buffer,
+      "image/png"
+    );
+    return url;
+  } catch (error) {
+    console.info("[ImageGen] Forge storage unavailable, using local storage");
+    return saveImageLocally(buffer, filename);
+  }
+}
 
 export type GenerateImageOptions = {
   prompt: string;
@@ -146,11 +178,7 @@ async function generateWithLocalFlux(
 
   if (result.image_base64) {
     const buffer = Buffer.from(result.image_base64, "base64");
-    const { url } = await storagePut(
-      `generated/flux-${Date.now()}.png`,
-      buffer,
-      "image/png"
-    );
+    const url = await saveImage(buffer, "flux");
     console.info("[ImageGen] Local Flux complete (base64):", url);
     return { url, provider: "flux-local" };
   }
@@ -205,11 +233,7 @@ async function generateWithDallE(
   }
 
   const buffer = Buffer.from(result.data[0].b64_json, "base64");
-  const { url } = await storagePut(
-    `generated/${Date.now()}.png`,
-    buffer,
-    "image/png"
-  );
+  const url = await saveImage(buffer, "dalle");
 
   console.info("[ImageGen] DALL-E complete:", url);
   return { url, provider: "dalle" };

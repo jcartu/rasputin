@@ -93,6 +93,14 @@ async function startServer() {
     })
   );
 
+  // Serve generated images (from DALL-E, Flux, etc.)
+  app.use(
+    "/generated",
+    express.static(path.join(process.cwd(), "public", "generated"), {
+      maxAge: "1d",
+    })
+  );
+
   // List files in JARVIS workspace
   app.get("/api/files/workspace-list", async (req, res) => {
     try {

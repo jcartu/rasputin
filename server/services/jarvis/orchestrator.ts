@@ -414,6 +414,7 @@ const TOOL_ALTERNATIVES: Record<string, string[]> = {
 
 const MAX_IDENTICAL_CALLS_PER_APPROACH = 2;
 export const MAX_ITERATIONS = 15;
+export const MAX_TASK_DURATION_MS = 5 * 60 * 1000; // 5 minutes hard limit
 
 interface ToolExecutionContext {
   failedTools: Map<string, number>;
@@ -1588,6 +1589,40 @@ export async function runOrchestrator(
 
   while (!isComplete && iterations < maxIterations) {
     const iterationStartTime = Date.now();
+
+    const taskDurationMs =
+      Date.now() - executionContext.evolutionTracker.startTime;
+    if (taskDurationMs >= MAX_TASK_DURATION_MS) {
+      executionContext.progressTracker.stage = "error";
+      const durationMin = Math.round(taskDurationMs / 60000);
+      callbacks.onProgress?.(
+        buildProgress(
+          executionContext.progressTracker,
+          executionContext,
+          iterations,
+          maxIterations,
+          "Task duration limit exceeded"
+        )
+      );
+      callbacks.onThinking?.(
+        `\n🛑 Task duration limit exceeded (${durationMin} minutes). Force completing to prevent runaway tasks.`
+      );
+
+      const partialResults = executionContext.progressTracker.partialResults;
+      const finalSummary = `Task was automatically stopped after ${durationMin} minutes. ${partialResults.length > 0 ? `Partial progress: ${partialResults.slice(-3).join("; ")}` : "The task may be incomplete."}`;
+      callbacks.onComplete(finalSummary);
+
+      await eventLogger.logTaskEnd(
+        taskId,
+        {
+          success: false,
+          summary: finalSummary,
+          error: "duration_limit_exceeded",
+        },
+        { userId, sessionId }
+      );
+      return;
+    }
 
     if (executionContext.tokenEstimate >= executionContext.tokenBudget) {
       executionContext.progressTracker.stage = "error";

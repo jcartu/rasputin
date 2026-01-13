@@ -463,6 +463,28 @@ export async function browseUrl(url: string): Promise<string> {
   }
 }
 
+const DEEP_RESEARCH_TIMEOUT_MS = 90_000;
+const SEARCH_TIMEOUT_MS = 30_000;
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  fallback: T
+): Promise<T> {
+  let timeoutId: NodeJS.Timeout;
+  const timeoutPromise = new Promise<T>(resolve => {
+    timeoutId = setTimeout(() => resolve(fallback), ms);
+  });
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    clearTimeout(timeoutId!);
+    return result;
+  } catch {
+    clearTimeout(timeoutId!);
+    return fallback;
+  }
+}
+
 export async function deepResearch(
   topic: string,
   depth: number = 2
@@ -472,27 +494,37 @@ export async function deepResearch(
   const queries = generateSearchQueries(topic);
   const maxQueries = Math.min(queries.length, depth + 2);
 
-  for (let i = 0; i < maxQueries; i++) {
-    const query = queries[i];
-    try {
-      const searchResult = await webSearch(query);
-      const urlMatches = searchResult.match(/https?:\/\/[^\s\]]+/g) || [];
+  const searchPromises = queries.slice(0, maxQueries).map(async query => {
+    const searchResult = await withTimeout(
+      webSearch(query),
+      SEARCH_TIMEOUT_MS,
+      ""
+    );
+    if (!searchResult) return [];
 
-      for (const url of urlMatches.slice(0, 3)) {
-        const { score, reason } = scoreSourceCredibility(url);
-        sources.push({
-          url,
-          title: url.split("/").slice(2, 3).join(""),
-          snippet: searchResult.slice(0, 200),
-          domain: new URL(url).hostname,
-          credibilityScore: score,
-          credibilityReason: reason,
-          retrievedAt: Date.now(),
-        });
-      }
-    } catch {
-      continue;
-    }
+    const urlMatches = searchResult.match(/https?:\/\/[^\s\]]+/g) || [];
+    return urlMatches.slice(0, 3).map(url => {
+      const { score, reason } = scoreSourceCredibility(url);
+      return {
+        url,
+        title: url.split("/").slice(2, 3).join(""),
+        snippet: searchResult.slice(0, 200),
+        domain: new URL(url).hostname,
+        credibilityScore: score,
+        credibilityReason: reason,
+        retrievedAt: Date.now(),
+      } as ResearchSource;
+    });
+  });
+
+  const searchResults = await withTimeout(
+    Promise.all(searchPromises),
+    DEEP_RESEARCH_TIMEOUT_MS - 30_000,
+    []
+  );
+
+  for (const resultSources of searchResults) {
+    sources.push(...resultSources);
   }
 
   const uniqueSources = sources.filter(
@@ -500,37 +532,49 @@ export async function deepResearch(
   );
 
   let synthesis = "";
-  try {
-    const SONAR_API_KEY = process.env.SONAR_API_KEY || "";
-    const synthesisResponse = await fetch(
-      "https://api.perplexity.ai/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${SONAR_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "sonar-pro",
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are a research synthesizer. Provide a comprehensive summary with citations to sources. Note any conflicting information between sources.",
-            },
-            {
-              role: "user",
-              content: `Synthesize research on: ${topic}\n\nSources consulted:\n${uniqueSources.map(s => `- ${s.url} (${s.credibilityReason})`).join("\n")}`,
-            },
-          ],
-          max_tokens: 4096,
-        }),
-      }
-    );
+  const remainingTime = DEEP_RESEARCH_TIMEOUT_MS - (Date.now() - startTime);
 
-    const data = await synthesisResponse.json();
-    synthesis = data.choices?.[0]?.message?.content || "Unable to synthesize";
-  } catch {
+  if (remainingTime > 10_000 && uniqueSources.length > 0) {
+    try {
+      const SONAR_API_KEY = process.env.SONAR_API_KEY || "";
+      const synthesisResponse = await withTimeout(
+        fetch("https://api.perplexity.ai/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${SONAR_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: "sonar-pro",
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are a research synthesizer. Provide a comprehensive summary with citations to sources. Note any conflicting information between sources.",
+              },
+              {
+                role: "user",
+                content: `Synthesize research on: ${topic}\n\nSources consulted:\n${uniqueSources.map(s => `- ${s.url} (${s.credibilityReason})`).join("\n")}`,
+              },
+            ],
+            max_tokens: 4096,
+          }),
+        }),
+        remainingTime - 5_000,
+        null
+      );
+
+      if (synthesisResponse) {
+        const data = await synthesisResponse.json();
+        synthesis =
+          data.choices?.[0]?.message?.content || "Unable to synthesize";
+      }
+    } catch {
+      synthesis = "";
+    }
+  }
+
+  if (!synthesis) {
     synthesis =
       `Research found ${uniqueSources.length} sources on "${topic}". Top sources by credibility:\n` +
       uniqueSources
@@ -1594,13 +1638,50 @@ export async function httpRequest(
 
 /**
  * Generate Image using AI
+ * Also saves image to JARVIS workspace for sandbox accessibility
  */
 export async function generateImageTool(prompt: string): Promise<string> {
   try {
+    await ensureSandbox();
     const result = await generateImage({ prompt });
 
     if (result.url) {
-      return `Image generated successfully!\n\nURL: ${result.url}\n\nPrompt used: ${prompt}`;
+      // Try to download and save the image to the workspace for sandbox access
+      let workspacePath: string | undefined;
+      try {
+        const imageResponse = await fetch(result.url);
+        if (imageResponse.ok) {
+          const buffer = Buffer.from(await imageResponse.arrayBuffer());
+          const filename = `image_${Date.now()}_${crypto.randomBytes(4).toString("hex")}.png`;
+          workspacePath = path.join(JARVIS_SANDBOX, filename);
+          await fs.writeFile(workspacePath, buffer);
+        }
+      } catch (downloadError) {
+        // Image may already be local, try to copy it
+        if (result.url.includes("/generated/")) {
+          const localPath = path.join(
+            process.cwd(),
+            "public",
+            result.url.split("/generated/")[1]
+              ? `generated/${result.url.split("/generated/")[1]}`
+              : ""
+          );
+          try {
+            const buffer = await fs.readFile(localPath);
+            const filename = `image_${Date.now()}_${crypto.randomBytes(4).toString("hex")}.png`;
+            workspacePath = path.join(JARVIS_SANDBOX, filename);
+            await fs.writeFile(workspacePath, buffer);
+          } catch {
+            // Couldn't copy local file either
+          }
+        }
+      }
+
+      const pathInfo = workspacePath
+        ? `\nWorkspace path: ${workspacePath}`
+        : "\nNote: Image could not be saved to workspace (use URL instead)";
+
+      return `Image generated successfully!\n\nURL: ${result.url}${pathInfo}\n\nPrompt used: ${prompt}`;
     } else {
       return "Image generation failed - no URL returned";
     }
