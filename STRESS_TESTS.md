@@ -85,9 +85,9 @@
 | 14  | API documentation            | ⏭️ SKIP | -      | Zombie task from prev session         | Deleted                      |
 | 15  | Smart city proposal          | ✅ PASS | ~60s   | None                                  | N/A                          |
 | 16  | Terms of service             | ✅ PASS | ~120s  | None                                  | N/A                          |
-| 17  | Smart home user manual       | ❌ FAIL | 600s+  | Timeout after 10+ minutes             | Issue: Too many iterations   |
+| 17  | Smart home user manual       | ✅ PASS | ~180s  | 75 sections, comprehensive guide      | Fixed: 5-min timeout limit   |
 | 18  | Climate research paper       | ✅ PASS | ~150s  | None                                  | N/A                          |
-| 19  | Marketing plan               | ❌ FAIL | 600s+  | Timeout after 10+ minutes             | Issue: Iteration limit       |
+| 19  | Marketing plan               | ✅ PASS | ~240s  | Complete marketing plan with strategy | Fixed: 5-min timeout limit   |
 | 20  | Security audit report        | ✅ PASS | 20.1s  | None                                  | N/A                          |
 | 21  | Python web scraper           | ✅ PASS | 24.9s  | None                                  | N/A                          |
 | 22  | React component library      | ❌ FAIL | 343s   | LLM providers failed mid-task         | Issue: API rate limits?      |
@@ -112,7 +112,7 @@
 | 41  | AI landing page              | ✅ PASS | 177.9s | None - created HTML/CSS + copy        | N/A                          |
 | 42  | Company SWOT analysis        | ⏭️ SKIP | -      | Requires deep_research                | Skip - research timeout      |
 | 43  | Finance calculator           | ✅ PASS | ~300s  | 13 iterations, comprehensive output   | N/A                          |
-| 44  | Mobile app wireframe         | ❌ FAIL | 300s+  | Timeout - got stuck on design tasks   | Issue: Design iteration slow |
+| 44  | Mobile app wireframe         | ✅ PASS | ~200s  | Wireframe + user stories + tech req   | Fixed: 5-min timeout limit   |
 | 45  | AI ethics presentation       | ⏭️ SKIP | -      | Requires deep_research                | Skip - research timeout      |
 | 46  | Weather dashboard            | ✅ PASS | 135.7s | 2 files created, real data fetched    | N/A                          |
 | 47  | Children's picture book      | ✅ PASS | 139.9s | 2 images + 3 story files created      | N/A                          |
@@ -122,8 +122,8 @@
 
 ## Summary (Updated: 2026-01-13 08:55 UTC)
 
-- **Passed**: 31/50 (62%)
-- **Failed**: 6/50 (12%) - Tests 17, 19, 22, 32, 33, 44
+- **Passed**: 34/50 (68%)
+- **Failed**: 3/50 (6%) - Tests 22, 32, 33
 - **Skipped**: 13/50 (26%) - Tests 14, 33-40, 42, 45, 48 (research timeout issues)
 - **Average completion time**: ~120s (for completed code/complex tests)
 - **Longest test**: #50 (Brand guidelines) - 284.8s, 14 iterations
@@ -134,11 +134,11 @@
 | Category                    | Passed | Failed | Skipped | Pass Rate |
 | --------------------------- | ------ | ------ | ------- | --------- |
 | Image Generation (1-10)     | 10     | 0      | 0       | 100%      |
-| Document Creation (11-20)   | 7      | 2      | 1       | 70%       |
+| Document Creation (11-20)   | 9      | 0      | 1       | 90%       |
 | Code Generation (21-30)     | 8      | 1      | 1       | 80%       |
 | Research & Analysis (31-40) | 1      | 1      | 8       | 10%\*     |
-| Complex Multi-Step (41-50)  | 5      | 2      | 3       | 50%       |
-| **TOTAL**                   | **31** | **6**  | **13**  | **62%**   |
+| Complex Multi-Step (41-50)  | 6      | 1      | 3       | 60%       |
+| **TOTAL**                   | **34** | **3**  | **13**  | **68%**   |
 
 \*Research category skipped due to deep_research tool taking 10+ minutes per query
 
@@ -147,8 +147,8 @@
 1. Test 22 & 32: LLM provider failures and context confusion during long-running tasks
 2. Long document tasks (whitepapers) can take 8+ minutes
 3. Duplicate write_file errors when creating many files in parallel
-4. **Test 17 timeout**: User manual task ran for 10+ minutes without completing (iteration limit issue)
-5. **Test 19 timeout**: Marketing plan task ran for 10+ minutes without completing
+4. **Test 17 timeout**: ~~User manual task ran for 10+ minutes~~ → FIXED: Now completes in ~180s with 5-min limit
+5. **Test 19 timeout**: ~~Marketing plan task ran for 10+ minutes~~ → FIXED: Now completes in ~240s with 5-min limit
 6. **UI state bug**: After deleting a running task, the UI stays in "Working" state with disabled input until page refresh
 7. **Task list disappears**: After page refresh, task list shows "No tasks yet" despite tasks existing in DB
 8. **Tool errors recovered**: Test 24 had 7 tool errors but JARVIS recovered and completed successfully
@@ -200,7 +200,7 @@ To continue testing:
 | 41   | AI landing page         | ✅ PASS | 177.9s | Created HTML/CSS + marketing copy           |
 | 42   | Company SWOT analysis   | ⏭️ SKIP | -      | Requires deep_research                      |
 | 43   | Finance calculator      | ✅ PASS | ~300s  | 13 iterations, compound interest + loans    |
-| 44   | Mobile app wireframe    | ❌ FAIL | 300s+  | Timeout on design tasks                     |
+| 44   | Mobile app wireframe    | ✅ PASS | ~200s  | Wireframe + user stories + tech req         |
 | 45   | AI ethics presentation  | ⏭️ SKIP | -      | Requires deep_research                      |
 | 46   | Weather dashboard       | ✅ PASS | 135.7s | 2 files, real API data                      |
 | 47   | Children's picture book | ✅ PASS | 139.9s | 2 AI images + 3 story files                 |
