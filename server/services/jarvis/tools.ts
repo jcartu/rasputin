@@ -1648,40 +1648,56 @@ export async function generateImageTool(prompt: string): Promise<string> {
     if (result.url) {
       // Try to download and save the image to the workspace for sandbox access
       let workspacePath: string | undefined;
+      let base64Data: string | undefined;
+
       try {
-        const imageResponse = await fetch(result.url);
-        if (imageResponse.ok) {
-          const buffer = Buffer.from(await imageResponse.arrayBuffer());
-          const filename = `image_${Date.now()}_${crypto.randomBytes(4).toString("hex")}.png`;
-          workspacePath = path.join(JARVIS_SANDBOX, filename);
-          await fs.writeFile(workspacePath, buffer);
-        }
-      } catch (downloadError) {
-        // Image may already be local, try to copy it
+        // If it's a local file path, read it directly
         if (result.url.includes("/generated/")) {
-          const localPath = path.join(
-            process.cwd(),
-            "public",
-            result.url.split("/generated/")[1]
-              ? `generated/${result.url.split("/generated/")[1]}`
-              : ""
-          );
-          try {
+          const filename = result.url.split("/generated/")[1];
+          if (filename) {
+            const localPath = path.join(
+              process.cwd(),
+              "public",
+              "generated",
+              filename
+            );
             const buffer = await fs.readFile(localPath);
-            const filename = `image_${Date.now()}_${crypto.randomBytes(4).toString("hex")}.png`;
-            workspacePath = path.join(JARVIS_SANDBOX, filename);
+            base64Data = buffer.toString("base64");
+
+            // Also save to workspace
+            const wsFilename = `image_${Date.now()}_${crypto.randomBytes(4).toString("hex")}.png`;
+            workspacePath = path.join(JARVIS_SANDBOX, wsFilename);
             await fs.writeFile(workspacePath, buffer);
-          } catch {
-            // Couldn't copy local file either
+          }
+        } else {
+          // Fetch from URL
+          const imageResponse = await fetch(result.url);
+          if (imageResponse.ok) {
+            const buffer = Buffer.from(await imageResponse.arrayBuffer());
+            base64Data = buffer.toString("base64");
+
+            const wsFilename = `image_${Date.now()}_${crypto.randomBytes(4).toString("hex")}.png`;
+            workspacePath = path.join(JARVIS_SANDBOX, wsFilename);
+            await fs.writeFile(workspacePath, buffer);
           }
         }
+      } catch (downloadError) {
+        console.error(
+          "[generateImageTool] Error processing image:",
+          downloadError
+        );
       }
 
       const pathInfo = workspacePath
         ? `\nWorkspace path: ${workspacePath}`
         : "\nNote: Image could not be saved to workspace (use URL instead)";
 
-      return `Image generated successfully!\n\nURL: ${result.url}${pathInfo}\n\nPrompt used: ${prompt}`;
+      // Return both URL and base64 data URL for reliable display
+      const dataUrl = base64Data
+        ? `data:image/png;base64,${base64Data}`
+        : undefined;
+
+      return `Image generated successfully!\n\nURL: ${result.url}${dataUrl ? `\nData URL: ${dataUrl}` : ""}${pathInfo}\n\nPrompt used: ${prompt}`;
     } else {
       return "Image generation failed - no URL returned";
     }

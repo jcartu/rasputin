@@ -561,17 +561,30 @@ function extractGeneratedImages(steps?: AgentStep[]): GeneratedImage[] {
       step.status === "success" &&
       step.output
     ) {
+      let prompt: string | undefined;
+      try {
+        const input = step.input ? JSON.parse(step.input) : null;
+        prompt = input?.prompt;
+      } catch {
+        prompt = undefined;
+      }
+
+      const dataUrlMatch = step.output.match(
+        /(data:image\/[^;]+;base64,[A-Za-z0-9+/=]+)/
+      );
+      if (dataUrlMatch) {
+        images.push({
+          url: dataUrlMatch[1],
+          prompt,
+          timestamp: step.timestamp,
+        });
+        continue;
+      }
+
       const urlMatch = step.output.match(
         /(https?:\/\/[^\s\n]+\.(jpg|jpeg|png|gif|webp)[^\s\n]*)/i
       );
       if (urlMatch) {
-        let prompt: string | undefined;
-        try {
-          const input = step.input ? JSON.parse(step.input) : null;
-          prompt = input?.prompt;
-        } catch {
-          prompt = undefined;
-        }
         images.push({
           url: urlMatch[1],
           prompt,
