@@ -28,6 +28,11 @@ import {
   getSelfEvolutionTools,
   executeSelfEvolutionTool,
 } from "../selfEvolution/tools";
+import {
+  getSuggestedTasks,
+  analyzeTaskPatterns,
+  predictNextTasks,
+} from "./predictiveTask";
 import { runAgentTeam, type TeamCallback } from "./agentTeams";
 import { webhookHandler } from "../events/webhookHandler";
 import { eventExecutor } from "../events/eventExecutor";
@@ -6892,6 +6897,61 @@ export async function getMemoryStats(userId: number): Promise<string> {
   }
 }
 
+export async function getPredictedTasks(userId: number): Promise<string> {
+  try {
+    const suggestions = await getSuggestedTasks(userId);
+
+    if (suggestions.length === 0) {
+      return "No task predictions available yet. Complete more tasks to enable predictions.";
+    }
+
+    const lines = suggestions.map((s, i) => {
+      const confidence = Math.round(s.confidence * 100);
+      return `${i + 1}. ${s.suggestion}
+   Confidence: ${confidence}%
+   Reason: ${s.reason}`;
+    });
+
+    return `Predicted/Suggested Tasks:\n\n${lines.join("\n\n")}`;
+  } catch (error) {
+    return `Failed to get predictions: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function getTaskPatterns(userId: number): Promise<string> {
+  try {
+    const patterns = await analyzeTaskPatterns(userId);
+
+    if (patterns.length === 0) {
+      return "No task patterns detected yet. Complete more tasks to enable pattern analysis.";
+    }
+
+    const lines = patterns.slice(0, 10).map((p, i) => {
+      const freq = (p.frequency * 30).toFixed(1);
+      const interval = formatIntervalMs(p.averageInterval);
+      const confidence = Math.round(p.confidence * 100);
+      return `${i + 1}. Pattern: "${p.pattern}"
+   Frequency: ~${freq} times/month
+   Avg interval: ${interval}
+   Confidence: ${confidence}%
+   Keywords: ${p.contextTriggers.slice(0, 5).join(", ")}`;
+    });
+
+    return `Detected Task Patterns:\n\n${lines.join("\n\n")}`;
+  } catch (error) {
+    return `Failed to analyze patterns: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+function formatIntervalMs(ms: number): string {
+  const hours = ms / (1000 * 60 * 60);
+  if (hours < 24) return `${Math.round(hours)} hours`;
+  const days = hours / 24;
+  if (days < 7) return `${Math.round(days)} days`;
+  const weeks = days / 7;
+  return `${Math.round(weeks)} weeks`;
+}
+
 export async function spawnSpecializedAgent(
   userId: number,
   agentType: AgentType,
@@ -7843,6 +7903,10 @@ export async function executeTool(
       );
     case "get_memory_stats":
       return getMemoryStats(input.userId as number);
+    case "get_predicted_tasks":
+      return getPredictedTasks(input.userId as number);
+    case "get_task_patterns":
+      return getTaskPatterns(input.userId as number);
     case "connect_mcp_server":
       return connectMCPServer(
         input.name as string,
@@ -10017,6 +10081,18 @@ export function getAvailableTools(): Array<{
     {
       name: "get_memory_stats",
       description: "Get statistics about your persistent memory system.",
+      parameters: {},
+    },
+    {
+      name: "get_predicted_tasks",
+      description:
+        "Get predicted/suggested tasks based on user patterns and history. Analyzes past tasks to predict what the user might want to do next.",
+      parameters: {},
+    },
+    {
+      name: "get_task_patterns",
+      description:
+        "Analyze and display detected patterns in user task history. Shows frequency, intervals, and keywords for recurring task types.",
       parameters: {},
     },
     {
