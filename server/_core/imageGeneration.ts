@@ -8,11 +8,12 @@ export type GenerateImageOptions = {
 
 export type GenerateImageResponse = {
   url?: string;
-  provider?: "nanobanana" | "dalle";
+  provider?: "nanobanana" | "dalle" | "flux-local";
 };
 
 const NANOBANANA_API_KEY = process.env.NANOBANANA_API_KEY ?? "";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? "";
+const FLUX_LOCAL_URL = process.env.FLUX_LOCAL_URL || "http://localhost:8001";
 
 const NANOBANANA_API_URL = "https://api.nanobananaapi.ai/api/v1/nanobanana";
 
@@ -101,6 +102,62 @@ async function generateWithNanoBanana(
   throw new Error("Nano Banana timeout - task did not complete in 2 minutes");
 }
 
+async function generateWithLocalFlux(
+  options: GenerateImageOptions
+): Promise<GenerateImageResponse> {
+  console.info("[ImageGen] Using local Flux:", options.prompt.slice(0, 80));
+
+  const sizeMap: Record<string, { width: number; height: number }> = {
+    "1:1": { width: 1024, height: 1024 },
+    "16:9": { width: 1792, height: 1024 },
+    "9:16": { width: 1024, height: 1792 },
+    "4:3": { width: 1365, height: 1024 },
+    "3:4": { width: 1024, height: 1365 },
+  };
+
+  const size = sizeMap[options.size || "1:1"] || sizeMap["1:1"];
+
+  const response = await fetch(`${FLUX_LOCAL_URL}/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      prompt: options.prompt,
+      width: size.width,
+      height: size.height,
+      num_inference_steps: 28,
+      guidance_scale: 3.5,
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Local Flux API error (${response.status}): ${detail}`);
+  }
+
+  const result = (await response.json()) as {
+    image_url?: string;
+    image_base64?: string;
+  };
+
+  if (result.image_url) {
+    console.info("[ImageGen] Local Flux complete:", result.image_url);
+    return { url: result.image_url, provider: "flux-local" };
+  }
+
+  if (result.image_base64) {
+    const buffer = Buffer.from(result.image_base64, "base64");
+    const { url } = await storagePut(
+      `generated/flux-${Date.now()}.png`,
+      buffer,
+      "image/png"
+    );
+    console.info("[ImageGen] Local Flux complete (base64):", url);
+    return { url, provider: "flux-local" };
+  }
+
+  throw new Error("No image data returned from local Flux");
+}
+
 async function generateWithDallE(
   options: GenerateImageOptions
 ): Promise<GenerateImageResponse> {
@@ -158,9 +215,38 @@ async function generateWithDallE(
   return { url, provider: "dalle" };
 }
 
+const NSFW_PATTERNS = [
+  /nsfw/i,
+  /nude/i,
+  /naked/i,
+  /sexual/i,
+  /erotic/i,
+  /porn/i,
+  /explicit/i,
+  /adult.*content/i,
+  /hentai/i,
+];
+
+function isNsfwPrompt(prompt: string): boolean {
+  return NSFW_PATTERNS.some(p => p.test(prompt));
+}
+
 export async function generateImage(
   options: GenerateImageOptions
 ): Promise<GenerateImageResponse> {
+  if (isNsfwPrompt(options.prompt)) {
+    console.info("[ImageGen] NSFW content detected, routing to local Flux");
+    try {
+      return await generateWithLocalFlux(options);
+    } catch (error) {
+      console.error("[ImageGen] Local Flux failed:", error);
+      throw new Error(
+        "NSFW content requires local Flux, but it is not available. " +
+          "Please configure FLUX_LOCAL_URL."
+      );
+    }
+  }
+
   if (NANOBANANA_API_KEY) {
     try {
       return await generateWithNanoBanana(options);
@@ -174,17 +260,22 @@ export async function generateImage(
       return await generateWithDallE(options);
     } catch (error) {
       console.error("[ImageGen] DALL-E also failed:", error);
-      throw error;
     }
   }
 
+  try {
+    return await generateWithLocalFlux(options);
+  } catch (error) {
+    console.error("[ImageGen] Local Flux also failed:", error);
+  }
+
   console.error(
-    "[ImageGen] No API keys configured - NANOBANANA:",
+    "[ImageGen] No providers available - NANOBANANA:",
     !!NANOBANANA_API_KEY,
     "OPENAI:",
     !!OPENAI_API_KEY
   );
   throw new Error(
-    "No image generation API configured. Set NANOBANANA_API_KEY or OPENAI_API_KEY."
+    "No image generation API configured. Set NANOBANANA_API_KEY, OPENAI_API_KEY, or FLUX_LOCAL_URL."
   );
 }
