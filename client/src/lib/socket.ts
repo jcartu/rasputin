@@ -50,6 +50,14 @@ export interface JarvisErrorEvent {
   timestamp: number;
 }
 
+export interface VoiceAnnouncementEvent {
+  text: string;
+  source: "scheduled_task" | "multi_agent" | "jarvis" | "system";
+  taskId?: number;
+  priority?: "normal" | "high";
+  timestamp: number;
+}
+
 let socket: Socket | null = null;
 
 export function getSocket(): Socket {

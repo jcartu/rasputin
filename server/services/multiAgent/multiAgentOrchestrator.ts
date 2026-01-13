@@ -15,6 +15,7 @@ import {
 import { invokeLLM } from "../../_core/llm";
 import { getDb } from "../../db";
 import { agentTasks } from "../../../drizzle/schema";
+import { emitVoiceAnnouncement } from "../websocket";
 
 interface OrchestrationPlan {
   analysis: string;
@@ -268,6 +269,13 @@ export class MultiAgentOrchestrator {
       // Mark orchestrator as completed
       await agentManager.updateAgentStatus(orchestrator.id, "completed");
 
+      const shortTask = task.slice(0, 50) + (task.length > 50 ? "..." : "");
+      emitVoiceAnnouncement({
+        text: `Multi-agent task completed with ${subtasks.length} subtasks: ${shortTask}`,
+        source: "multi_agent",
+        taskId,
+      });
+
       return {
         success: true,
         finalOutput,
@@ -282,6 +290,14 @@ export class MultiAgentOrchestrator {
           "failed"
         );
       }
+
+      const shortTask = task.slice(0, 50) + (task.length > 50 ? "..." : "");
+      emitVoiceAnnouncement({
+        text: `Multi-agent task failed: ${shortTask}`,
+        source: "multi_agent",
+        taskId,
+        priority: "high",
+      });
 
       return {
         success: false,

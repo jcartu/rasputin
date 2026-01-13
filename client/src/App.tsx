@@ -14,6 +14,12 @@ import MultiAgent from "./pages/MultiAgent";
 import Codebase from "./pages/Codebase";
 import Events from "./pages/Events";
 import Hosts from "./pages/Hosts";
+import { useVoiceAnnouncement } from "./hooks/useVoiceAnnouncement";
+
+function VoiceAnnouncementListener() {
+  useVoiceAnnouncement();
+  return null;
+}
 
 function Router() {
   return (
@@ -56,6 +62,7 @@ function App() {
           />
         )}
         <TooltipProvider>
+          <VoiceAnnouncementListener />
           <Toaster
             position="top-right"
             toastOptions={{

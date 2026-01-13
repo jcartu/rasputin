@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import { notifyOwner } from "../../_core/notification";
 import { runOrchestrator } from "../jarvis/orchestrator";
 import { executeTool } from "../jarvis/tools";
+import { emitVoiceAnnouncement } from "../websocket";
 
 type ActionType =
   | "jarvis_task"
@@ -196,6 +197,17 @@ export class EventExecutor {
           completedAt: new Date(),
         })
         .where(eq(agentTasks.id, taskRecord.id));
+
+      const shortPrompt =
+        prompt.slice(0, 50) + (prompt.length > 50 ? "..." : "");
+      emitVoiceAnnouncement({
+        text: hasError
+          ? `Scheduled task failed: ${shortPrompt}`
+          : `Scheduled task completed: ${shortPrompt}`,
+        source: "scheduled_task",
+        taskId: taskRecord.id,
+        priority: hasError ? "high" : "normal",
+      });
 
       return {
         message: hasError ? "Agent task failed" : "Agent task completed",

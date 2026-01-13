@@ -176,6 +176,13 @@ interface ServerToClientEvents {
     status: "approved" | "rejected" | "expired";
     timestamp: number;
   }) => void;
+  "voice:announce": (data: {
+    text: string;
+    source: "scheduled_task" | "multi_agent" | "jarvis" | "system";
+    taskId?: number;
+    priority?: "normal" | "high";
+    timestamp: number;
+  }) => void;
   error: (data: { message: string; code?: string }) => void;
 }
 
@@ -794,6 +801,24 @@ export function emitApprovalResolved(
     io.emit("approval:resolved", {
       id,
       status,
+      timestamp: Date.now(),
+    });
+  }
+}
+
+/**
+ * Emit voice announcement to all connected clients
+ */
+export function emitVoiceAnnouncement(data: {
+  text: string;
+  source: "scheduled_task" | "multi_agent" | "jarvis" | "system";
+  taskId?: number;
+  priority?: "normal" | "high";
+}): void {
+  if (io) {
+    io.emit("voice:announce", {
+      ...data,
+      priority: data.priority || "normal",
       timestamp: Date.now(),
     });
   }
