@@ -38,6 +38,7 @@ import {
   recordTaskPerformance,
   getPerformanceGuidance,
   formatPerformanceReport,
+  getOptimizedPromptContext,
 } from "./performanceTracking";
 import {
   routeTask,
@@ -1590,9 +1591,12 @@ export async function runOrchestrator(
   }
 
   if (options.userId) {
-    const perfGuidance = await getPerformanceGuidance(options.userId, task);
-    if (perfGuidance) {
-      taskWithContext += perfGuidance;
+    const optimizedContext = await getOptimizedPromptContext(
+      options.userId,
+      task
+    );
+    if (optimizedContext) {
+      taskWithContext += optimizedContext;
     }
   }
 

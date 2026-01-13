@@ -35,7 +35,11 @@ import {
   extractCitations,
   detectConflicts,
   formatResearchReport,
+  shouldDeepen,
+  generateFollowUpQueries,
   type ResearchSource,
+  type Citation,
+  type ResearchConflict,
   type DeepResearchResult,
 } from "./deepResearch";
 import { getMemoryService } from "../memory";
@@ -487,121 +491,223 @@ async function withTimeout<T>(
 
 export async function deepResearch(
   topic: string,
-  depth: number = 2
+  depth: number = 2,
+  maxIterations: number = 3
 ): Promise<string> {
   const startTime = Date.now();
-  const sources: ResearchSource[] = [];
-  const queries = generateSearchQueries(topic);
-  const maxQueries = Math.min(queries.length, depth + 2);
+  const allSources: ResearchSource[] = [];
+  const allCitations: Citation[] = [];
+  const allConflicts: ResearchConflict[] = [];
+  const iterationSummaries: string[] = [];
+  let totalQueries = 0;
+  let currentIteration = 0;
+  let currentQuery = topic;
 
-  const searchPromises = queries.slice(0, maxQueries).map(async query => {
-    const searchResult = await withTimeout(
-      webSearch(query),
-      SEARCH_TIMEOUT_MS,
-      ""
+  while (currentIteration < maxIterations) {
+    const remainingTime = DEEP_RESEARCH_TIMEOUT_MS - (Date.now() - startTime);
+    if (remainingTime < 20_000) break;
+
+    const queries = generateSearchQueries(currentQuery);
+    const maxQueriesThisIteration = Math.min(
+      queries.length,
+      currentIteration === 0 ? depth + 2 : 2
     );
-    if (!searchResult) return [];
+    totalQueries += maxQueriesThisIteration;
 
-    const urlMatches = searchResult.match(/https?:\/\/[^\s\]]+/g) || [];
-    return urlMatches.slice(0, 3).map(url => {
-      const { score, reason } = scoreSourceCredibility(url);
-      return {
-        url,
-        title: url.split("/").slice(2, 3).join(""),
-        snippet: searchResult.slice(0, 200),
-        domain: new URL(url).hostname,
-        credibilityScore: score,
-        credibilityReason: reason,
-        retrievedAt: Date.now(),
-      } as ResearchSource;
-    });
-  });
+    const searchPromises = queries
+      .slice(0, maxQueriesThisIteration)
+      .map(async query => {
+        const searchResult = await withTimeout(
+          webSearch(query),
+          SEARCH_TIMEOUT_MS,
+          ""
+        );
+        if (!searchResult) return [];
 
-  const searchResults = await withTimeout(
-    Promise.all(searchPromises),
-    DEEP_RESEARCH_TIMEOUT_MS - 30_000,
-    []
-  );
+        const urlMatches = searchResult.match(/https?:\/\/[^\s\]]+/g) || [];
+        return urlMatches.slice(0, 3).map(url => {
+          const { score, reason } = scoreSourceCredibility(url);
+          return {
+            url,
+            title: url.split("/").slice(2, 3).join(""),
+            snippet: searchResult.slice(0, 200),
+            domain: new URL(url).hostname,
+            credibilityScore: score,
+            credibilityReason: reason,
+            retrievedAt: Date.now(),
+          } as ResearchSource;
+        });
+      });
 
-  for (const resultSources of searchResults) {
-    sources.push(...resultSources);
+    const searchResults = await withTimeout(
+      Promise.all(searchPromises),
+      remainingTime - 15_000,
+      []
+    );
+
+    const iterationSources: ResearchSource[] = [];
+    for (const resultSources of searchResults) {
+      iterationSources.push(...resultSources);
+    }
+
+    const newSources = iterationSources.filter(
+      s => !allSources.some(existing => existing.url === s.url)
+    );
+    allSources.push(...newSources);
+
+    let iterationSynthesis = "";
+    const synthesisTimeRemaining =
+      DEEP_RESEARCH_TIMEOUT_MS - (Date.now() - startTime);
+
+    if (synthesisTimeRemaining > 10_000 && newSources.length > 0) {
+      try {
+        const SONAR_API_KEY = process.env.SONAR_API_KEY || "";
+        const synthesisResponse = await withTimeout(
+          fetch("https://api.perplexity.ai/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${SONAR_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model: "sonar-pro",
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    "You are a research synthesizer. Provide a comprehensive summary with citations. Note any gaps or areas needing more research. Identify conflicting claims.",
+                },
+                {
+                  role: "user",
+                  content: `Synthesize research on: ${currentQuery}\n\nIteration ${currentIteration + 1}/${maxIterations}\n\nNew sources:\n${newSources.map(s => `- ${s.url} (${s.credibilityReason})`).join("\n")}\n\n${currentIteration > 0 ? `Previous findings:\n${iterationSummaries.slice(-1).join("\n")}` : ""}`,
+                },
+              ],
+              max_tokens: 2048,
+            }),
+          }),
+          synthesisTimeRemaining - 5_000,
+          null
+        );
+
+        if (synthesisResponse) {
+          const data = await synthesisResponse.json();
+          iterationSynthesis =
+            data.choices?.[0]?.message?.content || "Unable to synthesize";
+        }
+      } catch {
+        iterationSynthesis = "";
+      }
+    }
+
+    if (!iterationSynthesis) {
+      iterationSynthesis =
+        `Iteration ${currentIteration + 1}: Found ${newSources.length} new sources on "${currentQuery}". Top sources:\n` +
+        newSources
+          .sort((a, b) => b.credibilityScore - a.credibilityScore)
+          .slice(0, 3)
+          .map(s => `- ${s.url} (${(s.credibilityScore * 100).toFixed(0)}%)`)
+          .join("\n");
+    }
+
+    iterationSummaries.push(iterationSynthesis);
+
+    const iterationCitations = extractCitations(iterationSynthesis, newSources);
+    const iterationConflicts = detectConflicts(iterationCitations);
+    allCitations.push(...iterationCitations);
+    allConflicts.push(...iterationConflicts);
+
+    currentIteration++;
+
+    const unansweredQuestions = countUnansweredQuestions(iterationSynthesis);
+    if (
+      !shouldDeepen(
+        currentIteration,
+        maxIterations,
+        allConflicts.length,
+        unansweredQuestions
+      )
+    ) {
+      break;
+    }
+
+    const followUps = generateFollowUpQueries(
+      topic,
+      iterationSynthesis,
+      iterationConflicts
+    );
+    if (followUps.length === 0) {
+      break;
+    }
+
+    currentQuery = followUps[0];
   }
 
-  const uniqueSources = sources.filter(
+  const uniqueSources = allSources.filter(
     (s, i, arr) => arr.findIndex(x => x.url === s.url) === i
   );
 
-  let synthesis = "";
-  const remainingTime = DEEP_RESEARCH_TIMEOUT_MS - (Date.now() - startTime);
-
-  if (remainingTime > 10_000 && uniqueSources.length > 0) {
-    try {
-      const SONAR_API_KEY = process.env.SONAR_API_KEY || "";
-      const synthesisResponse = await withTimeout(
-        fetch("https://api.perplexity.ai/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${SONAR_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: "sonar-pro",
-            messages: [
-              {
-                role: "system",
-                content:
-                  "You are a research synthesizer. Provide a comprehensive summary with citations to sources. Note any conflicting information between sources.",
-              },
-              {
-                role: "user",
-                content: `Synthesize research on: ${topic}\n\nSources consulted:\n${uniqueSources.map(s => `- ${s.url} (${s.credibilityReason})`).join("\n")}`,
-              },
-            ],
-            max_tokens: 4096,
-          }),
-        }),
-        remainingTime - 5_000,
-        null
+  const sourceCitationCount = new Map<string, number>();
+  for (const citation of allCitations) {
+    for (const source of citation.sources) {
+      sourceCitationCount.set(
+        source.url,
+        (sourceCitationCount.get(source.url) || 0) + 1
       );
-
-      if (synthesisResponse) {
-        const data = await synthesisResponse.json();
-        synthesis =
-          data.choices?.[0]?.message?.content || "Unable to synthesize";
-      }
-    } catch {
-      synthesis = "";
     }
   }
 
-  if (!synthesis) {
-    synthesis =
-      `Research found ${uniqueSources.length} sources on "${topic}". Top sources by credibility:\n` +
-      uniqueSources
-        .sort((a, b) => b.credibilityScore - a.credibilityScore)
-        .slice(0, 5)
-        .map(
-          s =>
-            `- ${s.url} (${(s.credibilityScore * 100).toFixed(0)}% credibility)`
-        )
-        .join("\n");
+  for (const source of uniqueSources) {
+    const citationCount = sourceCitationCount.get(source.url) || 0;
+    if (citationCount > 1) {
+      source.credibilityScore = Math.min(
+        1.0,
+        source.credibilityScore + citationCount * 0.02
+      );
+      source.credibilityReason += ` (cited ${citationCount}x)`;
+    }
   }
 
-  const citations = extractCitations(synthesis, uniqueSources);
-  const conflicts = detectConflicts(citations);
+  let finalSynthesis = iterationSummaries.join("\n\n---\n\n");
+  if (currentIteration > 1) {
+    finalSynthesis = `## Research Overview (${currentIteration} iterations)\n\n${finalSynthesis}`;
+  }
+
+  const uniqueConflicts = allConflicts.filter(
+    (c, i, arr) => arr.findIndex(x => x.topic === c.topic) === i
+  );
 
   const result: DeepResearchResult = {
     query: topic,
     sources: uniqueSources,
-    citations,
-    conflicts,
-    synthesis,
+    citations: allCitations,
+    conflicts: uniqueConflicts,
+    synthesis: finalSynthesis,
     depth,
-    totalQueries: maxQueries,
+    totalQueries,
     researchTimeMs: Date.now() - startTime,
   };
 
   return formatResearchReport(result);
+}
+
+function countUnansweredQuestions(synthesis: string): number {
+  const gapIndicators = [
+    /\bunknown\b/gi,
+    /\bunclear\b/gi,
+    /\buncertain\b/gi,
+    /\bmore research\b/gi,
+    /\bneeds? (more |further )?investigation\b/gi,
+    /\binsufficient (data|evidence|information)\b/gi,
+    /\bno (clear |definitive )?(answer|consensus)\b/gi,
+    /\?/g,
+  ];
+
+  let count = 0;
+  for (const pattern of gapIndicators) {
+    const matches = synthesis.match(pattern);
+    if (matches) count += matches.length;
+  }
+  return Math.min(count, 10);
 }
 
 /**

@@ -1,6 +1,10 @@
 import { getDb } from "../../db";
-import { learningEvents, proceduralMemories } from "../../../drizzle/schema";
-import { eq, and, desc, sql, like } from "drizzle-orm";
+import {
+  learningEvents,
+  proceduralMemories,
+  agentTasks,
+} from "../../../drizzle/schema";
+import { eq, and, desc, sql, like, gte, isNotNull } from "drizzle-orm";
 
 export interface TaskPerformance {
   taskSignature: string;
@@ -228,4 +232,170 @@ export async function getPerformanceGuidance(
   return sections.length > 0
     ? `\n[Performance Context: ${sections.join(" | ")}]`
     : "";
+}
+
+export interface PromptOptimization {
+  optimizedPromptSegments: string[];
+  toolRecommendations: string[];
+  avoidanceList: string[];
+  successPatterns: string[];
+}
+
+interface TaskOutcome {
+  taskType: string;
+  success: boolean;
+  duration: number;
+  iterations: number;
+  toolsUsed: string[];
+}
+
+const taskOutcomeCache = new Map<number, TaskOutcome[]>();
+
+export async function analyzeSuccessPatterns(
+  userId: number,
+  taskQuery: string
+): Promise<PromptOptimization> {
+  const optimization: PromptOptimization = {
+    optimizedPromptSegments: [],
+    toolRecommendations: [],
+    avoidanceList: [],
+    successPatterns: [],
+  };
+
+  const db = await getDb();
+  if (!db) return optimization;
+
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const recentTasks = await db
+    .select({
+      id: agentTasks.id,
+      query: agentTasks.query,
+      status: agentTasks.status,
+      iterations: agentTasks.iterationCount,
+      createdAt: agentTasks.createdAt,
+      completedAt: agentTasks.completedAt,
+    })
+    .from(agentTasks)
+    .where(
+      and(
+        eq(agentTasks.userId, userId),
+        gte(agentTasks.createdAt, thirtyDaysAgo),
+        isNotNull(agentTasks.completedAt)
+      )
+    )
+    .orderBy(desc(agentTasks.createdAt))
+    .limit(50);
+
+  if (recentTasks.length < 5) return optimization;
+
+  const successfulTasks = recentTasks.filter(t => t.status === "completed");
+  const failedTasks = recentTasks.filter(
+    t => t.status === "failed" || t.status === "cancelled"
+  );
+
+  const successRate =
+    recentTasks.length > 0
+      ? (successfulTasks.length / recentTasks.length) * 100
+      : 0;
+
+  if (successRate >= 80) {
+    optimization.successPatterns.push(
+      `High success rate (${successRate.toFixed(0)}%) - maintain current approach`
+    );
+  } else if (successRate < 50) {
+    optimization.optimizedPromptSegments.push(
+      "CAUTION: Recent task success rate is low. Consider breaking complex tasks into smaller steps."
+    );
+  }
+
+  const avgIterationsSuccess =
+    successfulTasks.length > 0
+      ? successfulTasks.reduce((sum, t) => sum + (t.iterations || 1), 0) /
+        successfulTasks.length
+      : 0;
+  const avgIterationsFailed =
+    failedTasks.length > 0
+      ? failedTasks.reduce((sum, t) => sum + (t.iterations || 1), 0) /
+        failedTasks.length
+      : 0;
+
+  if (avgIterationsFailed > avgIterationsSuccess * 1.5) {
+    optimization.optimizedPromptSegments.push(
+      `Tasks failing often hit iteration limits. Target completion within ${Math.ceil(avgIterationsSuccess)} iterations.`
+    );
+  }
+
+  const learnings = await db
+    .select()
+    .from(learningEvents)
+    .where(
+      and(
+        eq(learningEvents.userId, userId),
+        gte(learningEvents.createdAt, thirtyDaysAgo)
+      )
+    )
+    .orderBy(desc(learningEvents.createdAt))
+    .limit(20);
+
+  const errorLearnings = learnings.filter(l => l.eventType === "error_learned");
+  for (const learning of errorLearnings.slice(0, 3)) {
+    if (learning.confidence >= 70) {
+      optimization.avoidanceList.push(learning.summary);
+    }
+  }
+
+  const skillLearnings = learnings.filter(
+    l => l.eventType === "skill_acquired" || l.eventType === "skill_improved"
+  );
+  for (const learning of skillLearnings.slice(0, 3)) {
+    if (learning.confidence >= 80) {
+      optimization.successPatterns.push(learning.summary);
+    }
+  }
+
+  return optimization;
+}
+
+export function formatPromptOptimization(opt: PromptOptimization): string {
+  const sections: string[] = [];
+
+  if (opt.optimizedPromptSegments.length > 0) {
+    sections.push(
+      `OPTIMIZATION HINTS:\n${opt.optimizedPromptSegments.map(s => `- ${s}`).join("\n")}`
+    );
+  }
+
+  if (opt.avoidanceList.length > 0) {
+    sections.push(
+      `AVOID (learned from past failures):\n${opt.avoidanceList.map(s => `- ${s}`).join("\n")}`
+    );
+  }
+
+  if (opt.successPatterns.length > 0) {
+    sections.push(
+      `SUCCESS PATTERNS:\n${opt.successPatterns.map(s => `- ${s}`).join("\n")}`
+    );
+  }
+
+  if (opt.toolRecommendations.length > 0) {
+    sections.push(
+      `RECOMMENDED TOOLS:\n${opt.toolRecommendations.map(s => `- ${s}`).join("\n")}`
+    );
+  }
+
+  return sections.length > 0 ? `\n[${sections.join("\n\n")}]` : "";
+}
+
+export async function getOptimizedPromptContext(
+  userId: number,
+  taskQuery: string
+): Promise<string> {
+  const [perfGuidance, optimization] = await Promise.all([
+    getPerformanceGuidance(userId, taskQuery),
+    analyzeSuccessPatterns(userId, taskQuery),
+  ]);
+
+  const optContext = formatPromptOptimization(optimization);
+  return perfGuidance + optContext;
 }
