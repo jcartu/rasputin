@@ -26,6 +26,33 @@ import {
 import { createSelfReflectionSystem } from "./memory/selfReflection";
 
 // ============================================================================
+// Utilities
+// ============================================================================
+
+/**
+ * Extract clean user query from task that may contain file context.
+ * Looks for [USER TASK] or [USER QUESTION] markers and extracts just the user's query.
+ */
+function extractCleanTitle(task: string): string {
+  // Check for [USER TASK] marker (Agent page)
+  const userTaskMatch = task.match(/\[USER TASK\]\s*\n?([\s\S]*?)$/i);
+  if (userTaskMatch) {
+    const cleanQuery = userTaskMatch[1].trim();
+    return cleanQuery.slice(0, 100) + (cleanQuery.length > 100 ? "..." : "");
+  }
+
+  // Check for [USER QUESTION] marker (Chat page)
+  const userQuestionMatch = task.match(/\[USER QUESTION\]\s*\n?([\s\S]*?)$/i);
+  if (userQuestionMatch) {
+    const cleanQuery = userQuestionMatch[1].trim();
+    return cleanQuery.slice(0, 100) + (cleanQuery.length > 100 ? "..." : "");
+  }
+
+  // No markers found, return as-is (truncated)
+  return task.slice(0, 100) + (task.length > 100 ? "..." : "");
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -488,7 +515,7 @@ async function handleJarvisTask(
     return;
   }
 
-  const title = task.slice(0, 100) + (task.length > 100 ? "..." : "");
+  const title = extractCleanTitle(task);
   const dbTask = await db.createAgentTask({
     userId,
     title,

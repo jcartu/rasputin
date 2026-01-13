@@ -183,10 +183,19 @@ For SECURITY ANALYSIS (ALWAYS use specialized tools first!):
   3. read_file package.json for manual review
 
 For FILE CREATION:
-  1. write_file for text/code files (.txt, .md, .py, .js, etc.)
-  2. write_docx for Word documents (.docx) - USE THIS for reports/documents user will open in Word
-  3. read_file to VERIFY content was created correctly
-  4. For code: execute the file to test it works
+  1. write_file for plain text/code files (.txt, .py, .js, etc.)
+  2. create_rich_report for REPORTS with visuals - USE THIS for ANY report, analysis, or document that benefits from charts, diagrams, images, or professional formatting. Creates stunning HTML with:
+     - SVG pie/bar/line charts (no API needed!)
+     - Flowcharts, timelines, stat cards
+     - AI-generated images embedded
+     - Progress bars, callouts, quotes, comparison tables
+     - Professional styling (medical/business/executive/technical/modern)
+     - Exports perfectly to PDF via browser print
+  3. write_docx for Word documents (.docx) when user specifically needs Word format
+  4. read_file to VERIFY content was created correctly
+  5. For code: execute the file to test it works
+  
+  IMPORTANT: For reports, analyses, forecasts, summaries, medical explanations, business plans, etc - ALWAYS use create_rich_report instead of plain markdown!
 
 For RUNNING SHELL COMMANDS:
   1. run_shell - Execute any shell command
@@ -321,6 +330,15 @@ EXECUTION PATTERN:
 7. Review: For critical tasks, use self_review before completing
 8. Complete: Only when verified, use task_complete
 
+PRIORITIZATION - DELIVER VALUE FIRST:
+When a task has both ESSENTIAL and OPTIONAL components:
+- ESSENTIAL = core answer/explanation the user needs (e.g., "explain what's wrong")
+- OPTIONAL = enhancements like diagrams, visualizations, formatting
+ALWAYS deliver the ESSENTIAL answer FIRST before attempting OPTIONAL items.
+If image generation or other expensive tools fail, STILL COMPLETE THE TASK with text-based answer.
+Example: "Explain my MRI and provide diagrams" → Explain MRI findings FIRST → THEN attempt diagrams
+If diagrams fail after 1 attempt, complete task with text explanation + note "diagrams unavailable"
+
 CRITICAL - DELIVERABLE WRITING STRATEGY:
 When the user requests MULTIPLE FILES or DELIVERABLES:
 - Write EACH file as soon as you have enough information for it
@@ -411,6 +429,14 @@ const TOOL_ALTERNATIVES: Record<string, string[]> = {
   browse_url: ["playwright_browse", "http_request"],
   npm_audit: ["security_analysis", "execute_shell"],
 };
+
+const EXPENSIVE_TOOLS = new Set([
+  "generate_image",
+  "playwright_browse",
+  "screenshot",
+  "browser_session_start",
+]);
+const MAX_EXPENSIVE_TOOL_RETRIES = 1;
 
 const MAX_IDENTICAL_CALLS_PER_APPROACH = 2;
 export const MAX_ITERATIONS = 15;
@@ -727,10 +753,16 @@ async function executeToolsInParallel(
       parallelizable.map(async tc => {
         const callHash = hashToolCall(tc.name, tc.input);
         const callCount = executionContext.attemptedCalls.get(callHash) || 0;
-        if (callCount >= MAX_IDENTICAL_CALLS_PER_APPROACH) {
+        const maxRetries = EXPENSIVE_TOOLS.has(tc.name)
+          ? MAX_EXPENSIVE_TOOL_RETRIES
+          : MAX_IDENTICAL_CALLS_PER_APPROACH;
+        if (callCount >= maxRetries) {
+          const reason = EXPENSIVE_TOOLS.has(tc.name)
+            ? `"${tc.name}" is an expensive/slow tool and failed. Skip diagram generation and focus on delivering the core text-based answer.`
+            : `Identical call to "${tc.name}" was already attempted ${callCount} times this approach. Try a different approach.`;
           return {
             tc,
-            output: `[Skipped] Identical call to "${tc.name}" was already attempted ${callCount} times this approach. Try a different approach.`,
+            output: `[Skipped] ${reason}`,
             isError: true,
           };
         }
@@ -819,10 +851,16 @@ async function executeSingleTool(
 }> {
   const callHash = hashToolCall(tc.name, tc.input);
   const callCount = executionContext.attemptedCalls.get(callHash) || 0;
-  if (callCount >= MAX_IDENTICAL_CALLS_PER_APPROACH) {
+  const maxRetries = EXPENSIVE_TOOLS.has(tc.name)
+    ? MAX_EXPENSIVE_TOOL_RETRIES
+    : MAX_IDENTICAL_CALLS_PER_APPROACH;
+  if (callCount >= maxRetries) {
+    const reason = EXPENSIVE_TOOLS.has(tc.name)
+      ? `"${tc.name}" is an expensive/slow tool and failed. Skip diagram generation and focus on delivering the core text-based answer.`
+      : `Identical call to "${tc.name}" was already attempted ${callCount} times this approach. Try a different approach.`;
     return {
       tc,
-      output: `[Skipped] Identical call to "${tc.name}" was already attempted ${callCount} times this approach. Try a different approach.`,
+      output: `[Skipped] ${reason}`,
       isError: true,
     };
   }

@@ -1690,9 +1690,891 @@ export async function generateImageTool(prompt: string): Promise<string> {
   }
 }
 
-/**
- * Get current date and time
- */
+type ChartData = {
+  label: string;
+  value: number;
+  color?: string;
+};
+
+type FlowchartNode = {
+  id: string;
+  label: string;
+  type?: "start" | "end" | "process" | "decision";
+};
+
+type FlowchartEdge = {
+  from: string;
+  to: string;
+  label?: string;
+};
+
+type TimelineEvent = {
+  date: string;
+  title: string;
+  description?: string;
+};
+
+type StatCard = {
+  label: string;
+  value: string;
+  change?: string;
+  changeType?: "positive" | "negative" | "neutral";
+};
+
+type RichReportSection = {
+  type:
+    | "heading"
+    | "paragraph"
+    | "list"
+    | "image"
+    | "table"
+    | "pie_chart"
+    | "bar_chart"
+    | "line_chart"
+    | "flowchart"
+    | "timeline"
+    | "stat_cards"
+    | "progress_bar"
+    | "callout"
+    | "quote"
+    | "comparison"
+    | "code";
+  level?: number;
+  content?: string;
+  imagePrompt?: string;
+  items?: string[];
+  rows?: string[][];
+  chartData?: ChartData[];
+  chartTitle?: string;
+  flowNodes?: FlowchartNode[];
+  flowEdges?: FlowchartEdge[];
+  timelineEvents?: TimelineEvent[];
+  statCards?: StatCard[];
+  progress?: number;
+  progressLabel?: string;
+  calloutType?: "info" | "warning" | "success" | "error";
+  quoteAuthor?: string;
+  comparisonItems?: Array<{
+    name: string;
+    features: Record<string, boolean | string>;
+  }>;
+  language?: string;
+};
+
+type RichReportOptions = {
+  title: string;
+  subtitle?: string;
+  sections: RichReportSection[];
+  style?: "medical" | "business" | "technical" | "modern" | "executive";
+  includeTableOfContents?: boolean;
+  headerImage?: string;
+  author?: string;
+  date?: string;
+};
+
+const CHART_COLORS = [
+  "#6366f1",
+  "#8b5cf6",
+  "#ec4899",
+  "#f43f5e",
+  "#f97316",
+  "#eab308",
+  "#22c55e",
+  "#14b8a6",
+  "#06b6d4",
+  "#3b82f6",
+];
+
+function generatePieChartSVG(data: ChartData[], title?: string): string {
+  const size = 300;
+  const center = size / 2;
+  const radius = 120;
+  const total = data.reduce((sum, d) => sum + d.value, 0);
+
+  let currentAngle = -90;
+  const slices: string[] = [];
+  const labels: string[] = [];
+
+  data.forEach((d, i) => {
+    const percentage = d.value / total;
+    const angle = percentage * 360;
+    const endAngle = currentAngle + angle;
+    const largeArc = angle > 180 ? 1 : 0;
+    const color = d.color || CHART_COLORS[i % CHART_COLORS.length];
+
+    const startRad = (currentAngle * Math.PI) / 180;
+    const endRad = (endAngle * Math.PI) / 180;
+    const x1 = center + radius * Math.cos(startRad);
+    const y1 = center + radius * Math.sin(startRad);
+    const x2 = center + radius * Math.cos(endRad);
+    const y2 = center + radius * Math.sin(endRad);
+
+    slices.push(
+      `<path d="M ${center} ${center} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z" fill="${color}" stroke="white" stroke-width="2"><title>${d.label}: ${d.value} (${(percentage * 100).toFixed(1)}%)</title></path>`
+    );
+
+    const midAngle = ((currentAngle + angle / 2) * Math.PI) / 180;
+    const labelRadius = radius + 30;
+    const lx = center + labelRadius * Math.cos(midAngle);
+    const ly = center + labelRadius * Math.sin(midAngle);
+    labels.push(
+      `<text x="${lx}" y="${ly}" text-anchor="middle" font-size="11" fill="#666">${d.label}</text>`
+    );
+
+    currentAngle = endAngle;
+  });
+
+  const titleSvg = title
+    ? `<text x="${center}" y="20" text-anchor="middle" font-size="16" font-weight="bold" fill="#333">${title}</text>`
+    : "";
+
+  return `<svg viewBox="0 0 ${size} ${size + 40}" xmlns="http://www.w3.org/2000/svg" style="max-width: 400px; margin: 20px auto; display: block;">
+    ${titleSvg}
+    <g transform="translate(0, 20)">${slices.join("")}${labels.join("")}</g>
+  </svg>`;
+}
+
+function generateBarChartSVG(data: ChartData[], title?: string): string {
+  const width = 500;
+  const height = 300;
+  const padding = { top: 40, right: 20, bottom: 60, left: 60 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const maxValue = Math.max(...data.map(d => d.value));
+  const barWidth = chartWidth / data.length - 10;
+
+  const bars = data
+    .map((d, i) => {
+      const barHeight = (d.value / maxValue) * chartHeight;
+      const x = padding.left + i * (barWidth + 10) + 5;
+      const y = padding.top + chartHeight - barHeight;
+      const color = d.color || CHART_COLORS[i % CHART_COLORS.length];
+      return `
+      <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" fill="${color}" rx="4">
+        <title>${d.label}: ${d.value}</title>
+      </rect>
+      <text x="${x + barWidth / 2}" y="${height - 35}" text-anchor="middle" font-size="11" fill="#666" transform="rotate(-45, ${x + barWidth / 2}, ${height - 35})">${d.label}</text>
+      <text x="${x + barWidth / 2}" y="${y - 5}" text-anchor="middle" font-size="12" font-weight="bold" fill="#333">${d.value}</text>
+    `;
+    })
+    .join("");
+
+  const gridLines = [0, 0.25, 0.5, 0.75, 1]
+    .map(pct => {
+      const y = padding.top + chartHeight * (1 - pct);
+      const value = Math.round(maxValue * pct);
+      return `
+      <line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="#eee" stroke-dasharray="4"/>
+      <text x="${padding.left - 10}" y="${y + 4}" text-anchor="end" font-size="11" fill="#888">${value}</text>
+    `;
+    })
+    .join("");
+
+  const titleSvg = title
+    ? `<text x="${width / 2}" y="25" text-anchor="middle" font-size="16" font-weight="bold" fill="#333">${title}</text>`
+    : "";
+
+  return `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="max-width: 600px; margin: 20px auto; display: block;">
+    ${titleSvg}
+    ${gridLines}
+    ${bars}
+  </svg>`;
+}
+
+function generateLineChartSVG(data: ChartData[], title?: string): string {
+  const width = 500;
+  const height = 300;
+  const padding = { top: 40, right: 20, bottom: 50, left: 60 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const maxValue = Math.max(...data.map(d => d.value));
+  const minValue = Math.min(...data.map(d => d.value));
+  const range = maxValue - minValue || 1;
+
+  const points = data.map((d, i) => {
+    const x = padding.left + (i / (data.length - 1 || 1)) * chartWidth;
+    const y =
+      padding.top + chartHeight - ((d.value - minValue) / range) * chartHeight;
+    return { x, y, d };
+  });
+
+  const linePath = points
+    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
+    .join(" ");
+  const areaPath = `${linePath} L ${points[points.length - 1].x} ${padding.top + chartHeight} L ${points[0].x} ${padding.top + chartHeight} Z`;
+
+  const dots = points
+    .map(
+      p => `
+    <circle cx="${p.x}" cy="${p.y}" r="5" fill="#6366f1" stroke="white" stroke-width="2">
+      <title>${p.d.label}: ${p.d.value}</title>
+    </circle>
+  `
+    )
+    .join("");
+
+  const labels = points
+    .map((p, i) =>
+      i % Math.ceil(data.length / 8) === 0 || i === data.length - 1
+        ? `<text x="${p.x}" y="${height - 15}" text-anchor="middle" font-size="10" fill="#666">${p.d.label}</text>`
+        : ""
+    )
+    .join("");
+
+  const gridLines = [0, 0.25, 0.5, 0.75, 1]
+    .map(pct => {
+      const y = padding.top + chartHeight * (1 - pct);
+      const value = Math.round(minValue + range * pct);
+      return `
+      <line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="#eee"/>
+      <text x="${padding.left - 10}" y="${y + 4}" text-anchor="end" font-size="10" fill="#888">${value}</text>
+    `;
+    })
+    .join("");
+
+  const titleSvg = title
+    ? `<text x="${width / 2}" y="25" text-anchor="middle" font-size="16" font-weight="bold" fill="#333">${title}</text>`
+    : "";
+
+  return `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="max-width: 600px; margin: 20px auto; display: block;">
+    <defs>
+      <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#6366f1" stop-opacity="0.3"/>
+        <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    ${titleSvg}
+    ${gridLines}
+    <path d="${areaPath}" fill="url(#areaGradient)"/>
+    <path d="${linePath}" fill="none" stroke="#6366f1" stroke-width="3" stroke-linecap="round"/>
+    ${dots}
+    ${labels}
+  </svg>`;
+}
+
+function generateFlowchartSVG(
+  nodes: FlowchartNode[],
+  edges: FlowchartEdge[]
+): string {
+  const nodeWidth = 140;
+  const nodeHeight = 50;
+  const verticalGap = 80;
+  const horizontalGap = 180;
+
+  const nodeMap = new Map<
+    string,
+    { x: number; y: number; node: FlowchartNode }
+  >();
+  let row = 0;
+  const processed = new Set<string>();
+
+  function getNodeShape(node: FlowchartNode, x: number, y: number): string {
+    const colors = {
+      start: { fill: "#22c55e", stroke: "#16a34a" },
+      end: { fill: "#ef4444", stroke: "#dc2626" },
+      process: { fill: "#3b82f6", stroke: "#2563eb" },
+      decision: { fill: "#f59e0b", stroke: "#d97706" },
+    };
+    const c = colors[node.type || "process"];
+
+    if (node.type === "start" || node.type === "end") {
+      return `<ellipse cx="${x + nodeWidth / 2}" cy="${y + nodeHeight / 2}" rx="${nodeWidth / 2}" ry="${nodeHeight / 2}" fill="${c.fill}" stroke="${c.stroke}" stroke-width="2"/>
+        <text x="${x + nodeWidth / 2}" y="${y + nodeHeight / 2 + 5}" text-anchor="middle" fill="white" font-size="13" font-weight="bold">${node.label}</text>`;
+    }
+    if (node.type === "decision") {
+      const cx = x + nodeWidth / 2;
+      const cy = y + nodeHeight / 2;
+      return `<polygon points="${cx},${y} ${x + nodeWidth},${cy} ${cx},${y + nodeHeight} ${x},${cy}" fill="${c.fill}" stroke="${c.stroke}" stroke-width="2"/>
+        <text x="${cx}" y="${cy + 5}" text-anchor="middle" fill="white" font-size="12" font-weight="bold">${node.label}</text>`;
+    }
+    return `<rect x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" rx="8" fill="${c.fill}" stroke="${c.stroke}" stroke-width="2"/>
+      <text x="${x + nodeWidth / 2}" y="${y + nodeHeight / 2 + 5}" text-anchor="middle" fill="white" font-size="13" font-weight="bold">${node.label}</text>`;
+  }
+
+  const startNodes = nodes.filter(n => n.type === "start");
+  let queue = startNodes.length > 0 ? startNodes : [nodes[0]];
+  let col = 0;
+
+  while (queue.length > 0 && processed.size < nodes.length) {
+    const nextQueue: FlowchartNode[] = [];
+    col = 0;
+    for (const node of queue) {
+      if (!processed.has(node.id)) {
+        const x = 50 + col * horizontalGap;
+        const y = 30 + row * verticalGap;
+        nodeMap.set(node.id, { x, y, node });
+        processed.add(node.id);
+
+        const outEdges = edges.filter(e => e.from === node.id);
+        for (const edge of outEdges) {
+          const targetNode = nodes.find(n => n.id === edge.to);
+          if (targetNode && !processed.has(targetNode.id)) {
+            nextQueue.push(targetNode);
+          }
+        }
+        col++;
+      }
+    }
+    queue = nextQueue;
+    row++;
+  }
+
+  for (const node of nodes) {
+    if (!processed.has(node.id)) {
+      const x = 50 + (processed.size % 3) * horizontalGap;
+      const y = 30 + row * verticalGap;
+      nodeMap.set(node.id, { x, y, node });
+      processed.add(node.id);
+    }
+  }
+
+  const width = Math.max(400, col * horizontalGap + 100);
+  const height = Math.max(200, row * verticalGap + 100);
+
+  const edgesSvg = edges
+    .map(edge => {
+      const from = nodeMap.get(edge.from);
+      const to = nodeMap.get(edge.to);
+      if (!from || !to) return "";
+
+      const x1 = from.x + nodeWidth / 2;
+      const y1 = from.y + nodeHeight;
+      const x2 = to.x + nodeWidth / 2;
+      const y2 = to.y;
+
+      const midY = (y1 + y2) / 2;
+      const path = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
+
+      return `<path d="${path}" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrowhead)"/>
+      ${edge.label ? `<text x="${(x1 + x2) / 2 + 10}" y="${midY}" font-size="11" fill="#666">${edge.label}</text>` : ""}`;
+    })
+    .join("");
+
+  const nodesSvg = Array.from(nodeMap.values())
+    .map(({ x, y, node }) => getNodeShape(node, x, y))
+    .join("");
+
+  return `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="max-width: 100%; margin: 20px auto; display: block;">
+    <defs>
+      <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/>
+      </marker>
+    </defs>
+    ${edgesSvg}
+    ${nodesSvg}
+  </svg>`;
+}
+
+function generateTimelineSVG(events: TimelineEvent[]): string {
+  const width = 600;
+  const eventHeight = 80;
+  const height = events.length * eventHeight + 40;
+
+  const timelineEvents = events
+    .map((event, i) => {
+      const y = 20 + i * eventHeight;
+      const isLeft = i % 2 === 0;
+      const textX = isLeft ? width / 2 - 30 : width / 2 + 30;
+      const textAnchor = isLeft ? "end" : "start";
+      const color = CHART_COLORS[i % CHART_COLORS.length];
+
+      return `
+      <circle cx="${width / 2}" cy="${y + 20}" r="12" fill="${color}" stroke="white" stroke-width="3"/>
+      <text x="${textX}" y="${y + 15}" text-anchor="${textAnchor}" font-size="13" font-weight="bold" fill="#333">${event.title}</text>
+      <text x="${textX}" y="${y + 32}" text-anchor="${textAnchor}" font-size="11" fill="#888">${event.date}</text>
+      ${event.description ? `<text x="${textX}" y="${y + 48}" text-anchor="${textAnchor}" font-size="11" fill="#666">${event.description.slice(0, 50)}${event.description.length > 50 ? "..." : ""}</text>` : ""}
+    `;
+    })
+    .join("");
+
+  return `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="max-width: 700px; margin: 20px auto; display: block;">
+    <line x1="${width / 2}" y1="0" x2="${width / 2}" y2="${height}" stroke="#e5e7eb" stroke-width="4"/>
+    ${timelineEvents}
+  </svg>`;
+}
+
+function generateStatCardsSVG(cards: StatCard[]): string {
+  const cardWidth = 180;
+  const cardHeight = 100;
+  const gap = 20;
+  const cols = Math.min(cards.length, 4);
+  const rows = Math.ceil(cards.length / cols);
+  const width = cols * (cardWidth + gap) - gap + 40;
+  const height = rows * (cardHeight + gap) - gap + 40;
+
+  const cardsSvg = cards
+    .map((card, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const x = 20 + col * (cardWidth + gap);
+      const y = 20 + row * (cardHeight + gap);
+      const changeColor =
+        card.changeType === "positive"
+          ? "#22c55e"
+          : card.changeType === "negative"
+            ? "#ef4444"
+            : "#6b7280";
+      const changeSymbol =
+        card.changeType === "positive"
+          ? "↑"
+          : card.changeType === "negative"
+            ? "↓"
+            : "";
+
+      return `
+      <rect x="${x}" y="${y}" width="${cardWidth}" height="${cardHeight}" rx="12" fill="white" stroke="#e5e7eb" stroke-width="1"/>
+      <text x="${x + cardWidth / 2}" y="${y + 30}" text-anchor="middle" font-size="12" fill="#6b7280">${card.label}</text>
+      <text x="${x + cardWidth / 2}" y="${y + 60}" text-anchor="middle" font-size="24" font-weight="bold" fill="#1f2937">${card.value}</text>
+      ${card.change ? `<text x="${x + cardWidth / 2}" y="${y + 85}" text-anchor="middle" font-size="12" fill="${changeColor}">${changeSymbol} ${card.change}</text>` : ""}
+    `;
+    })
+    .join("");
+
+  return `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="max-width: 100%; margin: 20px auto; display: block; background: #f9fafb; border-radius: 16px;">
+    ${cardsSvg}
+  </svg>`;
+}
+
+function generateProgressBarSVG(progress: number, label?: string): string {
+  const width = 400;
+  const height = 60;
+  const barHeight = 20;
+  const clampedProgress = Math.max(0, Math.min(100, progress));
+  const color =
+    clampedProgress >= 75
+      ? "#22c55e"
+      : clampedProgress >= 50
+        ? "#eab308"
+        : clampedProgress >= 25
+          ? "#f97316"
+          : "#ef4444";
+
+  return `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="max-width: 500px; margin: 15px auto; display: block;">
+    ${label ? `<text x="0" y="15" font-size="13" fill="#374151">${label}</text>` : ""}
+    <rect x="0" y="25" width="${width}" height="${barHeight}" rx="10" fill="#e5e7eb"/>
+    <rect x="0" y="25" width="${(clampedProgress / 100) * width}" height="${barHeight}" rx="10" fill="${color}"/>
+    <text x="${width / 2}" y="40" text-anchor="middle" font-size="12" font-weight="bold" fill="white">${clampedProgress}%</text>
+  </svg>`;
+}
+
+const REPORT_STYLES: Record<string, string> = {
+  medical: `
+    body { font-family: 'Georgia', serif; line-height: 1.8; color: #2c3e50; max-width: 900px; margin: 0 auto; padding: 40px; }
+    h1 { color: #1a5276; border-bottom: 3px solid #3498db; padding-bottom: 15px; }
+    h2 { color: #2874a6; margin-top: 40px; border-left: 4px solid #3498db; padding-left: 15px; }
+    h3 { color: #2e86ab; }
+    .image-container { text-align: center; margin: 30px 0; padding: 20px; background: #f8f9fa; border-radius: 10px; }
+    .image-container img { max-width: 100%; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .image-caption { font-style: italic; color: #666; margin-top: 10px; font-size: 0.9em; }
+    .highlight { background: #e8f4f8; padding: 15px; border-radius: 8px; border-left: 4px solid #3498db; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+    th { background: #3498db; color: white; }
+    tr:nth-child(even) { background: #f8f9fa; }
+    ul { padding-left: 25px; }
+    li { margin: 8px 0; }
+  `,
+  business: `
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 0 auto; padding: 40px; }
+    h1 { color: #1a1a2e; font-weight: 300; font-size: 2.5em; border-bottom: 2px solid #e94560; }
+    h2 { color: #16213e; font-weight: 400; }
+    h3 { color: #0f3460; }
+    .image-container { text-align: center; margin: 30px 0; }
+    .image-container img { max-width: 100%; border: 1px solid #eee; }
+    .image-caption { color: #666; font-size: 0.85em; margin-top: 8px; }
+    .highlight { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    th, td { padding: 15px; border: none; border-bottom: 1px solid #eee; }
+    th { background: #1a1a2e; color: white; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; }
+  `,
+  technical: `
+    body { font-family: 'SF Mono', 'Consolas', monospace; line-height: 1.7; color: #e0e0e0; background: #1e1e1e; max-width: 900px; margin: 0 auto; padding: 40px; }
+    h1 { color: #4fc3f7; border-bottom: 2px solid #4fc3f7; }
+    h2 { color: #81d4fa; }
+    h3 { color: #b3e5fc; }
+    .image-container { text-align: center; margin: 30px 0; background: #2d2d2d; padding: 20px; border-radius: 8px; }
+    .image-container img { max-width: 100%; border-radius: 4px; }
+    .image-caption { color: #888; font-size: 0.9em; }
+    code { background: #2d2d2d; padding: 2px 6px; border-radius: 4px; }
+    pre { background: #2d2d2d; padding: 15px; border-radius: 8px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 12px; border: 1px solid #444; }
+    th { background: #333; color: #4fc3f7; }
+  `,
+  modern: `
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; line-height: 1.7; color: #1f2937; max-width: 900px; margin: 0 auto; padding: 40px; }
+    h1 { font-size: 2.5em; font-weight: 800; background: linear-gradient(135deg, #6366f1, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    h2 { font-size: 1.8em; color: #4f46e5; margin-top: 50px; }
+    h3 { font-size: 1.3em; color: #6366f1; }
+    .image-container { text-align: center; margin: 40px 0; }
+    .image-container img { max-width: 100%; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+    .image-caption { color: #6b7280; font-size: 0.9em; margin-top: 12px; }
+    .highlight { background: linear-gradient(135deg, #f0f9ff, #e0f2fe); padding: 20px; border-radius: 12px; border: 1px solid #bae6fd; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 20px 0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    th, td { padding: 16px; }
+    th { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; font-weight: 600; }
+    tr:nth-child(even) { background: #f9fafb; }
+    ul { list-style: none; padding-left: 0; }
+    li { padding: 8px 0; padding-left: 24px; position: relative; }
+    li::before { content: '→'; position: absolute; left: 0; color: #6366f1; }
+  `,
+  executive: `
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Source+Sans+Pro:wght@300;400;600&display=swap');
+    body { font-family: 'Source Sans Pro', sans-serif; line-height: 1.8; color: #1a1a1a; max-width: 900px; margin: 0 auto; padding: 60px 40px; background: #fafafa; }
+    h1 { font-family: 'Playfair Display', serif; font-size: 3em; font-weight: 700; color: #0d1b2a; margin-bottom: 10px; letter-spacing: -1px; }
+    h2 { font-family: 'Playfair Display', serif; font-size: 1.8em; color: #1b263b; margin-top: 50px; padding-bottom: 10px; border-bottom: 2px solid #415a77; }
+    h3 { font-size: 1.3em; color: #415a77; font-weight: 600; }
+    .image-container { text-align: center; margin: 40px 0; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    .image-container img { max-width: 100%; border-radius: 4px; }
+    .image-caption { color: #778da9; font-size: 0.9em; margin-top: 15px; font-style: italic; }
+    .highlight { background: white; padding: 25px; border-radius: 8px; border: 1px solid #e0e1dd; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    table { width: 100%; border-collapse: collapse; margin: 30px 0; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 15px rgba(0,0,0,0.08); }
+    th, td { padding: 16px 20px; text-align: left; }
+    th { background: #0d1b2a; color: white; font-weight: 600; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; }
+    tr:nth-child(even) { background: #f8f9fa; }
+    td { border-bottom: 1px solid #e9ecef; }
+    ul { padding-left: 0; list-style: none; }
+    li { padding: 12px 0; padding-left: 30px; position: relative; border-bottom: 1px solid #f0f0f0; }
+    li::before { content: '■'; position: absolute; left: 0; color: #415a77; font-size: 0.6em; top: 17px; }
+    blockquote { background: white; border-left: 4px solid #415a77; margin: 30px 0; padding: 25px 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+  `,
+};
+
+export async function createRichReport(
+  filePath: string,
+  options: RichReportOptions,
+  taskOptions?: { taskId?: number; userId?: number }
+): Promise<string> {
+  await ensureSandbox();
+  const resolvedPath = resolveSandboxPath(filePath);
+  const htmlPath = resolvedPath.endsWith(".html")
+    ? resolvedPath
+    : resolvedPath + ".html";
+
+  const generatedImages: Map<string, string> = new Map();
+  const imageErrors: string[] = [];
+
+  for (const section of options.sections) {
+    if (section.type === "image" && section.imagePrompt) {
+      try {
+        console.info(
+          `[RichReport] Generating image: ${section.imagePrompt.slice(0, 50)}...`
+        );
+        const result = await generateImage({ prompt: section.imagePrompt });
+        if (result.url) {
+          let base64Data: string | null = null;
+
+          try {
+            const imageResponse = await fetch(result.url);
+            if (imageResponse.ok) {
+              const buffer = Buffer.from(await imageResponse.arrayBuffer());
+              base64Data = buffer.toString("base64");
+            }
+          } catch {
+            if (result.url.includes("/generated/")) {
+              try {
+                const localPath = path.join(
+                  process.cwd(),
+                  "public",
+                  `generated/${result.url.split("/generated/")[1]}`
+                );
+                const buffer = await fs.readFile(localPath);
+                base64Data = buffer.toString("base64");
+              } catch {
+                base64Data = null;
+              }
+            }
+          }
+
+          if (base64Data) {
+            generatedImages.set(
+              section.imagePrompt,
+              `data:image/png;base64,${base64Data}`
+            );
+          } else {
+            generatedImages.set(section.imagePrompt, result.url);
+          }
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        imageErrors.push(`Failed to generate "${section.imagePrompt}": ${msg}`);
+        console.error(`[RichReport] Image generation failed: ${msg}`);
+      }
+    }
+  }
+
+  const style =
+    REPORT_STYLES[options.style || "modern"] || REPORT_STYLES.modern;
+
+  let htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(options.title)}</title>
+  <style>${style}</style>
+</head>
+<body>
+  <h1>${escapeHtml(options.title)}</h1>
+`;
+
+  if (options.includeTableOfContents) {
+    const headings = options.sections.filter(
+      s => s.type === "heading" && s.level && s.level <= 2
+    );
+    if (headings.length > 0) {
+      htmlContent += `  <nav class="toc"><h2>Table of Contents</h2><ul>`;
+      headings.forEach((h, i) => {
+        const indent = h.level === 2 ? "margin-left: 20px;" : "";
+        htmlContent += `<li style="${indent}"><a href="#section-${i}">${escapeHtml(h.content || "")}</a></li>`;
+      });
+      htmlContent += `</ul></nav>\n`;
+    }
+  }
+
+  let sectionIndex = 0;
+  for (const section of options.sections) {
+    switch (section.type) {
+      case "heading":
+        const tag = `h${Math.min(section.level || 2, 6)}`;
+        const id =
+          section.level && section.level <= 2
+            ? ` id="section-${sectionIndex++}"`
+            : "";
+        htmlContent += `  <${tag}${id}>${escapeHtml(section.content || "")}</${tag}>\n`;
+        break;
+
+      case "paragraph":
+        htmlContent += `  <p>${formatMarkdownInline(section.content || "")}</p>\n`;
+        break;
+
+      case "list":
+        htmlContent += `  <ul>\n`;
+        (section.items || []).forEach(item => {
+          htmlContent += `    <li>${formatMarkdownInline(item)}</li>\n`;
+        });
+        htmlContent += `  </ul>\n`;
+        break;
+
+      case "image":
+        const imgSrc = generatedImages.get(section.imagePrompt || "");
+        if (imgSrc) {
+          htmlContent += `  <div class="image-container">\n`;
+          htmlContent += `    <img src="${imgSrc}" alt="${escapeHtml(section.content || section.imagePrompt || "")}">\n`;
+          if (section.content) {
+            htmlContent += `    <p class="image-caption">${escapeHtml(section.content)}</p>\n`;
+          }
+          htmlContent += `  </div>\n`;
+        } else {
+          htmlContent += `  <div class="image-container" style="background: #fee; border: 2px dashed #c00; padding: 40px;">\n`;
+          htmlContent += `    <p style="color: #c00;">⚠️ Image could not be generated</p>\n`;
+          htmlContent += `    <p style="font-size: 0.9em; color: #666;">Prompt: ${escapeHtml(section.imagePrompt || "")}</p>\n`;
+          htmlContent += `  </div>\n`;
+        }
+        break;
+
+      case "table":
+        if (section.rows && section.rows.length > 0) {
+          htmlContent += `  <table>\n`;
+          const [header, ...rows] = section.rows;
+          htmlContent += `    <thead><tr>${header.map(h => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead>\n`;
+          htmlContent += `    <tbody>\n`;
+          rows.forEach(row => {
+            htmlContent += `      <tr>${row.map(c => `<td>${escapeHtml(c)}</td>`).join("")}</tr>\n`;
+          });
+          htmlContent += `    </tbody>\n  </table>\n`;
+        }
+        break;
+
+      case "pie_chart":
+        if (section.chartData && section.chartData.length > 0) {
+          htmlContent += `  <div class="chart-container" style="text-align: center; margin: 30px 0;">\n`;
+          htmlContent += generatePieChartSVG(
+            section.chartData,
+            section.chartTitle
+          );
+          htmlContent += `  </div>\n`;
+        }
+        break;
+
+      case "bar_chart":
+        if (section.chartData && section.chartData.length > 0) {
+          htmlContent += `  <div class="chart-container" style="text-align: center; margin: 30px 0;">\n`;
+          htmlContent += generateBarChartSVG(
+            section.chartData,
+            section.chartTitle
+          );
+          htmlContent += `  </div>\n`;
+        }
+        break;
+
+      case "line_chart":
+        if (section.chartData && section.chartData.length > 0) {
+          htmlContent += `  <div class="chart-container" style="text-align: center; margin: 30px 0;">\n`;
+          htmlContent += generateLineChartSVG(
+            section.chartData,
+            section.chartTitle
+          );
+          htmlContent += `  </div>\n`;
+        }
+        break;
+
+      case "flowchart":
+        if (section.flowNodes && section.flowNodes.length > 0) {
+          htmlContent += `  <div class="flowchart-container" style="text-align: center; margin: 30px 0; overflow-x: auto;">\n`;
+          htmlContent += generateFlowchartSVG(
+            section.flowNodes,
+            section.flowEdges || []
+          );
+          htmlContent += `  </div>\n`;
+        }
+        break;
+
+      case "timeline":
+        if (section.timelineEvents && section.timelineEvents.length > 0) {
+          htmlContent += `  <div class="timeline-container" style="margin: 30px 0;">\n`;
+          htmlContent += generateTimelineSVG(section.timelineEvents);
+          htmlContent += `  </div>\n`;
+        }
+        break;
+
+      case "stat_cards":
+        if (section.statCards && section.statCards.length > 0) {
+          htmlContent += `  <div class="stat-cards-container" style="margin: 30px 0;">\n`;
+          htmlContent += generateStatCardsSVG(section.statCards);
+          htmlContent += `  </div>\n`;
+        }
+        break;
+
+      case "progress_bar":
+        htmlContent += `  <div class="progress-container" style="margin: 20px 0;">\n`;
+        htmlContent += generateProgressBarSVG(
+          section.progress || 0,
+          section.progressLabel
+        );
+        htmlContent += `  </div>\n`;
+        break;
+
+      case "callout":
+        const calloutColors = {
+          info: { bg: "#eff6ff", border: "#3b82f6", icon: "ℹ️" },
+          warning: { bg: "#fffbeb", border: "#f59e0b", icon: "⚠️" },
+          success: { bg: "#f0fdf4", border: "#22c55e", icon: "✅" },
+          error: { bg: "#fef2f2", border: "#ef4444", icon: "❌" },
+        };
+        const calloutStyle = calloutColors[section.calloutType || "info"];
+        htmlContent += `  <div class="callout" style="background: ${calloutStyle.bg}; border-left: 4px solid ${calloutStyle.border}; padding: 20px; margin: 20px 0; border-radius: 8px;">\n`;
+        htmlContent += `    <span style="font-size: 1.2em; margin-right: 10px;">${calloutStyle.icon}</span>\n`;
+        htmlContent += `    <span>${formatMarkdownInline(section.content || "")}</span>\n`;
+        htmlContent += `  </div>\n`;
+        break;
+
+      case "quote":
+        htmlContent += `  <blockquote style="border-left: 4px solid #6366f1; padding: 20px 30px; margin: 30px 0; background: #f8fafc; font-style: italic; font-size: 1.1em;">\n`;
+        htmlContent += `    <p style="margin: 0;">"${escapeHtml(section.content || "")}"</p>\n`;
+        if (section.quoteAuthor) {
+          htmlContent += `    <footer style="margin-top: 10px; font-style: normal; font-size: 0.9em; color: #666;">— ${escapeHtml(section.quoteAuthor)}</footer>\n`;
+        }
+        htmlContent += `  </blockquote>\n`;
+        break;
+
+      case "comparison":
+        if (section.comparisonItems && section.comparisonItems.length > 0) {
+          const features = Object.keys(
+            section.comparisonItems[0]?.features || {}
+          );
+          htmlContent += `  <table class="comparison-table" style="width: 100%; border-collapse: collapse; margin: 20px 0;">\n`;
+          htmlContent += `    <thead><tr><th style="text-align: left; padding: 12px; background: #1f2937; color: white;">Feature</th>`;
+          section.comparisonItems.forEach(item => {
+            htmlContent += `<th style="text-align: center; padding: 12px; background: #1f2937; color: white;">${escapeHtml(item.name)}</th>`;
+          });
+          htmlContent += `</tr></thead>\n    <tbody>\n`;
+          features.forEach((feature, i) => {
+            const bg = i % 2 === 0 ? "#f9fafb" : "white";
+            htmlContent += `      <tr style="background: ${bg};"><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${escapeHtml(feature)}</td>`;
+            section.comparisonItems!.forEach(item => {
+              const val = item.features[feature];
+              const display =
+                typeof val === "boolean"
+                  ? val
+                    ? "✅"
+                    : "❌"
+                  : escapeHtml(String(val));
+              htmlContent += `<td style="text-align: center; padding: 12px; border-bottom: 1px solid #e5e7eb;">${display}</td>`;
+            });
+            htmlContent += `</tr>\n`;
+          });
+          htmlContent += `    </tbody>\n  </table>\n`;
+        }
+        break;
+
+      case "code":
+        const lang = section.language || "text";
+        htmlContent += `  <pre style="background: #1f2937; color: #e5e7eb; padding: 20px; border-radius: 8px; overflow-x: auto; font-family: 'SF Mono', Consolas, monospace; font-size: 14px;"><code class="language-${lang}">${escapeHtml(section.content || "")}</code></pre>\n`;
+        break;
+    }
+  }
+
+  const authorDate = [
+    options.author,
+    options.date || new Date().toLocaleDateString(),
+  ]
+    .filter(Boolean)
+    .join(" • ");
+
+  htmlContent += `
+  <footer style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 0.85em;">
+    <p>Generated by RASPUTIN AI${authorDate ? ` • ${authorDate}` : ""}</p>
+  </footer>
+</body>
+</html>`;
+
+  try {
+    await fs.mkdir(path.dirname(htmlPath), { recursive: true });
+    await fs.writeFile(htmlPath, htmlContent, "utf-8");
+
+    if (taskOptions?.taskId && taskOptions?.userId) {
+      try {
+        const stats = await fs.stat(htmlPath);
+        await createAgentFile({
+          taskId: taskOptions.taskId,
+          userId: taskOptions.userId,
+          fileName: path.basename(htmlPath),
+          filePath: htmlPath,
+          mimeType: getMimeType(htmlPath),
+          fileSize: stats.size,
+          source: "generated",
+        });
+      } catch {}
+    }
+
+    const imageCount = generatedImages.size;
+    const errorNote =
+      imageErrors.length > 0
+        ? `\n\n⚠️ ${imageErrors.length} image(s) failed to generate:\n${imageErrors.join("\n")}`
+        : "";
+
+    return `Rich report created successfully!\n\nPath: ${htmlPath}\nTitle: ${options.title}\nSections: ${options.sections.length}\nImages generated: ${imageCount}\nStyle: ${options.style || "modern"}${errorNote}\n\nThe report is a self-contained HTML file with embedded images that can be opened in any browser and exported to PDF using the browser's print function (Ctrl/Cmd+P → Save as PDF).`;
+  } catch (error) {
+    return `Error creating rich report: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function formatMarkdownInline(text: string): string {
+  return escapeHtml(text)
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/`(.+?)`/g, "<code>$1</code>");
+}
+
 export function getCurrentDateTime(): string {
   const now = new Date();
   return `Current date and time: ${now.toISOString()}\nLocal: ${now.toLocaleString()}\nTimezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
@@ -6596,6 +7478,20 @@ export async function executeTool(
       );
     case "generate_image":
       return generateImageTool(input.prompt as string);
+    case "create_rich_report":
+      return createRichReport(
+        input.path as string,
+        {
+          title: input.title as string,
+          sections: input.sections as RichReportSection[],
+          style: input.style as "medical" | "business" | "technical" | "modern",
+          includeTableOfContents: input.includeTableOfContents as boolean,
+        },
+        {
+          taskId: input.taskId as number | undefined,
+          userId: input.userId as number | undefined,
+        }
+      );
     case "get_datetime":
       return getCurrentDateTime();
     case "json_tool":
@@ -7351,6 +8247,66 @@ export function getAvailableTools(): Array<{
         prompt: {
           type: "string",
           description: "Description of the image to generate",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "create_rich_report",
+      description:
+        "Create a STUNNING professional HTML report with SVG charts, diagrams, and optional AI-generated images. ALWAYS USE THIS for reports, analyses, and documents that need visual elements. Supports: pie/bar/line charts, flowcharts, timelines, stat cards, progress bars, callouts, quotes, comparison tables, code blocks, and AI images. Output is a self-contained HTML file that exports perfectly to PDF. MUCH BETTER than plain markdown.",
+      parameters: {
+        path: {
+          type: "string",
+          description:
+            "Output file path (e.g., /tmp/jarvis-workspace/report.html)",
+          required: true,
+        },
+        title: {
+          type: "string",
+          description: "Report title",
+          required: true,
+        },
+        subtitle: {
+          type: "string",
+          description: "Optional subtitle",
+          required: false,
+        },
+        author: {
+          type: "string",
+          description: "Author name for footer",
+          required: false,
+        },
+        style: {
+          type: "string",
+          description:
+            "Visual style: 'medical', 'business', 'technical', 'modern', or 'executive' (default: modern)",
+          required: false,
+        },
+        includeTableOfContents: {
+          type: "boolean",
+          description: "Include table of contents (default: false)",
+          required: false,
+        },
+        sections: {
+          type: "array",
+          description: `Array of section objects. Section types and their fields:
+- heading: {type:'heading', level:1-6, content:'text'}
+- paragraph: {type:'paragraph', content:'text with **bold** and *italic*'}
+- list: {type:'list', items:['item1','item2']}
+- table: {type:'table', rows:[['Header1','Header2'],['row1col1','row1col2']]}
+- pie_chart: {type:'pie_chart', chartTitle:'Title', chartData:[{label:'A',value:30},{label:'B',value:70}]}
+- bar_chart: {type:'bar_chart', chartTitle:'Title', chartData:[{label:'Q1',value:100},{label:'Q2',value:150}]}
+- line_chart: {type:'line_chart', chartTitle:'Trend', chartData:[{label:'Jan',value:10},{label:'Feb',value:25}]}
+- flowchart: {type:'flowchart', flowNodes:[{id:'1',label:'Start',type:'start'},{id:'2',label:'Process',type:'process'}], flowEdges:[{from:'1',to:'2'}]}
+- timeline: {type:'timeline', timelineEvents:[{date:'2024-01',title:'Event 1'},{date:'2024-06',title:'Event 2'}]}
+- stat_cards: {type:'stat_cards', statCards:[{label:'Revenue',value:'$1.2M',change:'+15%',changeType:'positive'}]}
+- progress_bar: {type:'progress_bar', progress:75, progressLabel:'Completion'}
+- callout: {type:'callout', calloutType:'info|warning|success|error', content:'Important note'}
+- quote: {type:'quote', content:'Quote text', quoteAuthor:'Author Name'}
+- comparison: {type:'comparison', comparisonItems:[{name:'Option A',features:{Price:'$99',Speed:true}},{name:'Option B',features:{Price:'$149',Speed:false}}]}
+- code: {type:'code', language:'python', content:'print("hello")'}
+- image: {type:'image', imagePrompt:'AI prompt for image generation', content:'Caption'}`,
           required: true,
         },
       },

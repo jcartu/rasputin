@@ -26,6 +26,26 @@ import { createSelfReflectionSystem } from "./services/memory/selfReflection";
 import * as ssh from "./ssh";
 
 // ============================================================================
+// Utilities
+// ============================================================================
+
+function extractCleanTitle(task: string): string {
+  const userTaskMatch = task.match(/\[USER TASK\]\s*\n?([\s\S]*?)$/i);
+  if (userTaskMatch) {
+    const cleanQuery = userTaskMatch[1].trim();
+    return cleanQuery.slice(0, 100) + (cleanQuery.length > 100 ? "..." : "");
+  }
+
+  const userQuestionMatch = task.match(/\[USER QUESTION\]\s*\n?([\s\S]*?)$/i);
+  if (userQuestionMatch) {
+    const cleanQuery = userQuestionMatch[1].trim();
+    return cleanQuery.slice(0, 100) + (cleanQuery.length > 100 ? "..." : "");
+  }
+
+  return task.slice(0, 100) + (task.length > 100 ? "..." : "");
+}
+
+// ============================================================================
 // Zod Schemas
 // ============================================================================
 
@@ -693,9 +713,7 @@ export const appRouter = router({
           task = await db.getAgentTask(taskId, ctx.user.id);
           if (!task) throw new Error("Task not found");
         } else {
-          // Generate title from task
-          const title =
-            input.task.slice(0, 100) + (input.task.length > 100 ? "..." : "");
+          const title = extractCleanTitle(input.task);
           task = await db.createAgentTask({
             userId: ctx.user.id,
             title,
@@ -704,7 +722,6 @@ export const appRouter = router({
           });
           taskId = task.id;
 
-          // Increment usage
           await db.incrementUsage(ctx.user.id, today, "agentTaskCount");
         }
 

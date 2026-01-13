@@ -49,6 +49,29 @@ import type {
 import { ToolOutputPreview } from "./ToolOutputPreview";
 import { Streamdown } from "streamdown";
 
+function extractDisplayQuery(query: string): {
+  displayQuery: string;
+  hasAttachments: boolean;
+} {
+  const userTaskMatch = query.match(/\[USER TASK\]\s*\n?([\s\S]*?)$/i);
+  if (userTaskMatch) {
+    return {
+      displayQuery: userTaskMatch[1].trim(),
+      hasAttachments: query.includes("[ATTACHED FILES]"),
+    };
+  }
+
+  const userQuestionMatch = query.match(/\[USER QUESTION\]\s*\n?([\s\S]*?)$/i);
+  if (userQuestionMatch) {
+    return {
+      displayQuery: userQuestionMatch[1].trim(),
+      hasAttachments: query.includes("[ATTACHED FILES]"),
+    };
+  }
+
+  return { displayQuery: query, hasAttachments: false };
+}
+
 const TOOL_ICONS: Record<string, React.ReactNode> = {
   web_search: <Search className="h-4 w-4" />,
   browse_url: <Globe className="h-4 w-4" />,
@@ -856,6 +879,8 @@ function PastExchangeCard({
   userQuery: string;
   assistantSummary: string | null;
 }) {
+  const { displayQuery, hasAttachments } = extractDisplayQuery(userQuery);
+
   return (
     <div className="space-y-3 opacity-80">
       <div className="flex gap-3">
@@ -865,7 +890,13 @@ function PastExchangeCard({
         <div className="flex-1 min-w-0">
           <Card className="bg-muted/30 border-border/50">
             <CardContent className="p-3">
-              <p className="text-sm">{userQuery}</p>
+              {hasAttachments && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                  <File className="h-3 w-3" />
+                  <span>Files attached</span>
+                </div>
+              )}
+              <p className="text-sm">{displayQuery}</p>
             </CardContent>
           </Card>
         </div>
@@ -1077,20 +1108,32 @@ export function JarvisStreamView({
         />
       ))}
 
-      {currentExchange && (
-        <div className="flex gap-3 mb-4">
-          <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center">
-            <span className="text-xs font-medium text-white">You</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <Card className="bg-muted/30 border-border/50">
-              <CardContent className="p-3">
-                <p className="text-sm">{currentExchange.userQuery}</p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      )}
+      {currentExchange &&
+        (() => {
+          const { displayQuery, hasAttachments } = extractDisplayQuery(
+            currentExchange.userQuery
+          );
+          return (
+            <div className="flex gap-3 mb-4">
+              <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center">
+                <span className="text-xs font-medium text-white">You</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <Card className="bg-muted/30 border-border/50">
+                  <CardContent className="p-3">
+                    {hasAttachments && (
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                        <File className="h-3 w-3" />
+                        <span>Files attached</span>
+                      </div>
+                    )}
+                    <p className="text-sm">{displayQuery}</p>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          );
+        })()}
 
       <ProgressIndicator
         current={state.currentIteration}

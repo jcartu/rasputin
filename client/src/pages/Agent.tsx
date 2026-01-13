@@ -2005,6 +2005,9 @@ export default function AgentPage() {
                       className="w-full text-left p-2.5"
                     >
                       <div className="flex items-start gap-2">
+                        {task.query?.includes("[ATTACHED FILES]") && (
+                          <Paperclip className="h-3.5 w-3.5 shrink-0 mt-0.5 text-muted-foreground" />
+                        )}
                         <span
                           className={cn(
                             "text-sm font-medium flex-1 line-clamp-2 leading-snug break-words",
