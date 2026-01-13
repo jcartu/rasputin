@@ -18,6 +18,13 @@ import { scaffoldProject, type ScaffoldConfig } from "../webApp/scaffolder";
 import type { UILibrary } from "../webApp/uiComponents";
 import { generateSchemaFromDescription } from "../webApp/schemaGenerator";
 import {
+  getTemplateByType,
+  listTemplates,
+  renderTemplate,
+  validateTemplateVariables,
+  type TemplateType,
+} from "../webApp/documentTemplates";
+import {
   getSelfEvolutionTools,
   executeSelfEvolutionTool,
 } from "../selfEvolution/tools";
@@ -5397,6 +5404,134 @@ ${schemaContent}
 \`\`\``;
 }
 
+function listDocumentTemplates(): string {
+  const templates = listTemplates();
+  const lines = templates.map(
+    t => `- **${t.type}** (${t.format}): ${t.name} - ${t.description}`
+  );
+  return `Available document templates:\n\n${lines.join("\n")}`;
+}
+
+function getDocumentTemplate(templateType: string): string {
+  const template = getTemplateByType(templateType as TemplateType);
+  if (!template) {
+    const available = listTemplates()
+      .map(t => t.type)
+      .join(", ");
+    return `Unknown template type: ${templateType}. Available: ${available}`;
+  }
+
+  const variables = template.variables
+    .map(v => {
+      const req = v.required ? "(required)" : "(optional)";
+      const def = v.defaultValue ? ` [default: ${v.defaultValue}]` : "";
+      const ex = v.example ? ` e.g. "${v.example}"` : "";
+      return `  - ${v.name} ${req}${def}: ${v.description}${ex}`;
+    })
+    .join("\n");
+
+  return `Template: ${template.name}
+Type: ${template.type}
+Format: ${template.format}
+Description: ${template.description}
+
+Variables:
+${variables}
+
+Structure Preview:
+\`\`\`
+${template.structure.substring(0, 500)}${template.structure.length > 500 ? "..." : ""}
+\`\`\``;
+}
+
+async function renderDocumentTemplate(
+  templateType: string,
+  variables: Record<string, unknown>,
+  outputPath?: string
+): Promise<string> {
+  const template = getTemplateByType(templateType as TemplateType);
+  if (!template) {
+    const available = listTemplates()
+      .map(t => t.type)
+      .join(", ");
+    return `Unknown template type: ${templateType}. Available: ${available}`;
+  }
+
+  const validation = validateTemplateVariables(
+    templateType as TemplateType,
+    variables
+  );
+  if (!validation.valid) {
+    return `Template validation failed:\n${validation.errors.join("\n")}`;
+  }
+
+  const { content, missingRequired } = renderTemplate(template, variables);
+
+  if (missingRequired.length > 0) {
+    return `Missing required variables: ${missingRequired.join(", ")}`;
+  }
+
+  if (outputPath) {
+    await ensureSandbox();
+    const resolvedPath = resolveSandboxPath(outputPath);
+    await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
+
+    if (template.format === "docx") {
+      return writeDocx(resolvedPath, content, variables["title"] as string);
+    } else if (template.format === "html") {
+      const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${variables["title"] || template.name}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
+    h1 { border-bottom: 2px solid #333; padding-bottom: 0.5rem; }
+    h2 { color: #333; margin-top: 2rem; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+    th { background: #f5f5f5; }
+    code { background: #f0f0f0; padding: 0.2rem 0.4rem; border-radius: 3px; }
+    pre { background: #f0f0f0; padding: 1rem; overflow-x: auto; }
+  </style>
+</head>
+<body>
+${markdownToHtml(content)}
+</body>
+</html>`;
+      await fs.writeFile(resolvedPath, htmlContent, "utf-8");
+      const stats = await fs.stat(resolvedPath);
+      return `Document created: ${resolvedPath} (${stats.size} bytes, HTML format)`;
+    } else {
+      await fs.writeFile(resolvedPath, content, "utf-8");
+      const stats = await fs.stat(resolvedPath);
+      return `Document created: ${resolvedPath} (${stats.size} bytes, ${template.format} format)`;
+    }
+  }
+
+  return `Rendered ${template.name} (${template.format}):\n\n${content}`;
+}
+
+function markdownToHtml(md: string): string {
+  return md
+    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
+    .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+    .replace(/^# (.+)$/gm, "<h1>$1</h1>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/`(.+?)`/g, "<code>$1</code>")
+    .replace(/^- (.+)$/gm, "<li>$1</li>")
+    .replace(/(<li>.*<\/li>\n?)+/g, "<ul>$&</ul>")
+    .replace(/\n\n/g, "</p><p>")
+    .replace(/^(.+)$/gm, line => {
+      if (line.startsWith("<")) return line;
+      return `<p>${line}</p>`;
+    })
+    .replace(/<p><\/p>/g, "")
+    .replace(/<p>(<[hul])/g, "$1")
+    .replace(/(<\/[hul][^>]*>)<\/p>/g, "$1");
+}
+
 async function startDevServerTool(
   projectPath: string,
   command?: string
@@ -8181,6 +8316,16 @@ export async function executeTool(
         input.databaseType as string | undefined,
         input.outputPath as string | undefined
       );
+    case "list_document_templates":
+      return listDocumentTemplates();
+    case "get_document_template":
+      return getDocumentTemplate(input.templateType as string);
+    case "render_document_template":
+      return renderDocumentTemplate(
+        input.templateType as string,
+        input.variables as Record<string, unknown>,
+        input.outputPath as string | undefined
+      );
     case "stop_dev_server":
       return stopDevServerTool(input.projectPath as string);
     case "get_dev_server_output":
@@ -10328,6 +10473,50 @@ export function getAvailableTools(): Array<{
           items: { type: "string" },
           description:
             "Specific UI components to include (for shadcn: 'button', 'card', 'input', 'label', 'badge', etc.)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "list_document_templates",
+      description:
+        "List all available document templates. Use this to see what pre-defined templates are available for creating professional documents like business reports, meeting notes, invoices, SOWs, API docs, etc.",
+      parameters: {},
+    },
+    {
+      name: "get_document_template",
+      description:
+        "Get detailed information about a specific document template including required variables and structure preview.",
+      parameters: {
+        templateType: {
+          type: "string",
+          description:
+            "Template type: business_report, technical_doc, meeting_notes, project_proposal, status_update, research_summary, executive_brief, invoice, sow, api_doc",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "render_document_template",
+      description:
+        "Render a document using a pre-defined template. Provide the template type and variable values to generate a professional document. Optionally save to file.",
+      parameters: {
+        templateType: {
+          type: "string",
+          description:
+            "Template type: business_report, technical_doc, meeting_notes, project_proposal, status_update, research_summary, executive_brief, invoice, sow, api_doc",
+          required: true,
+        },
+        variables: {
+          type: "object",
+          description:
+            "Variable values for the template. Use get_document_template to see required/optional variables.",
+          required: true,
+        },
+        outputPath: {
+          type: "string",
+          description:
+            "Optional file path to save the rendered document. Format determined by template (docx, html, markdown).",
           required: false,
         },
       },
