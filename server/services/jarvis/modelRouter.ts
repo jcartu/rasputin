@@ -189,6 +189,7 @@ export function getRoutingStats(): {
     creative: 0,
     fast: 0,
     general: 0,
+    self_analysis: 0,
   };
 
   const topModelsPerType: Record<TaskType, string[]> = {
@@ -198,6 +199,7 @@ export function getRoutingStats(): {
     creative: [],
     fast: [],
     general: [],
+    self_analysis: [],
   };
 
   let totalDecisions = 0;

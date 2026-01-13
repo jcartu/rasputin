@@ -622,7 +622,7 @@ async function handleJarvisTask(
 
         const toolStartTime = Date.now();
         try {
-          const enrichedInput = { ...toolInput, userId };
+          const enrichedInput = { ...toolInput, userId, taskId };
           const result = await executeTool(toolName, enrichedInput);
           // Non-blocking DB logging - don't let logging failures break tool execution
           db.incrementUsage(userId, today, "totalApiCalls").catch(e =>

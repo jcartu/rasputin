@@ -18,6 +18,34 @@ import { serveStatic, setupVite } from "./vite";
 import { initializeWebSocket } from "../services/websocket";
 import { cronScheduler } from "../services/events/cronScheduler";
 import { taskQueue } from "../services/jarvis/taskQueue";
+import { getDb } from "../db";
+import { agentTasks } from "../../drizzle/schema";
+import { eq } from "drizzle-orm";
+
+async function cleanupStaleTasks(): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+
+    const result = await db
+      .update(agentTasks)
+      .set({
+        status: "failed",
+        errorMessage: "Task interrupted by server restart",
+      })
+      .where(eq(agentTasks.status, "running"));
+
+    const affectedRows =
+      (result as unknown as { affectedRows?: number })?.affectedRows || 0;
+    if (affectedRows > 0) {
+      console.info(
+        `[Startup] Cleaned up ${affectedRows} stale running task(s)`
+      );
+    }
+  } catch (error) {
+    console.error("[Startup] Failed to cleanup stale tasks:", error);
+  }
+}
 
 const JARVIS_WORKSPACE_PATH = "/tmp/jarvis-workspace";
 
@@ -53,6 +81,8 @@ async function startServer() {
   await ensureSilvsUser();
   await ensureDirkUser();
   await ensureAlakazamUser();
+
+  await cleanupStaleTasks();
 
   // Serve JARVIS workspace files for download
   app.use(

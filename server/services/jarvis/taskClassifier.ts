@@ -4,7 +4,8 @@ export type TaskType =
   | "analysis"
   | "creative"
   | "general"
-  | "fast";
+  | "fast"
+  | "self_analysis";
 
 export interface TaskClassification {
   type: TaskType;
@@ -60,6 +61,17 @@ const FAST_PATTERNS = [
   /^(what|when|where|who)\b.{0,50}$/i,
 ];
 
+const SELF_ANALYSIS_PATTERNS = [
+  /\b(your|you)\b.{0,20}\b(code|capabilities|tools|functions)\b/i,
+  /\b(audit|analyze|review)\b.{0,30}\b(your|yourself)\b/i,
+  /\byour own\b.{0,20}\b(code|capabilities|system)\b/i,
+  /\b(self|introspect|introspection)\b/i,
+  /\bwhat (can|do) you\b/i,
+  /\byour capabilities\b/i,
+  /\b(jarvis|rasputin)\b.{0,20}\b(code|capabilities|improve)\b/i,
+  /\b(tell me about yourself|what are you capable of)\b/i,
+];
+
 function countPatternMatches(task: string, patterns: RegExp[]): number {
   return patterns.filter(p => p.test(task)).length;
 }
@@ -70,8 +82,10 @@ export function classifyTask(task: string): TaskClassification {
   const analysisScore = countPatternMatches(task, ANALYSIS_PATTERNS);
   const creativeScore = countPatternMatches(task, CREATIVE_PATTERNS);
   const fastScore = countPatternMatches(task, FAST_PATTERNS);
+  const selfAnalysisScore = countPatternMatches(task, SELF_ANALYSIS_PATTERNS);
 
   const scores: { type: TaskType; score: number }[] = [
+    { type: "self_analysis", score: selfAnalysisScore * 1.5 },
     { type: "code", score: codeScore * 1.2 },
     { type: "research", score: researchScore },
     { type: "analysis", score: analysisScore },
@@ -129,6 +143,8 @@ function getModelsForTaskType(type: TaskType): string[] {
         "gemini-3-flash",
         "gpt-5",
       ];
+    case "self_analysis":
+      return ["claude-sonnet-4.5", "cerebras-llama-70b", "gpt-5"];
     case "general":
     default:
       return ["claude-sonnet-4.5", "gpt-5", "gemini-3-pro", "grok-4.1"];
@@ -155,6 +171,8 @@ function generateReasoning(
     fast: "Task is simple and can be handled quickly by a fast inference model.",
     general:
       "Task is general-purpose with no strong specialization indicators.",
+    self_analysis:
+      "Task involves analyzing JARVIS's own code, capabilities, or self-improvement.",
   };
 
   return reasons[type];
@@ -168,6 +186,20 @@ export function getTaskTypeDescription(type: TaskType): string {
     creative: "Creative writing, content generation, artistic output",
     fast: "Simple queries, calculations, quick answers",
     general: "General-purpose tasks",
+    self_analysis: "Self-analysis of JARVIS code/capabilities",
   };
   return descriptions[type];
+}
+
+export function isSelfAnalysisTask(task: string): boolean {
+  return countPatternMatches(task, SELF_ANALYSIS_PATTERNS) >= 2;
+}
+
+export function getDiscouragedToolsForTaskType(type: TaskType): string[] {
+  switch (type) {
+    case "self_analysis":
+      return ["query_synthesis", "query_consensus"];
+    default:
+      return [];
+  }
 }

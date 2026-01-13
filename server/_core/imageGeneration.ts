@@ -170,9 +170,20 @@ export async function generateImage(
   }
 
   if (OPENAI_API_KEY) {
-    return await generateWithDallE(options);
+    try {
+      return await generateWithDallE(options);
+    } catch (error) {
+      console.error("[ImageGen] DALL-E also failed:", error);
+      throw error;
+    }
   }
 
+  console.error(
+    "[ImageGen] No API keys configured - NANOBANANA:",
+    !!NANOBANANA_API_KEY,
+    "OPENAI:",
+    !!OPENAI_API_KEY
+  );
   throw new Error(
     "No image generation API configured. Set NANOBANANA_API_KEY or OPENAI_API_KEY."
   );

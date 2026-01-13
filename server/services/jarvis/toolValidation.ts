@@ -788,32 +788,33 @@ function genericValidation(output: string): ToolValidationResult {
   const warnings: string[] = [];
   let confidence = 75;
 
-  // Check for generic error patterns
-  if (output.toLowerCase().startsWith("error:")) {
+  const hasSuccessIndicator =
+    /successfully|completed|created:|written|indexed/i.test(output) ||
+    /## .+ (Report|Summary|Status)/i.test(output);
+
+  if (hasSuccessIndicator) {
+    confidence = Math.max(confidence, 85);
+  }
+
+  if (/^Error:/im.test(output)) {
     issues.push("Output starts with error");
     confidence = 20;
   }
-  if (output.includes("failed") && !output.includes("0 failed")) {
-    warnings.push("Output contains 'failed'");
-    confidence = Math.min(confidence, 50);
+
+  if (/^failed to /im.test(output) && !hasSuccessIndicator) {
+    warnings.push("Output indicates failure");
+    confidence = Math.min(confidence, 40);
   }
-  if (output.includes("exception") || output.includes("Exception")) {
+
+  if (
+    /Traceback \(most recent call last\)|SyntaxError:|TypeError:/i.test(output)
+  ) {
     issues.push("Exception occurred");
     confidence = 15;
   }
 
-  // Success indicators
-  if (
-    output.includes("successfully") ||
-    output.includes("completed") ||
-    output.includes("created")
-  ) {
-    confidence = Math.max(confidence, 80);
-  }
-
-  // Very short output might indicate failure
-  if (output.trim().length < 10 && !output.includes("success")) {
-    warnings.push("Very short output - may indicate incomplete execution");
+  if (output.trim().length < 10 && !hasSuccessIndicator) {
+    warnings.push("Very short output");
   }
 
   return {
