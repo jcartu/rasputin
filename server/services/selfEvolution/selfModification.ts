@@ -6,7 +6,7 @@ import { promisify } from "util";
 import type { ModificationSpec, ModificationChange } from "./types";
 import { getDb } from "../../db";
 import { selfModificationLog } from "../../../drizzle/schema";
-import { desc } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 
 const execAsync = promisify(exec);
 
@@ -245,6 +245,10 @@ export class SelfModificationPipeline {
       spec.status = "applied";
       spec.appliedAt = new Date();
 
+      if (spec.target.includes("tools/") && spec.type === "code_patch") {
+        await this.registerToolFromSpec(spec);
+      }
+
       await this.logModification(spec, "success");
 
       return { success: true };
@@ -309,6 +313,41 @@ export class SelfModificationPipeline {
       success: result === "success" ? 1 : 0,
       errorMessage: errorMessage || null,
     });
+  }
+
+  private async registerToolFromSpec(spec: ModificationSpec): Promise<void> {
+    const db = await getDb();
+    if (!db || !this.userId) return;
+
+    const toolName = spec.target
+      .replace("tools/", "")
+      .replace(".ts", "")
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, "_");
+
+    const implementation = spec.changes
+      .filter(c => c.type === "create" && c.newContent)
+      .map(c => c.newContent)
+      .join("\n");
+
+    if (!implementation) return;
+
+    try {
+      const existing = await db.execute(
+        sql`SELECT id FROM dynamic_tools WHERE name = ${toolName} AND is_active = 1 LIMIT 1`
+      );
+
+      if (Array.isArray(existing[0]) && existing[0].length > 0) {
+        return;
+      }
+
+      await db.execute(sql`
+        INSERT INTO dynamic_tools (user_id, name, description, parameters, implementation, is_active, usage_count)
+        VALUES (${this.userId}, ${toolName}, ${spec.description}, ${JSON.stringify({})}, ${implementation}, 1, 0)
+      `);
+    } catch {
+      /* non-critical */
+    }
   }
 
   async discardWorkspace(): Promise<void> {
