@@ -1226,6 +1226,59 @@ export const appRouter = router({
       const { taskQueue } = await import("./services/jarvis/taskQueue");
       return taskQueue.getQueueStats();
     }),
+
+    exportReportPdf: protectedProcedure
+      .input(z.object({ htmlPath: z.string() }))
+      .mutation(async ({ input }) => {
+        const fs = await import("fs/promises");
+        const path = await import("path");
+        const { chromium } = await import("playwright");
+
+        const htmlPath = input.htmlPath.startsWith("/tmp/jarvis-workspace/")
+          ? input.htmlPath
+          : path.join("/tmp/jarvis-workspace", input.htmlPath);
+
+        const htmlExists = await fs
+          .access(htmlPath)
+          .then(() => true)
+          .catch(() => false);
+        if (!htmlExists) {
+          throw new Error(`Report not found: ${htmlPath}`);
+        }
+
+        const htmlContent = await fs.readFile(htmlPath, "utf-8");
+        const pdfPath = htmlPath.replace(/\.html$/, ".pdf");
+
+        const browser = await chromium.launch({ headless: true });
+        try {
+          const page = await browser.newPage();
+          await page.setContent(htmlContent, { waitUntil: "networkidle" });
+          await page.waitForTimeout(1000);
+
+          const pdfBuffer = await page.pdf({
+            format: "A4",
+            printBackground: true,
+            margin: {
+              top: "20mm",
+              bottom: "20mm",
+              left: "15mm",
+              right: "15mm",
+            },
+          });
+
+          await fs.writeFile(pdfPath, pdfBuffer);
+
+          const base64Pdf = pdfBuffer.toString("base64");
+          return {
+            success: true,
+            pdfPath,
+            fileName: path.basename(pdfPath),
+            base64: base64Pdf,
+          };
+        } finally {
+          await browser.close();
+        }
+      }),
   }),
 
   // ============================================================================

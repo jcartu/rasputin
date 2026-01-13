@@ -10,6 +10,7 @@ import {
   FileCode,
   Copy,
   Archive,
+  Printer,
 } from "lucide-react";
 import { saveAs } from "file-saver";
 import * as XLSX from "xlsx";
@@ -28,6 +29,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 
 export interface ExportContent {
   title: string;
@@ -115,6 +117,8 @@ export function ExportPanel({ content, className = "" }: ExportPanelProps) {
   const [fetchedDocContent, setFetchedDocContent] = useState<string | null>(
     null
   );
+  const [exportingPdfPath, setExportingPdfPath] = useState<string | null>(null);
+  const exportReportPdf = trpc.jarvis.exportReportPdf.useMutation();
 
   const getDocumentContent = async (): Promise<string> => {
     if (fetchedDocContent !== null) {
@@ -605,6 +609,45 @@ export function ExportPanel({ content, className = "" }: ExportPanelProps) {
                       {artifact.type}
                     </div>
                   </div>
+                  {artifact.filename?.endsWith(".html") && artifact.path && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                      disabled={exportingPdfPath === artifact.path}
+                      onClick={async () => {
+                        if (!artifact.path) return;
+                        setExportingPdfPath(artifact.path);
+                        try {
+                          const result = await exportReportPdf.mutateAsync({
+                            htmlPath: artifact.path,
+                          });
+                          const byteArray = Uint8Array.from(
+                            atob(result.base64),
+                            c => c.charCodeAt(0)
+                          );
+                          const blob = new Blob([byteArray], {
+                            type: "application/pdf",
+                          });
+                          saveAs(blob, result.fileName);
+                          toast.success("PDF exported successfully");
+                        } catch (err) {
+                          toast.error(
+                            `PDF export failed: ${err instanceof Error ? err.message : "Unknown error"}`
+                          );
+                        } finally {
+                          setExportingPdfPath(null);
+                        }
+                      }}
+                      title="Export to PDF"
+                    >
+                      {exportingPdfPath === artifact.path ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Printer className="w-4 h-4" />
+                      )}
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="ghost"
@@ -615,6 +658,7 @@ export function ExportPanel({ content, className = "" }: ExportPanelProps) {
                       a.download = artifact.filename || "download";
                       a.click();
                     }}
+                    title="Download"
                   >
                     <Download className="w-4 h-4" />
                   </Button>

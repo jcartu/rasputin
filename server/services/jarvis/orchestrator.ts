@@ -250,14 +250,13 @@ MANDATORY VERIFICATION PROTOCOL (BLOCKING - task_complete will be REJECTED witho
 
 CRITICAL: If user requested FILE OUTPUT (MD, document, report, etc.):
   1. You MUST call write_file to save the content - execute_python creating strings does NOT save files!
-  2. You MUST call list_files or read_file to VERIFY the file exists BEFORE calling task_complete
-  3. Failure to verify = task_complete will be REJECTED and you must redo the verification
+  2. EXCEPTION: create_rich_report automatically verifies file creation - no additional verification needed!
+  3. For write_file: You MUST call read_file to VERIFY content BEFORE calling task_complete
 
 For FILE tasks:
-  - FIRST: write_file to create the file (execute_python alone does NOT create files!)
-  - THEN: read_file to confirm content is correct
-  - THEN: list_files to confirm file exists in expected location
-  - ONLY THEN: task_complete
+  - If using create_rich_report: Just call the tool and then task_complete (it self-verifies)
+  - If using write_file: Call write_file, then read_file to confirm, then task_complete
+  - DO NOT call list_files after create_rich_report - it wastes time and the tool confirms success
 
 For CODE tasks:
   - Execute the code to verify it runs
@@ -439,8 +438,8 @@ const EXPENSIVE_TOOLS = new Set([
 const MAX_EXPENSIVE_TOOL_RETRIES = 1;
 
 const MAX_IDENTICAL_CALLS_PER_APPROACH = 2;
-export const MAX_ITERATIONS = 15;
-export const MAX_TASK_DURATION_MS = 5 * 60 * 1000; // 5 minutes hard limit
+export const MAX_ITERATIONS = 25;
+export const MAX_TASK_DURATION_MS = 5 * 60 * 1000;
 
 interface ToolExecutionContext {
   failedTools: Map<string, number>;
@@ -1785,6 +1784,7 @@ Do NOT continue working - call task_complete immediately.`;
             "write_docx",
             "write_pptx",
             "write_xlsx",
+            "create_rich_report",
           ];
           const usedFileWrite = fileWriteTools.some(tool =>
             executionContext.evolutionTracker.toolsUsed.has(tool)
@@ -1792,13 +1792,12 @@ Do NOT continue working - call task_complete immediately.`;
 
           if (taskRequestsFiles && !usedFileWrite) {
             // Reject premature completion - files were requested but not written
-            const rejectMessage = `⚠️ TASK COMPLETION REJECTED: You were asked to create file output but never called write_file.
-Creating content in execute_python does NOT save files! You must:
-1. Call write_file with the content and a path like /tmp/jarvis-workspace/filename.md
-2. Call list_files to verify the file was created
-3. THEN call task_complete
+            const rejectMessage = `⚠️ TASK COMPLETION REJECTED: You were asked to create file output but never called write_file or create_rich_report.
+Creating content in execute_python does NOT save files! You must either:
+- Use create_rich_report for reports with charts/visuals (preferred)
+- Use write_file with a path like /tmp/jarvis-workspace/filename.md
 
-Please save the files now using write_file.`;
+Please save the content now.`;
 
             callbacks.onThinking?.(rejectMessage);
 
@@ -1830,6 +1829,19 @@ Please save the files now using write_file.`;
                   path: pathMatch[1],
                   size: output.length,
                   type: pathMatch[1].split(".").pop() || "unknown",
+                });
+              }
+            }
+            if (
+              toolName === "create_rich_report" &&
+              typeof output === "string"
+            ) {
+              const pathMatch = output.match(/Path:\s*([^\n]+\.html)/i);
+              if (pathMatch) {
+                filesWritten.push({
+                  path: pathMatch[1].trim(),
+                  size: 0,
+                  type: "html",
                 });
               }
             }

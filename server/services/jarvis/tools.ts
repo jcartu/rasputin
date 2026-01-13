@@ -1737,6 +1737,14 @@ type StatCard = {
   changeType?: "positive" | "negative" | "neutral";
 };
 
+type ScatterPoint = {
+  x: number;
+  y: number;
+  label?: string;
+  color?: string;
+  size?: number;
+};
+
 type RichReportSection = {
   type:
     | "heading"
@@ -1747,6 +1755,10 @@ type RichReportSection = {
     | "pie_chart"
     | "bar_chart"
     | "line_chart"
+    | "scatter_chart"
+    | "area_chart"
+    | "gauge_chart"
+    | "donut_chart"
     | "flowchart"
     | "timeline"
     | "stat_cards"
@@ -1762,6 +1774,12 @@ type RichReportSection = {
   rows?: string[][];
   chartData?: ChartData[];
   chartTitle?: string;
+  scatterPoints?: ScatterPoint[];
+  xAxisLabel?: string;
+  yAxisLabel?: string;
+  gaugeValue?: number;
+  gaugeMax?: number;
+  gaugeLabel?: string;
   flowNodes?: FlowchartNode[];
   flowEdges?: FlowchartEdge[];
   timelineEvents?: TimelineEvent[];
@@ -1801,171 +1819,306 @@ const CHART_COLORS = [
   "#3b82f6",
 ];
 
-function generatePieChartSVG(data: ChartData[], title?: string): string {
-  const size = 300;
-  const center = size / 2;
-  const radius = 120;
-  const total = data.reduce((sum, d) => sum + d.value, 0);
+let chartIdCounter = 0;
 
-  let currentAngle = -90;
-  const slices: string[] = [];
-  const labels: string[] = [];
+function generateEChartsDiv(
+  chartType: string,
+  data: ChartData[] | ScatterPoint[],
+  title?: string,
+  options?: {
+    xAxisLabel?: string;
+    yAxisLabel?: string;
+    gaugeValue?: number;
+    gaugeMax?: number;
+    gaugeLabel?: string;
+  }
+): string {
+  const chartId = `chart_${++chartIdCounter}_${Date.now()}`;
+  const height = chartType === "gauge" ? "280px" : "350px";
 
-  data.forEach((d, i) => {
-    const percentage = d.value / total;
-    const angle = percentage * 360;
-    const endAngle = currentAngle + angle;
-    const largeArc = angle > 180 ? 1 : 0;
-    const color = d.color || CHART_COLORS[i % CHART_COLORS.length];
+  let echartsOption: Record<string, unknown>;
 
-    const startRad = (currentAngle * Math.PI) / 180;
-    const endRad = (endAngle * Math.PI) / 180;
-    const x1 = center + radius * Math.cos(startRad);
-    const y1 = center + radius * Math.sin(startRad);
-    const x2 = center + radius * Math.cos(endRad);
-    const y2 = center + radius * Math.sin(endRad);
+  switch (chartType) {
+    case "pie":
+      echartsOption = {
+        title: title
+          ? { text: title, left: "center", textStyle: { fontSize: 16 } }
+          : undefined,
+        tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+        legend: { orient: "vertical", right: 10, top: "center" },
+        series: [
+          {
+            type: "pie",
+            radius: "65%",
+            center: ["40%", "50%"],
+            data: (data as ChartData[]).map((d, i) => ({
+              name: d.label,
+              value: d.value,
+              itemStyle: {
+                color: d.color || CHART_COLORS[i % CHART_COLORS.length],
+              },
+            })),
+            emphasis: {
+              itemStyle: {
+                shadowBlur: 10,
+                shadowOffsetX: 0,
+                shadowColor: "rgba(0,0,0,0.5)",
+              },
+            },
+            animationType: "scale",
+            animationEasing: "elasticOut",
+          },
+        ],
+      };
+      break;
 
-    slices.push(
-      `<path d="M ${center} ${center} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z" fill="${color}" stroke="white" stroke-width="2"><title>${d.label}: ${d.value} (${(percentage * 100).toFixed(1)}%)</title></path>`
-    );
+    case "donut":
+      echartsOption = {
+        title: title
+          ? { text: title, left: "center", textStyle: { fontSize: 16 } }
+          : undefined,
+        tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+        legend: { orient: "vertical", right: 10, top: "center" },
+        series: [
+          {
+            type: "pie",
+            radius: ["45%", "70%"],
+            center: ["40%", "50%"],
+            avoidLabelOverlap: false,
+            itemStyle: {
+              borderRadius: 10,
+              borderColor: "#fff",
+              borderWidth: 2,
+            },
+            label: {
+              show: true,
+              position: "center",
+              fontSize: 24,
+              fontWeight: "bold",
+              formatter: () =>
+                (data as ChartData[])
+                  .reduce((s, d) => s + d.value, 0)
+                  .toString(),
+            },
+            emphasis: { label: { show: true, fontSize: 28 } },
+            labelLine: { show: false },
+            data: (data as ChartData[]).map((d, i) => ({
+              name: d.label,
+              value: d.value,
+              itemStyle: {
+                color: d.color || CHART_COLORS[i % CHART_COLORS.length],
+              },
+            })),
+            animationType: "scale",
+            animationEasing: "elasticOut",
+          },
+        ],
+      };
+      break;
 
-    const midAngle = ((currentAngle + angle / 2) * Math.PI) / 180;
-    const labelRadius = radius + 30;
-    const lx = center + labelRadius * Math.cos(midAngle);
-    const ly = center + labelRadius * Math.sin(midAngle);
-    labels.push(
-      `<text x="${lx}" y="${ly}" text-anchor="middle" font-size="11" fill="#666">${d.label}</text>`
-    );
+    case "bar":
+      echartsOption = {
+        title: title
+          ? { text: title, left: "center", textStyle: { fontSize: 16 } }
+          : undefined,
+        tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+        grid: { left: "3%", right: "4%", bottom: "15%", containLabel: true },
+        xAxis: {
+          type: "category",
+          data: (data as ChartData[]).map(d => d.label),
+          axisLabel: { rotate: 30, interval: 0 },
+        },
+        yAxis: { type: "value", name: options?.yAxisLabel },
+        series: [
+          {
+            type: "bar",
+            data: (data as ChartData[]).map((d, i) => ({
+              value: d.value,
+              itemStyle: {
+                color: d.color || CHART_COLORS[i % CHART_COLORS.length],
+                borderRadius: [4, 4, 0, 0],
+              },
+            })),
+            animationDelay: (idx: number) => idx * 50,
+          },
+        ],
+      };
+      break;
 
-    currentAngle = endAngle;
-  });
+    case "line":
+      echartsOption = {
+        title: title
+          ? { text: title, left: "center", textStyle: { fontSize: 16 } }
+          : undefined,
+        tooltip: { trigger: "axis" },
+        grid: { left: "3%", right: "4%", bottom: "10%", containLabel: true },
+        xAxis: {
+          type: "category",
+          data: (data as ChartData[]).map(d => d.label),
+          boundaryGap: false,
+        },
+        yAxis: { type: "value", name: options?.yAxisLabel },
+        series: [
+          {
+            type: "line",
+            data: (data as ChartData[]).map(d => d.value),
+            smooth: true,
+            symbol: "circle",
+            symbolSize: 8,
+            lineStyle: { width: 3, color: "#6366f1" },
+            itemStyle: { color: "#6366f1" },
+            areaStyle: {
+              color: {
+                type: "linear",
+                x: 0,
+                y: 0,
+                x2: 0,
+                y2: 1,
+                colorStops: [
+                  { offset: 0, color: "rgba(99,102,241,0.4)" },
+                  { offset: 1, color: "rgba(99,102,241,0.05)" },
+                ],
+              },
+            },
+          },
+        ],
+      };
+      break;
 
-  const titleSvg = title
-    ? `<text x="${center}" y="20" text-anchor="middle" font-size="16" font-weight="bold" fill="#333">${title}</text>`
-    : "";
+    case "area":
+      echartsOption = {
+        title: title
+          ? { text: title, left: "center", textStyle: { fontSize: 16 } }
+          : undefined,
+        tooltip: { trigger: "axis" },
+        grid: { left: "3%", right: "4%", bottom: "10%", containLabel: true },
+        xAxis: {
+          type: "category",
+          data: (data as ChartData[]).map(d => d.label),
+          boundaryGap: false,
+        },
+        yAxis: { type: "value" },
+        series: [
+          {
+            type: "line",
+            data: (data as ChartData[]).map(d => d.value),
+            smooth: true,
+            symbol: "none",
+            lineStyle: { width: 2, color: "#8b5cf6" },
+            areaStyle: {
+              color: {
+                type: "linear",
+                x: 0,
+                y: 0,
+                x2: 0,
+                y2: 1,
+                colorStops: [
+                  { offset: 0, color: "rgba(139,92,246,0.6)" },
+                  { offset: 0.5, color: "rgba(139,92,246,0.3)" },
+                  { offset: 1, color: "rgba(139,92,246,0.05)" },
+                ],
+              },
+            },
+          },
+        ],
+      };
+      break;
 
-  return `<svg viewBox="0 0 ${size} ${size + 40}" xmlns="http://www.w3.org/2000/svg" style="max-width: 400px; margin: 20px auto; display: block;">
-    ${titleSvg}
-    <g transform="translate(0, 20)">${slices.join("")}${labels.join("")}</g>
-  </svg>`;
-}
+    case "scatter":
+      echartsOption = {
+        title: title
+          ? { text: title, left: "center", textStyle: { fontSize: 16 } }
+          : undefined,
+        tooltip: {
+          trigger: "item",
+          formatter: (p: { data: number[] }) => `(${p.data[0]}, ${p.data[1]})`,
+        },
+        grid: { left: "3%", right: "4%", bottom: "10%", containLabel: true },
+        xAxis: { type: "value", name: options?.xAxisLabel, scale: true },
+        yAxis: { type: "value", name: options?.yAxisLabel, scale: true },
+        series: [
+          {
+            type: "scatter",
+            symbolSize: 12,
+            data: (data as ScatterPoint[]).map((p, i) => ({
+              value: [p.x, p.y],
+              itemStyle: {
+                color: p.color || CHART_COLORS[i % CHART_COLORS.length],
+              },
+            })),
+            animationDelay: (idx: number) => idx * 20,
+          },
+        ],
+      };
+      break;
 
-function generateBarChartSVG(data: ChartData[], title?: string): string {
-  const width = 500;
-  const height = 300;
-  const padding = { top: 40, right: 20, bottom: 60, left: 60 };
-  const chartWidth = width - padding.left - padding.right;
-  const chartHeight = height - padding.top - padding.bottom;
-  const maxValue = Math.max(...data.map(d => d.value));
-  const barWidth = chartWidth / data.length - 10;
+    case "gauge":
+      const gaugeVal = options?.gaugeValue ?? 0;
+      const gaugeMax = options?.gaugeMax ?? 100;
+      const pct = gaugeVal / gaugeMax;
+      const gaugeColor =
+        pct >= 0.75
+          ? "#22c55e"
+          : pct >= 0.5
+            ? "#eab308"
+            : pct >= 0.25
+              ? "#f97316"
+              : "#ef4444";
+      echartsOption = {
+        title: title
+          ? {
+              text: title,
+              left: "center",
+              top: 10,
+              textStyle: { fontSize: 16 },
+            }
+          : undefined,
+        series: [
+          {
+            type: "gauge",
+            startAngle: 180,
+            endAngle: 0,
+            min: 0,
+            max: gaugeMax,
+            radius: "90%",
+            center: ["50%", "70%"],
+            progress: {
+              show: true,
+              width: 18,
+              itemStyle: { color: gaugeColor },
+            },
+            axisLine: { lineStyle: { width: 18, color: [[1, "#e5e7eb"]] } },
+            axisTick: { show: false },
+            splitLine: { show: false },
+            axisLabel: { show: true, distance: 25, fontSize: 12 },
+            pointer: { show: false },
+            detail: {
+              valueAnimation: true,
+              fontSize: 32,
+              fontWeight: "bold",
+              offsetCenter: [0, "-10%"],
+              formatter: "{value}",
+              color: "#1f2937",
+            },
+            title: { offsetCenter: [0, "20%"], fontSize: 14, color: "#6b7280" },
+            data: [{ value: gaugeVal, name: options?.gaugeLabel || "" }],
+          },
+        ],
+      };
+      break;
 
-  const bars = data
-    .map((d, i) => {
-      const barHeight = (d.value / maxValue) * chartHeight;
-      const x = padding.left + i * (barWidth + 10) + 5;
-      const y = padding.top + chartHeight - barHeight;
-      const color = d.color || CHART_COLORS[i % CHART_COLORS.length];
-      return `
-      <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" fill="${color}" rx="4">
-        <title>${d.label}: ${d.value}</title>
-      </rect>
-      <text x="${x + barWidth / 2}" y="${height - 35}" text-anchor="middle" font-size="11" fill="#666" transform="rotate(-45, ${x + barWidth / 2}, ${height - 35})">${d.label}</text>
-      <text x="${x + barWidth / 2}" y="${y - 5}" text-anchor="middle" font-size="12" font-weight="bold" fill="#333">${d.value}</text>
-    `;
-    })
-    .join("");
+    default:
+      return `<div style="color: red;">Unknown chart type: ${chartType}</div>`;
+  }
 
-  const gridLines = [0, 0.25, 0.5, 0.75, 1]
-    .map(pct => {
-      const y = padding.top + chartHeight * (1 - pct);
-      const value = Math.round(maxValue * pct);
-      return `
-      <line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="#eee" stroke-dasharray="4"/>
-      <text x="${padding.left - 10}" y="${y + 4}" text-anchor="end" font-size="11" fill="#888">${value}</text>
-    `;
-    })
-    .join("");
-
-  const titleSvg = title
-    ? `<text x="${width / 2}" y="25" text-anchor="middle" font-size="16" font-weight="bold" fill="#333">${title}</text>`
-    : "";
-
-  return `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="max-width: 600px; margin: 20px auto; display: block;">
-    ${titleSvg}
-    ${gridLines}
-    ${bars}
-  </svg>`;
-}
-
-function generateLineChartSVG(data: ChartData[], title?: string): string {
-  const width = 500;
-  const height = 300;
-  const padding = { top: 40, right: 20, bottom: 50, left: 60 };
-  const chartWidth = width - padding.left - padding.right;
-  const chartHeight = height - padding.top - padding.bottom;
-  const maxValue = Math.max(...data.map(d => d.value));
-  const minValue = Math.min(...data.map(d => d.value));
-  const range = maxValue - minValue || 1;
-
-  const points = data.map((d, i) => {
-    const x = padding.left + (i / (data.length - 1 || 1)) * chartWidth;
-    const y =
-      padding.top + chartHeight - ((d.value - minValue) / range) * chartHeight;
-    return { x, y, d };
-  });
-
-  const linePath = points
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
-    .join(" ");
-  const areaPath = `${linePath} L ${points[points.length - 1].x} ${padding.top + chartHeight} L ${points[0].x} ${padding.top + chartHeight} Z`;
-
-  const dots = points
-    .map(
-      p => `
-    <circle cx="${p.x}" cy="${p.y}" r="5" fill="#6366f1" stroke="white" stroke-width="2">
-      <title>${p.d.label}: ${p.d.value}</title>
-    </circle>
-  `
-    )
-    .join("");
-
-  const labels = points
-    .map((p, i) =>
-      i % Math.ceil(data.length / 8) === 0 || i === data.length - 1
-        ? `<text x="${p.x}" y="${height - 15}" text-anchor="middle" font-size="10" fill="#666">${p.d.label}</text>`
-        : ""
-    )
-    .join("");
-
-  const gridLines = [0, 0.25, 0.5, 0.75, 1]
-    .map(pct => {
-      const y = padding.top + chartHeight * (1 - pct);
-      const value = Math.round(minValue + range * pct);
-      return `
-      <line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="#eee"/>
-      <text x="${padding.left - 10}" y="${y + 4}" text-anchor="end" font-size="10" fill="#888">${value}</text>
-    `;
-    })
-    .join("");
-
-  const titleSvg = title
-    ? `<text x="${width / 2}" y="25" text-anchor="middle" font-size="16" font-weight="bold" fill="#333">${title}</text>`
-    : "";
-
-  return `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="max-width: 600px; margin: 20px auto; display: block;">
-    <defs>
-      <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#6366f1" stop-opacity="0.3"/>
-        <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
-      </linearGradient>
-    </defs>
-    ${titleSvg}
-    ${gridLines}
-    <path d="${areaPath}" fill="url(#areaGradient)"/>
-    <path d="${linePath}" fill="none" stroke="#6366f1" stroke-width="3" stroke-linecap="round"/>
-    ${dots}
-    ${labels}
-  </svg>`;
+  return `<div id="${chartId}" style="width: 100%; height: ${height}; margin: 20px auto;"></div>
+<script>
+(function() {
+  var chart = echarts.init(document.getElementById('${chartId}'));
+  chart.setOption(${JSON.stringify(echartsOption)});
+  window.addEventListener('resize', function() { chart.resize(); });
+})();
+</script>`;
 }
 
 function generateFlowchartSVG(
@@ -2328,6 +2481,7 @@ export async function createRichReport(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(options.title)}</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
   <style>${style}</style>
 </head>
 <body>
@@ -2404,35 +2558,80 @@ export async function createRichReport(
 
       case "pie_chart":
         if (section.chartData && section.chartData.length > 0) {
-          htmlContent += `  <div class="chart-container" style="text-align: center; margin: 30px 0;">\n`;
-          htmlContent += generatePieChartSVG(
+          htmlContent += generateEChartsDiv(
+            "pie",
             section.chartData,
             section.chartTitle
           );
-          htmlContent += `  </div>\n`;
+        }
+        break;
+
+      case "donut_chart":
+        if (section.chartData && section.chartData.length > 0) {
+          htmlContent += generateEChartsDiv(
+            "donut",
+            section.chartData,
+            section.chartTitle
+          );
         }
         break;
 
       case "bar_chart":
         if (section.chartData && section.chartData.length > 0) {
-          htmlContent += `  <div class="chart-container" style="text-align: center; margin: 30px 0;">\n`;
-          htmlContent += generateBarChartSVG(
+          htmlContent += generateEChartsDiv(
+            "bar",
             section.chartData,
-            section.chartTitle
+            section.chartTitle,
+            {
+              yAxisLabel: section.yAxisLabel,
+            }
           );
-          htmlContent += `  </div>\n`;
         }
         break;
 
       case "line_chart":
         if (section.chartData && section.chartData.length > 0) {
-          htmlContent += `  <div class="chart-container" style="text-align: center; margin: 30px 0;">\n`;
-          htmlContent += generateLineChartSVG(
+          htmlContent += generateEChartsDiv(
+            "line",
+            section.chartData,
+            section.chartTitle,
+            {
+              yAxisLabel: section.yAxisLabel,
+            }
+          );
+        }
+        break;
+
+      case "area_chart":
+        if (section.chartData && section.chartData.length > 0) {
+          htmlContent += generateEChartsDiv(
+            "area",
             section.chartData,
             section.chartTitle
           );
-          htmlContent += `  </div>\n`;
         }
+        break;
+
+      case "scatter_chart":
+        if (section.scatterPoints && section.scatterPoints.length > 0) {
+          htmlContent += generateEChartsDiv(
+            "scatter",
+            section.scatterPoints,
+            section.chartTitle,
+            {
+              xAxisLabel: section.xAxisLabel,
+              yAxisLabel: section.yAxisLabel,
+            }
+          );
+        }
+        break;
+
+      case "gauge_chart":
+        htmlContent += generateEChartsDiv("gauge", [], section.chartTitle, {
+          gaugeValue: section.gaugeValue,
+          gaugeMax: section.gaugeMax,
+          gaugeLabel: section.gaugeLabel,
+        });
         break;
 
       case "flowchart":

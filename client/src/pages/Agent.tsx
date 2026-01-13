@@ -783,6 +783,118 @@ function GeneratedImagesDisplay({ images }: { images: GeneratedImage[] }) {
   );
 }
 
+function extractHtmlReports(steps?: AgentStep[]): Array<{
+  path: string;
+  filename: string;
+  downloadUrl: string;
+}> {
+  if (!steps) return [];
+
+  const reports: Array<{
+    path: string;
+    filename: string;
+    downloadUrl: string;
+  }> = [];
+
+  for (const step of steps) {
+    if (
+      step.tool === "create_rich_report" &&
+      step.status === "success" &&
+      step.output
+    ) {
+      const pathMatch = step.output.match(/Path:\s*([^\n]+\.html)/i);
+      if (pathMatch) {
+        const filePath = pathMatch[1].trim();
+        const filename = filePath.split("/").pop() || filePath;
+        const relativePath = filePath
+          .replace(/^\/tmp\/jarvis-workspace\//, "")
+          .replace(/^jarvis-workspace\//, "")
+          .replace(/^\/tmp\//, "")
+          .replace(/^\//, "");
+        const downloadUrl = `/api/files/workspace/${relativePath}`;
+        reports.push({ path: filePath, filename, downloadUrl });
+      }
+    }
+
+    if (
+      step.tool === "write_file" &&
+      step.status === "success" &&
+      step.output
+    ) {
+      const pathMatch = step.output.match(
+        /(?:wrote|created|saved).*?([^\s]+\.html)/i
+      );
+      if (pathMatch) {
+        const filePath = pathMatch[1].trim();
+        const filename = filePath.split("/").pop() || filePath;
+        const relativePath = filePath
+          .replace(/^\/tmp\/jarvis-workspace\//, "")
+          .replace(/^jarvis-workspace\//, "")
+          .replace(/^\/tmp\//, "")
+          .replace(/^\//, "");
+        const downloadUrl = `/api/files/workspace/${relativePath}`;
+        reports.push({ path: filePath, filename, downloadUrl });
+      }
+    }
+  }
+
+  return reports;
+}
+
+function HtmlReportPreview({ steps }: { steps?: AgentStep[] }) {
+  const reports = extractHtmlReports(steps);
+
+  if (reports.length === 0) return null;
+
+  return (
+    <div className="space-y-4">
+      {reports.map((report, idx) => (
+        <div
+          key={idx}
+          className="rounded-lg border border-border/50 overflow-hidden"
+        >
+          <div className="p-3 bg-gradient-to-r from-purple-500/10 to-cyan-500/10 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-cyan-400" />
+              <span className="font-medium text-sm">{report.filename}</span>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => window.open(report.downloadUrl, "_blank")}
+              >
+                <ExternalLink className="h-3 w-3 mr-1" />
+                Open
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const a = document.createElement("a");
+                  a.href = report.downloadUrl;
+                  a.download = report.filename;
+                  a.click();
+                }}
+              >
+                <Download className="h-3 w-3 mr-1" />
+                Download
+              </Button>
+            </div>
+          </div>
+          <div className="bg-white">
+            <iframe
+              src={report.downloadUrl}
+              className="w-full h-[500px]"
+              title={report.filename}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AgentMessageView({
   message,
   isLive,
@@ -860,6 +972,7 @@ function AgentMessageView({
             <GeneratedImagesDisplay
               images={extractGeneratedImages(message.steps)}
             />
+            <HtmlReportPreview steps={message.steps} />
             {message.content && (
               <div className="relative p-4 rounded-lg bg-muted/30 text-foreground prose prose-sm prose-invert max-w-none">
                 <div className="absolute top-2 right-2 z-10">

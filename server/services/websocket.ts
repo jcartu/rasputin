@@ -74,6 +74,7 @@ interface JarvisRequest {
   taskId?: number;
   userId: number;
   conversationHistory?: ConversationMessage[];
+  maxIterations?: number;
 }
 
 interface ClientToServerEvents {
@@ -683,6 +684,7 @@ async function handleJarvisTask(
         userId,
         enableMemoryInjection: true,
         conversationHistory,
+        maxIterations: data.maxIterations,
       }
     );
   } catch (error) {

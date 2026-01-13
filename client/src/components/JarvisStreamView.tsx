@@ -863,6 +863,46 @@ function CompletionCard({
             </div>
           </div>
 
+          {artifacts?.some(a => a.type === "html" && a.downloadUrl) && (
+            <div className="border-t border-border/50">
+              <div className="p-4 bg-gradient-to-r from-purple-500/10 to-cyan-500/10">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-cyan-400" />
+                    Generated Report
+                  </h4>
+                  <div className="flex gap-2">
+                    {artifacts
+                      .filter(a => a.type === "html" && a.downloadUrl)
+                      .map((a, i) => (
+                        <Button
+                          key={i}
+                          size="sm"
+                          variant="outline"
+                          onClick={() => window.open(a.downloadUrl, "_blank")}
+                        >
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          Open in New Tab
+                        </Button>
+                      ))}
+                  </div>
+                </div>
+                <div className="rounded-lg overflow-hidden border border-border/50 bg-white">
+                  {artifacts
+                    .filter(a => a.type === "html" && a.downloadUrl)
+                    .map((a, i) => (
+                      <iframe
+                        key={i}
+                        src={a.downloadUrl}
+                        className="w-full h-[600px] bg-white"
+                        title={a.filename || "Report Preview"}
+                      />
+                    ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="bg-muted/30 border-t border-border/50 p-6">
             <ExportPanel content={exportContent} />
           </div>
@@ -993,7 +1033,8 @@ export function JarvisStreamView({
         (t.name === "write_file" ||
           t.name === "write_xlsx" ||
           t.name === "write_docx" ||
-          t.name === "write_pptx")
+          t.name === "write_pptx" ||
+          t.name === "create_rich_report")
     );
 
   const artifacts = writeTools
@@ -1027,6 +1068,28 @@ export function JarvisStreamView({
             filename,
             downloadUrl,
             fileType,
+          };
+        }
+      }
+
+      if (t.name === "create_rich_report" && t.output) {
+        const pathMatch = t.output.match(/Path:\s*([^\n]+\.html)/i);
+        if (pathMatch) {
+          const filePath = pathMatch[1].trim();
+          const filename = filePath.split("/").pop() || filePath;
+          const relativePath = filePath
+            .replace(/^\/tmp\/jarvis-workspace\//, "")
+            .replace(/^jarvis-workspace\//, "")
+            .replace(/^\/tmp\//, "")
+            .replace(/^\//, "");
+          const downloadUrl = `/api/files/workspace/${relativePath}`;
+
+          return {
+            type: "html",
+            path: filePath,
+            filename,
+            downloadUrl,
+            url: downloadUrl,
           };
         }
       }
