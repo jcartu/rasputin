@@ -713,6 +713,9 @@ type Artifact = {
   downloadUrl?: string;
 };
 
+import { ExportPanel } from "./ExportPanel";
+import { ReportPreview } from "./ReportPreview";
+
 function CompletionCard({
   summary,
   success,
@@ -758,72 +761,16 @@ function CompletionCard({
     }
   }, [summary, isSpeaking, audioElement, ttsMutation]);
 
-  const handleExport = useCallback(
-    (format: "markdown" | "html" | "pdf" | "json") => {
-      if (!summary) return;
-
-      const timestamp = new Date().toISOString().split("T")[0];
-      const filename = `rasputin-report-${timestamp}`;
-
-      if (format === "markdown") {
-        const content = `# RASPUTIN Task Report\n\n**Date:** ${new Date().toLocaleString()}\n**Status:** ${success ? "Completed" : "Failed"}\n**Duration:** ${durationMs ? (durationMs / 1000).toFixed(1) + "s" : "N/A"}\n\n## Summary\n\n${summary}`;
-        const blob = new Blob([content], { type: "text/markdown" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${filename}.md`;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast.success("Exported as Markdown");
-      } else if (format === "html") {
-        const content = `<!DOCTYPE html><html><head><title>RASPUTIN Report</title><style>body{font-family:system-ui;max-width:800px;margin:40px auto;padding:20px;background:#0a0a0a;color:#e5e5e5}h1{color:#22d3ee}pre{background:#1a1a1a;padding:15px;border-radius:8px;overflow-x:auto}.meta{color:#888;margin-bottom:20px}</style></head><body><h1>RASPUTIN Task Report</h1><div class="meta"><p>Date: ${new Date().toLocaleString()}</p><p>Status: ${success ? "✅ Completed" : "❌ Failed"}</p><p>Duration: ${durationMs ? (durationMs / 1000).toFixed(1) + "s" : "N/A"}</p></div><div>${summary.replace(/\n/g, "<br>")}</div></body></html>`;
-        const blob = new Blob([content], { type: "text/html" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${filename}.html`;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast.success("Exported as HTML");
-      } else if (format === "pdf") {
-        const htmlContent = `<h1>RASPUTIN Task Report</h1><div class="meta"><p><strong>Date:</strong> ${new Date().toLocaleString()}</p><p><strong>Status:</strong> ${success ? "Completed" : "Failed"}</p><p><strong>Duration:</strong> ${durationMs ? (durationMs / 1000).toFixed(1) + "s" : "N/A"}</p></div><h2>Summary</h2><div>${summary.replace(/\n/g, "<br>")}</div>`;
-        fetch("/api/files/export-pdf", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            html: htmlContent,
-            filename: `${filename}.pdf`,
-          }),
-        })
-          .then(res => res.blob())
-          .then(blob => {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `${filename}.pdf`;
-            a.click();
-            URL.revokeObjectURL(url);
-            toast.success("Exported as PDF");
-          })
-          .catch(() => toast.error("PDF export failed"));
-      } else if (format === "json") {
-        const content = JSON.stringify(
-          { summary, success, durationMs, artifacts, exportedAt: new Date() },
-          null,
-          2
-        );
-        const blob = new Blob([content], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${filename}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast.success("Exported as JSON");
-      }
+  const exportContent = {
+    title: "RASPUTIN Task Report",
+    content: summary || "",
+    metadata: {
+      date: new Date().toLocaleString(),
+      duration: durationMs ? (durationMs / 1000).toFixed(1) + "s" : undefined,
+      status: success ? "Completed" : "Failed",
     },
-    [summary, success, durationMs, artifacts]
-  );
+    artifacts: artifacts,
+  };
 
   return (
     <motion.div
@@ -834,41 +781,41 @@ function CompletionCard({
     >
       <Card
         className={cn(
-          "border-2",
+          "border-2 overflow-hidden",
           success ? "border-green-500/30" : "border-red-500/30"
         )}
       >
-        <CardContent className="p-4">
-          <div className="flex items-start gap-3">
-            <div
-              className={cn(
-                "p-2 rounded-full print:hidden",
-                success ? "bg-green-500/20" : "bg-red-500/20"
-              )}
-            >
-              {success ? (
-                <CheckCircle2 className="h-6 w-6 text-green-400" />
-              ) : (
-                <XCircle className="h-6 w-6 text-red-400" />
-              )}
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold">
-                  {success ? "Task Completed" : "Task Failed"}
-                </h3>
-                <div className="flex items-center gap-2">
-                  {durationMs && (
-                    <Badge variant="outline" className="text-xs print:hidden">
-                      {(durationMs / 1000).toFixed(1)}s
-                    </Badge>
-                  )}
-                  {summary && (
-                    <>
+        <CardContent className="p-0">
+          <div className="p-6">
+            <div className="flex items-start gap-4 mb-6">
+              <div
+                className={cn(
+                  "p-3 rounded-full shrink-0",
+                  success ? "bg-green-500/20" : "bg-red-500/20"
+                )}
+              >
+                {success ? (
+                  <CheckCircle2 className="h-6 w-6 text-green-400" />
+                ) : (
+                  <XCircle className="h-6 w-6 text-red-400" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xl font-semibold">
+                    {success ? "Task Completed" : "Task Failed"}
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    {durationMs && (
+                      <Badge variant="outline" className="font-mono">
+                        {(durationMs / 1000).toFixed(1)}s
+                      </Badge>
+                    )}
+                    {summary && (
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 print:hidden"
+                        size="icon"
+                        className="h-8 w-8"
                         onClick={handleSpeak}
                         title={isSpeaking ? "Stop speaking" : "Read aloud"}
                       >
@@ -878,212 +825,23 @@ function CompletionCard({
                           <Volume2 className="h-4 w-4" />
                         )}
                       </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 print:hidden"
-                            title="Export"
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => handleExport("markdown")}
-                          >
-                            <FileDown className="h-4 w-4 mr-2" />
-                            Export as Markdown
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleExport("html")}
-                          >
-                            <Globe className="h-4 w-4 mr-2" />
-                            Export as HTML
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleExport("json")}
-                          >
-                            <FileJson className="h-4 w-4 mr-2" />
-                            Export as JSON
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleExport("pdf")}>
-                            <Printer className="h-4 w-4 mr-2" />
-                            Print / Save as PDF
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </>
-                  )}
+                    )}
+                  </div>
                 </div>
+
+                {summary && (
+                  <ReportPreview
+                    content={summary}
+                    artifacts={artifacts || []}
+                    isStreaming={false}
+                  />
+                )}
               </div>
-              {summary && (
-                <div className="prose prose-invert prose-sm max-w-none print:prose-neutral">
-                  <Streamdown>{summary}</Streamdown>
-                </div>
-              )}
-
-              {artifacts?.some(a => a.type === "html" && a.content) && (
-                <div className="mt-6 pt-4 border-t border-border/50">
-                  <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-                    <Code className="h-4 w-4" />
-                    Generated Report Preview
-                  </h4>
-                  {artifacts
-                    .filter(a => a.type === "html" && a.content)
-                    .map((artifact, idx) => (
-                      <div
-                        key={`html-preview-${idx}`}
-                        className="rounded-lg overflow-hidden border border-border/50 bg-white"
-                      >
-                        <iframe
-                          srcDoc={artifact.content}
-                          title={artifact.filename || "HTML Preview"}
-                          className="w-full h-[500px] border-0"
-                          sandbox="allow-scripts allow-same-origin"
-                        />
-                      </div>
-                    ))}
-                </div>
-              )}
-
-              {artifacts && artifacts.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  className="mt-6 pt-4 border-t border-border/50"
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-cyan-500/20">
-                      <Download className="h-5 w-5 text-purple-400" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold">Generated Files</h4>
-                      <p className="text-xs text-muted-foreground">
-                        {artifacts.length} file{artifacts.length > 1 ? "s" : ""}{" "}
-                        ready for download
-                      </p>
-                    </div>
-                  </div>
-                  <div className="grid gap-3">
-                    {artifacts.map((artifact, idx) => (
-                      <motion.div
-                        key={idx}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.1 * idx }}
-                        className="group relative flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-muted/50 via-muted/30 to-transparent border border-border/50 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300"
-                      >
-                        {(() => {
-                          const filename =
-                            artifact.filename ||
-                            artifact.path?.split("/").pop() ||
-                            "";
-                          const fileInfo = getFileIcon(filename, artifact.type);
-                          return (
-                            <>
-                              <button
-                                onClick={() => {
-                                  const a = document.createElement("a");
-                                  a.href =
-                                    artifact.downloadUrl || artifact.url || "";
-                                  a.download = filename || "download";
-                                  a.click();
-                                  toast.success("Download started");
-                                }}
-                                className="shrink-0 cursor-pointer hover:scale-105 active:scale-95 transition-transform"
-                                title="Click to download"
-                              >
-                                {artifact.type === "image" && artifact.url ? (
-                                  <div
-                                    className={cn(
-                                      "w-14 h-14 rounded-xl overflow-hidden bg-gradient-to-br ring-2",
-                                      fileInfo.gradient,
-                                      fileInfo.ring
-                                    )}
-                                  >
-                                    <img
-                                      src={artifact.url}
-                                      alt="Preview"
-                                      className="w-full h-full object-cover"
-                                    />
-                                  </div>
-                                ) : (
-                                  <div
-                                    className={cn(
-                                      "w-14 h-14 rounded-xl bg-gradient-to-br flex items-center justify-center ring-2",
-                                      fileInfo.gradient,
-                                      fileInfo.ring
-                                    )}
-                                  >
-                                    {fileInfo.icon}
-                                  </div>
-                                )}
-                              </button>
-
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold truncate group-hover:text-purple-300 transition-colors">
-                                  {filename || `${artifact.type} file`}
-                                </p>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {getFileTypeLabel(filename, artifact.type)}
-                                </p>
-                              </div>
-                            </>
-                          );
-                        })()}
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          {artifact.url && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-9 px-3 text-xs border-border/50 hover:border-purple-500/50 hover:bg-purple-500/10"
-                              onClick={() =>
-                                window.open(artifact.url!, "_blank")
-                              }
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {artifact.downloadUrl && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-9 px-3 text-xs border-border/50 hover:border-cyan-500/50 hover:bg-cyan-500/10"
-                              onClick={() => {
-                                const url = `${window.location.origin}${artifact.downloadUrl}`;
-                                navigator.clipboard.writeText(url);
-                                toast.success("Link copied to clipboard");
-                              }}
-                            >
-                              <Link className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            className="h-9 px-4 text-xs font-medium bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 transition-all duration-300"
-                            onClick={() => {
-                              const a = document.createElement("a");
-                              a.href =
-                                artifact.downloadUrl || artifact.url || "";
-                              a.download = artifact.filename || "download";
-                              a.click();
-                              toast.success("Download started");
-                            }}
-                          >
-                            <Download className="h-4 w-4 mr-2" />
-                            Download
-                          </Button>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
             </div>
+          </div>
+
+          <div className="bg-muted/30 border-t border-border/50 p-6">
+            <ExportPanel content={exportContent} />
           </div>
         </CardContent>
       </Card>
@@ -1375,9 +1133,13 @@ export function JarvisStreamView({
                       Streaming
                     </motion.span>
                   </div>
-                  <div className="prose prose-invert prose-sm max-w-none prose-p:text-foreground/90 prose-p:my-1 prose-headings:text-foreground prose-strong:text-foreground">
-                    <Streamdown>{latestThinking}</Streamdown>
-                  </div>
+
+                  <ReportPreview
+                    content={latestThinking}
+                    artifacts={artifacts}
+                    isStreaming={true}
+                    className="mt-2"
+                  />
                 </div>
               </div>
             </CardContent>
