@@ -245,15 +245,18 @@ export class AgentManager {
     const db = await getDb();
     if (!db || messageIds.length === 0) return;
 
-    for (const id of messageIds) {
-      await db
-        .update(interAgentMessages)
-        .set({
-          isRead: 1,
-          readAt: new Date(),
-        })
-        .where(eq(interAgentMessages.id, id));
-    }
+    const now = new Date();
+    await Promise.all(
+      messageIds.map(id =>
+        db
+          .update(interAgentMessages)
+          .set({
+            isRead: 1,
+            readAt: now,
+          })
+          .where(eq(interAgentMessages.id, id))
+      )
+    );
   }
 
   /**

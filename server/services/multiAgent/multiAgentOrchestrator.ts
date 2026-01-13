@@ -536,12 +536,16 @@ Please provide a comprehensive final answer that:
   async cancelOrchestration(taskId: number): Promise<void> {
     const subtasks = await agentManager.getSubtasks(taskId);
 
-    for (const subtask of subtasks) {
-      if (subtask.status === "pending" || subtask.status === "in_progress") {
+    const cancellableSubtasks = subtasks.filter(
+      s => s.status === "pending" || s.status === "in_progress"
+    );
+
+    await Promise.all(
+      cancellableSubtasks.map(async subtask => {
         await agentManager.updateSubtask(subtask.id, "cancelled");
         await agentManager.terminateAgent(subtask.assignedAgentId);
-      }
-    }
+      })
+    );
 
     if (this.orchestratorAgentId) {
       await agentManager.terminateAgent(this.orchestratorAgentId);
