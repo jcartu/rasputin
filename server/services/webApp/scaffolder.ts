@@ -6,6 +6,8 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { integrateUILibrary, type UIConfig } from "./uiComponents";
+
 export interface ScaffoldConfig {
   projectName: string;
   projectType:
@@ -20,6 +22,7 @@ export interface ScaffoldConfig {
   authentication?: "jwt" | "oauth" | "session";
   features?: string[];
   outputPath: string;
+  ui?: UIConfig;
 }
 
 export interface ScaffoldResult {
@@ -71,6 +74,27 @@ export async function scaffoldProject(
       case "rails":
         filesCreated.push(...(await generateRailsFiles(projectPath, config)));
         break;
+    }
+
+    const frontendTypes = ["react", "nextjs", "vue", "svelte"];
+    if (config.ui && frontendTypes.includes(config.projectType)) {
+      const uiResult = await integrateUILibrary(
+        projectPath,
+        config.projectType,
+        config.ui
+      );
+      filesCreated.push(...uiResult.filesCreated);
+
+      if (
+        Object.keys(uiResult.dependenciesToAdd).length > 0 ||
+        Object.keys(uiResult.devDependenciesToAdd).length > 0
+      ) {
+        await updatePackageJson(
+          projectPath,
+          uiResult.dependenciesToAdd,
+          uiResult.devDependenciesToAdd
+        );
+      }
     }
 
     return {
@@ -871,4 +895,31 @@ end
   files.push("Gemfile");
 
   return files;
+}
+
+async function updatePackageJson(
+  projectPath: string,
+  dependencies: Record<string, string>,
+  devDependencies: Record<string, string>
+): Promise<void> {
+  const packageJsonPath = path.join(projectPath, "package.json");
+  if (!fs.existsSync(packageJsonPath)) return;
+
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+
+  if (Object.keys(dependencies).length > 0) {
+    packageJson.dependencies = {
+      ...packageJson.dependencies,
+      ...dependencies,
+    };
+  }
+
+  if (Object.keys(devDependencies).length > 0) {
+    packageJson.devDependencies = {
+      ...packageJson.devDependencies,
+      ...devDependencies,
+    };
+  }
+
+  fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
 }

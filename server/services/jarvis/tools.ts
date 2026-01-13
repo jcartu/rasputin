@@ -15,6 +15,7 @@ import { eq, and } from "drizzle-orm";
 import { getCachedResult, setCachedResult } from "../knowledgeCache";
 import * as crypto from "crypto";
 import { scaffoldProject, type ScaffoldConfig } from "../webApp/scaffolder";
+import type { UILibrary } from "../webApp/uiComponents";
 import { generateSchemaFromDescription } from "../webApp/schemaGenerator";
 import {
   getSelfEvolutionTools,
@@ -5280,7 +5281,10 @@ async function scaffoldProjectTool(
   outputPath: string,
   database?: string,
   authentication?: string,
-  features?: string[]
+  features?: string[],
+  uiLibrary?: string,
+  uiTheme?: string,
+  uiComponents?: string[]
 ): Promise<string> {
   const validTypes = [
     "react",
@@ -5295,6 +5299,11 @@ async function scaffoldProjectTool(
     return `Error: Invalid project type. Must be one of: ${validTypes.join(", ")}`;
   }
 
+  const validUILibraries = ["shadcn", "radix", "headless", "none"];
+  if (uiLibrary && !validUILibraries.includes(uiLibrary)) {
+    return `Error: Invalid UI library. Must be one of: ${validUILibraries.join(", ")}`;
+  }
+
   const config: ScaffoldConfig = {
     projectName,
     projectType: projectType as ScaffoldConfig["projectType"],
@@ -5304,16 +5313,30 @@ async function scaffoldProjectTool(
     features,
   };
 
+  if (uiLibrary && uiLibrary !== "none") {
+    config.ui = {
+      library: uiLibrary as UILibrary,
+      theme: (uiTheme as "light" | "dark" | "system") || "system",
+      components: uiComponents,
+    };
+  }
+
   const result = await scaffoldProject(config);
 
   if (!result.success) {
     return `Error creating project: ${result.error}`;
   }
 
-  return `Project "${projectName}" created successfully!
+  let output = `Project "${projectName}" created successfully!
 
 Location: ${result.projectPath}
-Files created: ${result.filesCreated.length}
+Files created: ${result.filesCreated.length}`;
+
+  if (config.ui) {
+    output += `\nUI Library: ${config.ui.library} with ${config.ui.theme} theme`;
+  }
+
+  output += `
 
 Files:
 ${result.filesCreated.map(f => `  - ${f}`).join("\n")}
@@ -5322,6 +5345,8 @@ Next steps:
 1. cd ${result.projectPath}
 2. npm install (or pnpm install)
 3. npm run dev`;
+
+  return output;
 }
 
 async function generateSchemaTool(
@@ -8145,7 +8170,10 @@ export async function executeTool(
         (input.outputPath || input.path || "/tmp/jarvis-projects") as string,
         input.database as string | undefined,
         input.authentication as string | undefined,
-        input.features as string[] | undefined
+        input.features as string[] | undefined,
+        input.uiLibrary as string | undefined,
+        input.uiTheme as string | undefined,
+        input.uiComponents as string[] | undefined
       );
     case "generate_schema":
       return generateSchemaTool(
@@ -10239,6 +10267,68 @@ export function getAvailableTools(): Array<{
             "Optional array of artifact objects (files, outputs) created during the task",
           required: false,
           items: { type: "object" },
+        },
+      },
+    },
+    // === PROJECT SCAFFOLDING TOOLS ===
+    {
+      name: "scaffold_project",
+      description:
+        "Scaffold a new web application project with production-ready structure. Supports React, Next.js, Vue, Svelte, Express, FastAPI, and Rails. Optionally includes database setup, authentication, and UI component libraries (shadcn/ui, Radix, Headless UI).",
+      parameters: {
+        projectName: {
+          type: "string",
+          description: "Name of the project (used for directory name)",
+          required: true,
+        },
+        projectType: {
+          type: "string",
+          description:
+            "Framework type: 'react', 'nextjs', 'vue', 'svelte', 'express', 'fastapi', or 'rails'",
+          required: true,
+        },
+        outputPath: {
+          type: "string",
+          description:
+            "Parent directory for the project (default: /tmp/jarvis-projects)",
+          required: false,
+        },
+        database: {
+          type: "string",
+          description:
+            "Database to set up: 'postgresql', 'mysql', 'mongodb', or 'sqlite'",
+          required: false,
+        },
+        authentication: {
+          type: "string",
+          description: "Auth system to include: 'jwt', 'oauth', or 'session'",
+          required: false,
+        },
+        features: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Additional features to include (e.g., 'testing', 'docker', 'ci')",
+          required: false,
+        },
+        uiLibrary: {
+          type: "string",
+          description:
+            "UI component library: 'shadcn' (shadcn/ui with Tailwind), 'radix' (Radix UI primitives), 'headless' (Headless UI), or 'none'. Default: none",
+          required: false,
+        },
+        uiTheme: {
+          type: "string",
+          description:
+            "UI theme mode: 'light', 'dark', or 'system'. Default: system",
+          required: false,
+        },
+        uiComponents: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Specific UI components to include (for shadcn: 'button', 'card', 'input', 'label', 'badge', etc.)",
+          required: false,
         },
       },
     },
