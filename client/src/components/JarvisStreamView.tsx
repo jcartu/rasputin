@@ -20,21 +20,11 @@ import {
   Sparkles,
   Volume2,
   VolumeX,
-  Download,
-  FileDown,
   FileJson,
-  Printer,
   ExternalLink,
-  Link,
   File,
   AlertTriangle,
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -94,7 +84,7 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
   task_complete: <CheckCircle2 className="h-4 w-4 text-green-400" />,
 };
 
-function getFileIcon(
+function _getFileIcon(
   filename: string,
   type: string
 ): { icon: React.ReactNode; gradient: string; ring: string } {
@@ -255,7 +245,7 @@ function getFileIcon(
   };
 }
 
-function getFileTypeLabel(filename: string, type: string): string {
+function _getFileTypeLabel(filename: string, type: string): string {
   const ext = filename?.split(".").pop()?.toLowerCase() || "";
   const labels: Record<string, string> = {
     md: "Markdown",

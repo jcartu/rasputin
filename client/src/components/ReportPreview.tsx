@@ -1,17 +1,7 @@
-import { useRef, useEffect, useState } from "react";
+import { useState } from "react";
 import { Streamdown } from "streamdown";
 import { motion, AnimatePresence } from "framer-motion";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Maximize2,
-  Minimize2,
-  ImageIcon,
-  BarChart3,
-  FileText,
-  Download,
-  X,
-} from "lucide-react";
+import { ImageIcon, FileText, Download, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -84,8 +74,8 @@ export function ReportPreview({
                 {isStreaming && idx === visuals.length - 1 && (
                   <div className="absolute top-2 right-2">
                     <span className="relative flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
                     </span>
                   </div>
                 )}

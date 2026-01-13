@@ -421,7 +421,7 @@ export function ExportPanel({ content, className = "" }: ExportPanelProps) {
       } else {
         throw new Error("PDF export failed");
       }
-    } catch (e) {
+    } catch (_e) {
       toast.error("Using browser print as fallback");
       window.print();
       showSuccess("pdf");
