@@ -10,20 +10,20 @@
 - [ ] Mobile responsive testing
 - [ ] Samsung Tri-Fold layout testing
 
-### Computer Control / Self-Evolution (P0 - Critical)
+### Computer Control / Self-Evolution (P0 - Critical) - MOSTLY COMPLETE
 
-- [ ] Activate self_propose_change, self_validate_change, self_apply_change tools
-- [ ] Create first self-modification (add a new tool)
-- [ ] Implement procedural memory extraction from successful tasks
+- [x] Activate self_propose_change, self_validate_change, self_apply_change tools - Working
+- [x] Create first self-modification (add a new tool) - check_url_status created via self_generate_tool
+- [x] Implement procedural memory extraction from successful tasks - 32 procedural memories stored
 - [ ] Test procedure replay on similar tasks
 - [x] True parallel agent execution (Promise.all refactor) - VERIFIED: Already implemented in multiAgentOrchestrator.ts with parallel, sequential, and mixed modes. Added parallelization to markMessagesRead and cancelOrchestration.
 
-### Intelligent Self-Correction (P0)
+### Intelligent Self-Correction (P0) - COMPLETE
 
-- [ ] Error classification system (API error, timeout, logic error)
-- [ ] Dynamic fallback chains based on error type
-- [ ] Learning from failure patterns
-- [ ] Strategy switching when approach isn't working
+- [x] Error classification system (errorClassification.ts) - 8 error types: timeout, not_found, code_error, rate_limit, auth_error, network_error, validation_error, unknown
+- [x] Dynamic fallback chains (fallbackPolicy.ts) - Policy-based retry decisions, tool alternatives, reliability ranking
+- [x] Learning from failure patterns (failureMemory.ts) - Stores to episodic memory, tracks patterns, suggests mitigations
+- [x] Strategy switching (strategySwitching.ts) - 6 strategies: default, decompose, verify_first, use_alternatives, reduce_scope, offline_mode
 
 ### Voice + Agent Integration
 
