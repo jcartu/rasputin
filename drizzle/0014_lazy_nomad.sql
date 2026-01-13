@@ -1,0 +1,62 @@
+CREATE TABLE `actionDSLLog` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`actionId` varchar(32) NOT NULL,
+	`taskId` int NOT NULL,
+	`userId` int NOT NULL,
+	`sessionId` varchar(64) NOT NULL,
+	`actionType` varchar(64) NOT NULL,
+	`argsJson` json NOT NULL,
+	`idempotencyKey` varchar(64),
+	`preStateHash` varchar(64),
+	`postStateHash` varchar(64),
+	`status` enum('pending','executing','completed','failed','cancelled') NOT NULL DEFAULT 'pending',
+	`result` json,
+	`errorMessage` text,
+	`durationMs` int,
+	`screenshotPreRef` varchar(128),
+	`screenshotPostRef` varchar(128),
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`completedAt` timestamp,
+	CONSTRAINT `actionDSLLog_id` PRIMARY KEY(`id`),
+	CONSTRAINT `actionDSLLog_actionId_unique` UNIQUE(`actionId`)
+);
+--> statement-breakpoint
+CREATE TABLE `jarvisEventLog` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`eventId` varchar(32) NOT NULL,
+	`userId` int NOT NULL,
+	`sessionId` varchar(64) NOT NULL,
+	`taskId` int NOT NULL,
+	`seq` int NOT NULL,
+	`jarvisEventType` enum('OBSERVATION','PLAN','TOOL_CALL','ACTION','VERIFICATION','FEEDBACK','ERROR','TASK_START','TASK_END','STATE_UPDATE','PLAN_PROPOSED','ACTION_PROPOSED','ACTION_RESULT','CONTROL_CMD') NOT NULL,
+	`payload` json NOT NULL,
+	`prevHash` varchar(64),
+	`hash` varchar(64) NOT NULL,
+	`blobRefs` json,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `jarvisEventLog_id` PRIMARY KEY(`id`),
+	CONSTRAINT `jarvisEventLog_eventId_unique` UNIQUE(`eventId`)
+);
+--> statement-breakpoint
+CREATE TABLE `visionActionSessions` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`sessionId` varchar(64) NOT NULL,
+	`taskId` int NOT NULL,
+	`userId` int NOT NULL,
+	`goal` text NOT NULL,
+	`status` enum('running','paused','completed','failed','cancelled') NOT NULL DEFAULT 'running',
+	`currentPhase` varchar(32),
+	`stateHash` varchar(64),
+	`iterationCount` int NOT NULL DEFAULT 0,
+	`actionCount` int NOT NULL DEFAULT 0,
+	`vlmCallCount` int NOT NULL DEFAULT 0,
+	`repeatStateCount` int NOT NULL DEFAULT 0,
+	`lastObservation` json,
+	`recoveryAttempts` int NOT NULL DEFAULT 0,
+	`startedAt` timestamp NOT NULL DEFAULT (now()),
+	`completedAt` timestamp,
+	`result` text,
+	`errorMessage` text,
+	CONSTRAINT `visionActionSessions_id` PRIMARY KEY(`id`),
+	CONSTRAINT `visionActionSessions_sessionId_unique` UNIQUE(`sessionId`)
+);

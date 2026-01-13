@@ -3,6 +3,7 @@ import {
   mysqlEnum,
   mysqlTable,
   text,
+  mediumtext,
   timestamp,
   varchar,
   json,
@@ -1218,16 +1219,16 @@ export const episodicMemories = mysqlTable("episodicMemories", {
   title: varchar("title", { length: 255 }).notNull(),
 
   /** Detailed description of what happened */
-  description: text("description").notNull(),
+  description: mediumtext("description").notNull(),
 
   /** Context: what was the situation? */
-  context: text("context"),
+  context: mediumtext("context"),
 
   /** Action: what was done? */
-  action: text("action"),
+  action: mediumtext("action"),
 
   /** Outcome: what was the result? */
-  outcome: text("outcome"),
+  outcome: mediumtext("outcome"),
 
   /** Lessons learned (extracted insights) */
   lessons: json("lessons").$type<string[]>(),
@@ -1537,11 +1538,11 @@ export const trainingData = mysqlTable("trainingData", {
     "error_recovery", // Error handling examples
   ]).notNull(),
 
-  /** Input (prompt/context) */
-  input: text("input").notNull(),
+  /** Input (prompt/context) - can be large prompts */
+  input: mediumtext("input").notNull(),
 
-  /** Output (response/action) */
-  output: text("output").notNull(),
+  /** Output (response/action) - can be large tool outputs */
+  output: mediumtext("output").notNull(),
 
   /** Quality score (0-100) */
   qualityScore: int("qualityScore").notNull().default(80),
@@ -2684,3 +2685,146 @@ export const dynamicAgentTypes = mysqlTable("dynamic_agent_types", {
 
 export type DynamicAgentType = typeof dynamicAgentTypes.$inferSelect;
 export type InsertDynamicAgentType = typeof dynamicAgentTypes.$inferInsert;
+
+export const jarvisEventLog = mysqlTable("jarvisEventLog", {
+  id: int("id").autoincrement().primaryKey(),
+
+  eventId: varchar("eventId", { length: 32 }).notNull().unique(),
+
+  userId: int("userId").notNull(),
+
+  sessionId: varchar("sessionId", { length: 64 }).notNull(),
+
+  taskId: int("taskId").notNull(),
+
+  seq: int("seq").notNull(),
+
+  jarvisEventType: mysqlEnum("jarvisEventType", [
+    "OBSERVATION",
+    "PLAN",
+    "TOOL_CALL",
+    "ACTION",
+    "VERIFICATION",
+    "FEEDBACK",
+    "ERROR",
+    "TASK_START",
+    "TASK_END",
+    "STATE_UPDATE",
+    "PLAN_PROPOSED",
+    "ACTION_PROPOSED",
+    "ACTION_RESULT",
+    "CONTROL_CMD",
+  ]).notNull(),
+
+  payload: json("payload").$type<Record<string, unknown>>().notNull(),
+
+  prevHash: varchar("prevHash", { length: 64 }),
+
+  hash: varchar("hash", { length: 64 }).notNull(),
+
+  blobRefs: json("blobRefs").$type<string[]>(),
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type JarvisEventLog = typeof jarvisEventLog.$inferSelect;
+export type InsertJarvisEventLog = typeof jarvisEventLog.$inferInsert;
+
+export const actionDSLLog = mysqlTable("actionDSLLog", {
+  id: int("id").autoincrement().primaryKey(),
+
+  actionId: varchar("actionId", { length: 32 }).notNull().unique(),
+
+  taskId: int("taskId").notNull(),
+
+  userId: int("userId").notNull(),
+
+  sessionId: varchar("sessionId", { length: 64 }).notNull(),
+
+  actionType: varchar("actionType", { length: 64 }).notNull(),
+
+  argsJson: json("argsJson").$type<Record<string, unknown>>().notNull(),
+
+  idempotencyKey: varchar("idempotencyKey", { length: 64 }),
+
+  preStateHash: varchar("preStateHash", { length: 64 }),
+
+  postStateHash: varchar("postStateHash", { length: 64 }),
+
+  status: mysqlEnum("status", [
+    "pending",
+    "executing",
+    "completed",
+    "failed",
+    "cancelled",
+  ])
+    .notNull()
+    .default("pending"),
+
+  result: json("result").$type<Record<string, unknown>>(),
+
+  errorMessage: text("errorMessage"),
+
+  durationMs: int("durationMs"),
+
+  screenshotPreRef: varchar("screenshotPreRef", { length: 128 }),
+
+  screenshotPostRef: varchar("screenshotPostRef", { length: 128 }),
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+
+  completedAt: timestamp("completedAt"),
+});
+
+export type ActionDSLLog = typeof actionDSLLog.$inferSelect;
+export type InsertActionDSLLog = typeof actionDSLLog.$inferInsert;
+
+export const visionActionSessions = mysqlTable("visionActionSessions", {
+  id: int("id").autoincrement().primaryKey(),
+
+  sessionId: varchar("sessionId", { length: 64 }).notNull().unique(),
+
+  taskId: int("taskId").notNull(),
+
+  userId: int("userId").notNull(),
+
+  goal: text("goal").notNull(),
+
+  status: mysqlEnum("status", [
+    "running",
+    "paused",
+    "completed",
+    "failed",
+    "cancelled",
+  ])
+    .notNull()
+    .default("running"),
+
+  currentPhase: varchar("currentPhase", { length: 32 }),
+
+  stateHash: varchar("stateHash", { length: 64 }),
+
+  iterationCount: int("iterationCount").notNull().default(0),
+
+  actionCount: int("actionCount").notNull().default(0),
+
+  vlmCallCount: int("vlmCallCount").notNull().default(0),
+
+  repeatStateCount: int("repeatStateCount").notNull().default(0),
+
+  lastObservation: json("lastObservation").$type<Record<string, unknown>>(),
+
+  recoveryAttempts: int("recoveryAttempts").notNull().default(0),
+
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+
+  completedAt: timestamp("completedAt"),
+
+  result: text("result"),
+
+  errorMessage: text("errorMessage"),
+});
+
+export type VisionActionSession = typeof visionActionSessions.$inferSelect;
+export type InsertVisionActionSession =
+  typeof visionActionSessions.$inferInsert;

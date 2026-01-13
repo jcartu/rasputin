@@ -38,8 +38,10 @@ services:
       - OLLAMA_URL=http://ollama:11434
       - VLLM_URL=http://vllm:8000
       - LOCAL_LLM_PRIORITY=local # local, cloud, or hybrid
+      - REDIS_URL=redis://redis:6379
     depends_on:
       - ollama
+      - redis
     networks:
       - rasputin-network
     volumes:
@@ -104,6 +106,26 @@ services:
       - vllm # Only start with: docker compose --profile vllm up
 
   # ==========================================================================
+  # Redis - Shared Memory Bus + Event Streams
+  # ==========================================================================
+  redis:
+    image: redis:7.2.5-alpine
+    container_name: rasputin-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - rasputin-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
   # Caddy - Reverse Proxy with Auto SSL
   # ==========================================================================
   caddy:
@@ -132,3 +154,4 @@ volumes:
   vllm-models:
   caddy-data:
   caddy-config:
+  redis-data:
