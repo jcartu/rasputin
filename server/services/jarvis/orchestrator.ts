@@ -3,6 +3,7 @@
  * Uses direct API connections (Anthropic, Cerebras, Gemini, Grok) for autonomous task execution
  */
 
+import * as fs from "fs/promises";
 import { getAvailableTools } from "./tools";
 import {
   createExecutionPlan,
@@ -1838,9 +1839,18 @@ Please save the content now.`;
             ) {
               const pathMatch = output.match(/Path:\s*([^\n]+\.html)/i);
               if (pathMatch) {
+                const filePath = pathMatch[1].trim();
+                let fileSize = 0;
+                try {
+                  const stats = await fs.stat(filePath);
+                  fileSize = stats.size;
+                } catch {
+                  // File stat failed, use output length as estimate
+                  fileSize = output.length;
+                }
                 filesWritten.push({
-                  path: pathMatch[1].trim(),
-                  size: 0,
+                  path: filePath,
+                  size: fileSize,
                   type: "html",
                 });
               }
