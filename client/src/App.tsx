@@ -5,6 +5,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { VoiceAnnouncementProvider } from "./contexts/VoiceAnnouncementContext";
 import SplashScreen from "./components/SplashScreen";
 import Chat from "./pages/Chat";
 import Login from "./pages/Login";
@@ -14,12 +15,6 @@ import MultiAgent from "./pages/MultiAgent";
 import Codebase from "./pages/Codebase";
 import Events from "./pages/Events";
 import Hosts from "./pages/Hosts";
-import { useVoiceAnnouncement } from "./hooks/useVoiceAnnouncement";
-
-function VoiceAnnouncementListener() {
-  useVoiceAnnouncement();
-  return null;
-}
 
 function Router() {
   return (
@@ -62,18 +57,19 @@ function App() {
           />
         )}
         <TooltipProvider>
-          <VoiceAnnouncementListener />
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              style: {
-                background: "oklch(0.16 0.02 260)",
-                border: "1px solid oklch(0.28 0.02 260)",
-                color: "oklch(0.95 0.01 260)",
-              },
-            }}
-          />
-          <Router />
+          <VoiceAnnouncementProvider>
+            <Toaster
+              position="top-right"
+              toastOptions={{
+                style: {
+                  background: "oklch(0.16 0.02 260)",
+                  border: "1px solid oklch(0.28 0.02 260)",
+                  color: "oklch(0.95 0.01 260)",
+                },
+              }}
+            />
+            <Router />
+          </VoiceAnnouncementProvider>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

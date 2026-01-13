@@ -1,13 +1,16 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { LogOut, ChevronDown } from "lucide-react";
+import { LogOut, ChevronDown, Volume2, VolumeX } from "lucide-react";
+import { useVoiceAnnouncementContext } from "@/contexts/VoiceAnnouncementContext";
 
 export function UserProfileMenu() {
   const { user, loading } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const logoutMutation = trpc.auth.logout.useMutation();
+  const { isEnabled: voiceEnabled, toggle: toggleVoice } =
+    useVoiceAnnouncementContext();
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -109,6 +112,22 @@ export function UserProfileMenu() {
 
           {/* Menu Items */}
           <div className="py-1">
+            <button
+              onClick={toggleVoice}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground/80 hover:bg-muted transition-colors"
+            >
+              {voiceEnabled ? (
+                <Volume2 className="w-4 h-4 text-primary" />
+              ) : (
+                <VolumeX className="w-4 h-4 text-muted-foreground" />
+              )}
+              Voice Announcements
+              <span
+                className={`ml-auto text-xs px-1.5 py-0.5 rounded ${voiceEnabled ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
+              >
+                {voiceEnabled ? "ON" : "OFF"}
+              </span>
+            </button>
             <button
               onClick={handleLogout}
               disabled={logoutMutation.isPending}

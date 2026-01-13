@@ -25,11 +25,12 @@
 - [x] Learning from failure patterns (failureMemory.ts) - Stores to episodic memory, tracks patterns, suggests mitigations
 - [x] Strategy switching (strategySwitching.ts) - 6 strategies: default, decompose, verify_first, use_alternatives, reduce_scope, offline_mode
 
-### Voice + Agent Integration
+### Voice + Agent Integration - COMPLETE
 
-- [ ] Voice announcements for scheduled task results
-- [ ] Voice output for multi-agent team results
-- [ ] Full voice + JARVIS agent integration test
+- [x] Voice announcements for scheduled task results
+- [x] Voice output for multi-agent team results
+- [x] Full voice + JARVIS agent integration (regular JARVIS tasks emit voice announcements)
+- [x] useVoiceAnnouncement hook with queue and localStorage preference
 
 ### Infrastructure (Pending Hardware)
 
@@ -106,6 +107,17 @@
 
 ## Recently Completed (Jan 13, 2026)
 
+- [x] Migrate create_rich_report from manual SVG to Apache ECharts
+  - Now supports: pie, donut, bar, line, area, scatter, gauge charts
+  - Animated, interactive charts with tooltips
+  - ECharts loaded via CDN (no bundling overhead)
+- [x] Add PDF export for HTML reports (jarvis.exportReportPdf)
+  - Uses Playwright to render HTML to PDF
+  - Returns base64 PDF for client download
+- [x] Add PDF export button in UI (ExportPanel)
+  - Printer icon appears on hover for HTML report artifacts
+- [x] Local SDXL image generation on Blackwell GPU (RTX PRO 6000)
+- [x] Fix production image URLs with SERVER_BASE_URL + base64 fallback
 - [x] Add MAX_TASK_DURATION_MS (5 min) hard limit to orchestrator
 - [x] Optimize deepResearch with parallel searches and 90s timeout
 - [x] Remove duplicate thinking display in streaming UI

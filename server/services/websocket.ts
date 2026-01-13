@@ -636,6 +636,12 @@ async function handleJarvisTask(
             durationMs: completeDurationMs,
             timestamp: Date.now(),
           });
+          emitVoiceAnnouncement({
+            text: `Task completed successfully. ${finalResult?.slice(0, 200) || ""}`,
+            source: "jarvis",
+            taskId,
+            priority: "normal",
+          });
         },
         onError: (error: string) => {
           hasError = true;
@@ -769,6 +775,12 @@ async function handleJarvisTask(
       iterationCount,
       durationMs,
       timestamp: Date.now(),
+    });
+    emitVoiceAnnouncement({
+      text: `Task failed. ${finalResult?.slice(0, 150) || "An error occurred."}`,
+      source: "jarvis",
+      taskId,
+      priority: "high",
     });
   }
 }
