@@ -7,6 +7,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { integrateUILibrary, type UIConfig } from "./uiComponents";
+import { setupTestFramework, type TestConfig } from "./testSetup";
 
 export interface ScaffoldConfig {
   projectName: string;
@@ -23,6 +24,7 @@ export interface ScaffoldConfig {
   features?: string[];
   outputPath: string;
   ui?: UIConfig;
+  testing?: TestConfig | boolean;
 }
 
 export interface ScaffoldResult {
@@ -93,6 +95,31 @@ export async function scaffoldProject(
           projectPath,
           uiResult.dependenciesToAdd,
           uiResult.devDependenciesToAdd
+        );
+      }
+    }
+
+    if (config.testing) {
+      const testConfig =
+        typeof config.testing === "boolean" ? {} : config.testing;
+      const testResult = await setupTestFramework(
+        projectPath,
+        config.projectType,
+        config.projectName,
+        testConfig
+      );
+      filesCreated.push(...testResult.filesCreated);
+
+      if (
+        Object.keys(testResult.dependenciesToAdd).length > 0 ||
+        Object.keys(testResult.devDependenciesToAdd).length > 0 ||
+        Object.keys(testResult.scripts).length > 0
+      ) {
+        await updatePackageJson(
+          projectPath,
+          testResult.dependenciesToAdd,
+          testResult.devDependenciesToAdd,
+          testResult.scripts
         );
       }
     }
@@ -900,7 +927,8 @@ end
 async function updatePackageJson(
   projectPath: string,
   dependencies: Record<string, string>,
-  devDependencies: Record<string, string>
+  devDependencies: Record<string, string>,
+  scripts?: Record<string, string>
 ): Promise<void> {
   const packageJsonPath = path.join(projectPath, "package.json");
   if (!fs.existsSync(packageJsonPath)) return;
@@ -918,6 +946,13 @@ async function updatePackageJson(
     packageJson.devDependencies = {
       ...packageJson.devDependencies,
       ...devDependencies,
+    };
+  }
+
+  if (scripts && Object.keys(scripts).length > 0) {
+    packageJson.scripts = {
+      ...packageJson.scripts,
+      ...scripts,
     };
   }
 

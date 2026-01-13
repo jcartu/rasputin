@@ -5291,7 +5291,9 @@ async function scaffoldProjectTool(
   features?: string[],
   uiLibrary?: string,
   uiTheme?: string,
-  uiComponents?: string[]
+  uiComponents?: string[],
+  testing?: boolean,
+  testCoverage?: boolean
 ): Promise<string> {
   const validTypes = [
     "react",
@@ -5328,6 +5330,10 @@ async function scaffoldProjectTool(
     };
   }
 
+  if (testing) {
+    config.testing = testCoverage ? { coverage: true } : true;
+  }
+
   const result = await scaffoldProject(config);
 
   if (!result.success) {
@@ -5343,6 +5349,10 @@ Files created: ${result.filesCreated.length}`;
     output += `\nUI Library: ${config.ui.library} with ${config.ui.theme} theme`;
   }
 
+  if (config.testing) {
+    output += `\nTesting: Configured with sample tests`;
+  }
+
   output += `
 
 Files:
@@ -5351,7 +5361,7 @@ ${result.filesCreated.map(f => `  - ${f}`).join("\n")}
 Next steps:
 1. cd ${result.projectPath}
 2. npm install (or pnpm install)
-3. npm run dev`;
+3. npm run dev${testing ? "\n4. npm test (to run tests)" : ""}`;
 
   return output;
 }
@@ -8308,7 +8318,9 @@ export async function executeTool(
         input.features as string[] | undefined,
         input.uiLibrary as string | undefined,
         input.uiTheme as string | undefined,
-        input.uiComponents as string[] | undefined
+        input.uiComponents as string[] | undefined,
+        input.testing as boolean | undefined,
+        input.testCoverage as boolean | undefined
       );
     case "generate_schema":
       return generateSchemaTool(
@@ -10473,6 +10485,18 @@ export function getAvailableTools(): Array<{
           items: { type: "string" },
           description:
             "Specific UI components to include (for shadcn: 'button', 'card', 'input', 'label', 'badge', etc.)",
+          required: false,
+        },
+        testing: {
+          type: "boolean",
+          description:
+            "Include test setup with sample tests. Sets up vitest (React/Vue/Svelte), jest (Next.js/Express), pytest (FastAPI), or minitest (Rails).",
+          required: false,
+        },
+        testCoverage: {
+          type: "boolean",
+          description:
+            "Include test coverage configuration (requires testing: true).",
           required: false,
         },
       },
