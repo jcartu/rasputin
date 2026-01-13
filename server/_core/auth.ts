@@ -136,13 +136,14 @@ export async function ensureSilvsUser() {
 }
 
 export async function ensureDirkUser() {
+  const passwordHash = hashPassword("dirk2026");
   const existingUser = await db.getUserByUsername("dirk");
+
   if (existingUser) {
-    console.log("[Auth] User 'dirk' already exists");
+    await db.updateUserPassword(existingUser.id, passwordHash);
+    console.log("[Auth] Updated password for user 'dirk'");
     return;
   }
-
-  const passwordHash = hashPassword("fhp394fhq38");
 
   await db.createUserWithPassword({
     openId: "dirk_local",
