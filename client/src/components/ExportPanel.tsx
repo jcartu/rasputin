@@ -49,6 +49,7 @@ export interface ExportContent {
     url?: string;
     downloadUrl?: string;
     path?: string;
+    content?: string;
   }>;
 }
 
@@ -111,6 +112,47 @@ const getFileIcon = (filename: string, type: string) => {
 export function ExportPanel({ content, className = "" }: ExportPanelProps) {
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
   const [success, setSuccess] = useState<ExportFormat | null>(null);
+  const [fetchedDocContent, setFetchedDocContent] = useState<string | null>(
+    null
+  );
+
+  const getDocumentContent = async (): Promise<string> => {
+    if (fetchedDocContent !== null) {
+      return fetchedDocContent || content.content;
+    }
+
+    const docArtifact = content.artifacts?.find(
+      a =>
+        a.filename?.match(/\.(md|txt|markdown)$/i) ||
+        (a.type === "file" && a.filename?.match(/report|forecast|analysis/i))
+    );
+
+    if (docArtifact) {
+      if (docArtifact.content && docArtifact.content.length > 100) {
+        setFetchedDocContent(docArtifact.content);
+        return docArtifact.content;
+      }
+
+      const url = docArtifact.downloadUrl || docArtifact.url;
+      if (url) {
+        try {
+          const response = await fetch(url);
+          if (response.ok) {
+            const text = await response.text();
+            if (text && text.length > 50) {
+              setFetchedDocContent(text);
+              return text;
+            }
+          }
+        } catch (e) {
+          console.error("Failed to fetch document content:", e);
+        }
+      }
+    }
+
+    setFetchedDocContent(content.content);
+    return content.content;
+  };
 
   const sanitizeFilename = (name: string) => {
     return name.replace(/[^a-z0-9]/gi, "-").substring(0, 50);
@@ -204,6 +246,7 @@ export function ExportPanel({ content, className = "" }: ExportPanelProps) {
   const exportMarkdown = async () => {
     setExporting("md");
     try {
+      const docContent = await getDocumentContent();
       let markdown = `# ${content.title}\n\n`;
       if (content.metadata) {
         markdown += `---\n`;
@@ -213,7 +256,7 @@ export function ExportPanel({ content, className = "" }: ExportPanelProps) {
         });
         markdown += `---\n\n`;
       }
-      markdown += content.content;
+      markdown += docContent;
       const blob = new Blob([markdown], {
         type: "text/markdown;charset=utf-8",
       });
@@ -227,10 +270,11 @@ export function ExportPanel({ content, className = "" }: ExportPanelProps) {
   const exportExcel = async () => {
     setExporting("xlsx");
     try {
+      const docContent = await getDocumentContent();
       const wb = XLSX.utils.book_new();
       const contentRows: string[][] = [["Title", content.title], [""]];
 
-      const sections = parseContent(content.content);
+      const sections = parseContent(docContent);
       sections.forEach(section => {
         if (section.type === "heading") contentRows.push([section.content]);
         else if (section.type === "paragraph")
@@ -271,6 +315,7 @@ export function ExportPanel({ content, className = "" }: ExportPanelProps) {
   const exportDocx = async () => {
     setExporting("docx");
     try {
+      const docContent = await getDocumentContent();
       const children: (Paragraph | Table)[] = [];
       children.push(
         new Paragraph({
@@ -280,7 +325,7 @@ export function ExportPanel({ content, className = "" }: ExportPanelProps) {
         })
       );
 
-      const sections = parseContent(content.content);
+      const sections = parseContent(docContent);
       for (const section of sections) {
         if (section.type === "heading") {
           children.push(
@@ -353,7 +398,8 @@ export function ExportPanel({ content, className = "" }: ExportPanelProps) {
   const exportPDF = async () => {
     setExporting("pdf");
     try {
-      const htmlContent = `<!DOCTYPE html><html><body><h1>${content.title}</h1><div>${content.content.replace(/\n/g, "<br>")}</div></body></html>`;
+      const docContent = await getDocumentContent();
+      const htmlContent = `<!DOCTYPE html><html><body><h1>${content.title}</h1><div>${docContent.replace(/\n/g, "<br>")}</div></body></html>`;
 
       const response = await fetch("/api/files/export-pdf", {
         method: "POST",
@@ -383,12 +429,13 @@ export function ExportPanel({ content, className = "" }: ExportPanelProps) {
   const exportHTML = async () => {
     setExporting("html");
     try {
+      const docContent = await getDocumentContent();
       const html = `<!DOCTYPE html>
 <html>
 <head><title>${content.title}</title>
 <style>body{font-family:system-ui;max-width:800px;margin:2rem auto;padding:1rem;background:#111;color:#eee}pre{background:#222;padding:1rem;border-radius:4px;overflow:auto}blockquote{border-left:4px solid #00d9c0;padding-left:1rem;color:#aaa}</style>
 </head>
-<body><h1>${content.title}</h1>${content.content.replace(/\n/g, "<br>")}</body>
+<body><h1>${content.title}</h1>${docContent.replace(/\n/g, "<br>")}</body>
 </html>`;
       const blob = new Blob([html], { type: "text/html;charset=utf-8" });
       saveAs(blob, `${sanitizeFilename(content.title)}.html`);
@@ -401,7 +448,8 @@ export function ExportPanel({ content, className = "" }: ExportPanelProps) {
   const copyToClipboard = async () => {
     setExporting("copy");
     try {
-      await navigator.clipboard.writeText(content.content);
+      const docContent = await getDocumentContent();
+      await navigator.clipboard.writeText(docContent);
       showSuccess("copy");
       toast.success("Copied to clipboard");
     } finally {
