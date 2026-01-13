@@ -54,11 +54,11 @@
 
 ## P1: Feature Parity with Manus (Week 2-3)
 
-### Multi-Model Router
+### Multi-Model Router - COMPLETE
 
-- [ ] Task classifier (code/research/analysis/creative)
-- [ ] Route to specialized models based on task type
-- [ ] Model performance tracking per task type
+- [x] Task classifier (code/research/analysis/creative) - taskClassifier.ts with 7 task types
+- [x] Route to specialized models based on task type - routeTask() called in orchestrator.ts
+- [x] Model performance tracking per task type - recordModelPerformance() tracks success/duration
 
 ### Deep Research Agent
 
@@ -67,11 +67,11 @@
 - [ ] Iterative research deepening
 - [ ] Cross-reference verification
 
-### Async Task Queue
+### Async Task Queue - COMPLETE
 
-- [ ] Redis/PostgreSQL job queue
-- [ ] Worker processes that survive sessions
-- [ ] Task status polling & webhooks
+- [x] Redis/PostgreSQL job queue - taskQueue.ts uses MySQL/TiDB with Drizzle ORM (asyncTaskQueue table)
+- [x] Worker processes that survive sessions - TaskQueueService with startWorker/stopWorker, stale task recovery
+- [x] Task status polling & webhooks - getTaskStatus(), webhook delivery with retry logic
 
 ### Document Engine
 
@@ -84,11 +84,11 @@
 
 ## P2: Beat Manus (Unique Advantages)
 
-### Real Self-Evolution
+### Real Self-Evolution - MOSTLY COMPLETE
 
-- [ ] Generate new tools from natural language
-- [ ] Create new agent types dynamically
-- [ ] Evolve prompts based on success metrics
+- [x] Generate new tools from natural language - self_generate_tool in selfEvolution/tools.ts
+- [x] Create new agent types dynamically - agentTypeGenerator.ts with LLM-based analysis
+- [ ] Evolve prompts based on success metrics (prompt optimization system not yet implemented)
 
 ### Predictive Task Initiation
 
