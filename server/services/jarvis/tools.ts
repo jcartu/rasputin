@@ -71,6 +71,7 @@ import {
   loadDynamicToolsFromDatabase,
 } from "../selfEvolution/toolGenerator";
 import { getDesktopDaemon, parseAction, type Action } from "../desktop";
+import { runVisionLoop, type VisionLoopConfig } from "../vision";
 
 const execAsync = promisify(exec);
 const USE_DOCKER_SANDBOX = process.env.USE_SANDBOX !== "false";
@@ -6192,6 +6193,47 @@ async function executeDesktopAction(
   }
 }
 
+async function executeVisionAutomate(
+  goal: string,
+  taskId: number,
+  userId: number,
+  sessionId: string,
+  maxIterations?: number
+): Promise<string> {
+  try {
+    const config: VisionLoopConfig = {
+      taskId,
+      userId,
+      sessionId,
+      goal,
+      maxIterations: maxIterations || 30,
+    };
+
+    const result = await runVisionLoop(config);
+
+    if (result.success) {
+      return `Vision automation completed successfully!
+Goal: ${goal}
+Iterations: ${result.iterations}
+Final state: ${result.finalState || "Goal achieved"}
+Actions taken: ${result.actionHistory.length}
+
+Action history:
+${result.actionHistory.map((a, i) => `${i + 1}. ${a}`).join("\n")}`;
+    } else {
+      return `Vision automation failed after ${result.iterations} iterations.
+Goal: ${goal}
+Error: ${result.error}
+Actions attempted: ${result.actionHistory.length}
+
+Action history:
+${result.actionHistory.map((a, i) => `${i + 1}. ${a}`).join("\n")}`;
+    }
+  } catch (error) {
+    return `Vision automation error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 export async function executeTool(
   name: string,
   input: Record<string, unknown>
@@ -6822,6 +6864,14 @@ export async function executeTool(
         input.userId as number,
         input.sessionId as string
       );
+    case "vision_automate":
+      return executeVisionAutomate(
+        input.goal as string,
+        input.taskId as number,
+        input.userId as number,
+        input.sessionId as string,
+        input.maxIterations as number | undefined
+      );
     default:
       if (name.startsWith("self_")) {
         return executeSelfEvolutionTool(name, input, input.userId as number);
@@ -7439,6 +7489,39 @@ export function getAvailableTools(): Array<{
           type: "string",
           description: "Session ID for logging",
           required: true,
+        },
+      },
+    },
+    {
+      name: "vision_automate",
+      description:
+        "Automate desktop tasks using vision-action loop. Takes a screenshot, uses Claude to analyze it, determines next action, executes it, and repeats until goal is achieved. Best for complex GUI automation where element positions are unknown.",
+      parameters: {
+        goal: {
+          type: "string",
+          description:
+            "Natural language description of what to achieve (e.g., 'Open Firefox and navigate to google.com')",
+          required: true,
+        },
+        taskId: {
+          type: "number",
+          description: "Task ID for logging",
+          required: true,
+        },
+        userId: {
+          type: "number",
+          description: "User ID for logging",
+          required: true,
+        },
+        sessionId: {
+          type: "string",
+          description: "Session ID for logging",
+          required: true,
+        },
+        maxIterations: {
+          type: "number",
+          description: "Maximum iterations before giving up (default: 30)",
+          required: false,
         },
       },
     },
