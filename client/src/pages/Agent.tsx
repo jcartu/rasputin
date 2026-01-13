@@ -74,6 +74,14 @@ import {
   ExternalLink,
   Maximize2,
   X,
+  Paperclip,
+  Video,
+  Music,
+  FileSpreadsheet,
+  FileCode,
+  Archive,
+  Presentation,
+  File as FileIcon,
 } from "lucide-react";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { WorkspaceIDE } from "@/components/WorkspaceIDE";
@@ -85,6 +93,8 @@ import { VoiceConversation } from "@/components/VoiceConversation";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
+import { FileUpload, type ProcessedFile } from "@/components/FileUpload";
+import { motion, AnimatePresence } from "framer-motion";
 
 // Types for JARVIS
 interface ToolCall {
@@ -1391,6 +1401,117 @@ export default function AgentPage() {
   const [useStreamingMode, setUseStreamingMode] = useState(true);
   const [researchMode, setResearchMode] = useState(false);
 
+  const [showFileUpload, setShowFileUpload] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState<
+    (ProcessedFile & { uiId?: string })[]
+  >([]);
+  const [fileContext, setFileContext] = useState<string>("");
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB", "TB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+  };
+
+  const getFileStyle = (category: ProcessedFile["category"]) => {
+    switch (category) {
+      case "image":
+        return {
+          color: "text-pink-400",
+          bg: "from-pink-500/10 to-rose-500/10",
+          border: "border-pink-500/20",
+          icon: ImageIcon,
+        };
+      case "video":
+        return {
+          color: "text-violet-400",
+          bg: "from-violet-500/10 to-purple-500/10",
+          border: "border-violet-500/20",
+          icon: Video,
+        };
+      case "audio":
+        return {
+          color: "text-cyan-400",
+          bg: "from-cyan-500/10 to-blue-500/10",
+          border: "border-cyan-500/20",
+          icon: Music,
+        };
+      case "pdf":
+        return {
+          color: "text-red-400",
+          bg: "from-red-500/10 to-orange-500/10",
+          border: "border-red-500/20",
+          icon: FileText,
+        };
+      case "spreadsheet":
+        return {
+          color: "text-green-400",
+          bg: "from-green-500/10 to-emerald-500/10",
+          border: "border-green-500/20",
+          icon: FileSpreadsheet,
+        };
+      case "presentation":
+        return {
+          color: "text-orange-400",
+          bg: "from-orange-500/10 to-red-500/10",
+          border: "border-orange-500/20",
+          icon: Presentation,
+        };
+      case "code":
+        return {
+          color: "text-yellow-400",
+          bg: "from-yellow-500/10 to-amber-500/10",
+          border: "border-yellow-500/20",
+          icon: FileCode,
+        };
+      case "archive":
+        return {
+          color: "text-slate-400",
+          bg: "from-slate-500/10 to-gray-500/10",
+          border: "border-slate-500/20",
+          icon: Archive,
+        };
+      default:
+        return {
+          color: "text-blue-400",
+          bg: "from-blue-500/10 to-indigo-500/10",
+          border: "border-blue-500/20",
+          icon: FileIcon,
+        };
+    }
+  };
+
+  const handleFilesUploaded = useCallback(
+    (files: ProcessedFile[], context?: string) => {
+      setAttachedFiles(prev => [
+        ...prev,
+        ...files.map(f => ({
+          ...f,
+          uiId: Math.random().toString(36).slice(2),
+        })),
+      ]);
+      if (context) {
+        setFileContext(prev => (prev ? prev + "\n\n" + context : context));
+      }
+      setShowFileUpload(false);
+      toast.success(`${files.length} file(s) attached`);
+    },
+    []
+  );
+
+  const removeAttachedFile = useCallback((index: number) => {
+    setAttachedFiles(prev => {
+      const newFiles = [...prev];
+      newFiles.splice(index, 1);
+      if (newFiles.length === 0) {
+        setFileContext("");
+      }
+      return newFiles;
+    });
+  }, []);
+
   // Fetch persisted tasks from database
   const { data: dbTasks, refetch: refetchTasks } =
     trpc.jarvis.listTasks.useQuery({ limit: 50 }, { enabled: !!user });
@@ -1535,19 +1656,30 @@ export default function AgentPage() {
 
     let taskInput = input.trim();
 
+    if (fileContext) {
+      taskInput = `[ATTACHED FILES]\n${fileContext}\n\n[USER TASK]\n${taskInput}`;
+    }
+
     if (researchMode) {
       taskInput = `[RESEARCH MODE - Use query_synthesis for comprehensive multi-model analysis with web search, or query_consensus if comparing perspectives. Provide thorough, well-researched response.]\n\n${taskInput}`;
     }
 
     setInput("");
+    setAttachedFiles([]);
+    setFileContext("");
     setCurrentTask(null);
     jarvisStream.startTask(taskInput, user.id);
-  }, [input, jarvisStream, user?.id, researchMode]);
+  }, [input, jarvisStream, user?.id, researchMode, fileContext]);
 
   const handleSubmitLegacy = useCallback(async () => {
     if (!input.trim() || isProcessing) return;
 
     let taskInput = input.trim();
+
+    if (fileContext) {
+      taskInput = `[ATTACHED FILES]\n${fileContext}\n\n[USER TASK]\n${taskInput}`;
+    }
+
     if (researchMode) {
       taskInput = `[RESEARCH MODE - Use query_synthesis for comprehensive multi-model analysis with web search, or query_consensus if comparing perspectives. Provide thorough, well-researched response.]\n\n${taskInput}`;
     }
@@ -1581,6 +1713,8 @@ export default function AgentPage() {
 
     setCurrentTask(task);
     setInput("");
+    setAttachedFiles([]);
+    setFileContext("");
     setIsProcessing(true);
 
     const assistantMessage: AgentMessage = {
@@ -2414,7 +2548,102 @@ export default function AgentPage() {
         {/* Input Area */}
         <div className="p-4 border-t border-border">
           <div className="max-w-4xl mx-auto">
+            {showFileUpload && (
+              <div className="mb-4">
+                <FileUpload
+                  onUpload={(files, context) =>
+                    handleFilesUploaded(files, context || "")
+                  }
+                  disabled={isProcessing}
+                  maxFiles={5}
+                />
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-3 mb-3 empty:mb-0 transition-all">
+              <AnimatePresence mode="popLayout">
+                {attachedFiles.map((file, idx) => {
+                  const style = getFileStyle(file.category);
+                  const Icon = style.icon;
+                  const isDataUrl =
+                    typeof file.content === "string" &&
+                    file.content.startsWith("data:image");
+                  const thumbnailSrc = isDataUrl ? file.content : null;
+
+                  return (
+                    <motion.div
+                      key={file.uiId || `${file.originalName}-${idx}`}
+                      layout
+                      initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.8, y: -10 }}
+                      className={cn(
+                        "relative group flex items-center gap-3 pr-8 pl-2 py-2",
+                        "rounded-xl border backdrop-blur-md transition-all",
+                        "hover:scale-[1.02] hover:shadow-lg",
+                        `bg-gradient-to-br ${style.bg} ${style.border}`
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "w-10 h-10 rounded-lg flex items-center justify-center shrink-0 overflow-hidden",
+                          thumbnailSrc ? "bg-black/40" : "bg-black/20",
+                          style.color
+                        )}
+                      >
+                        {thumbnailSrc && file.category === "image" ? (
+                          <img
+                            src={thumbnailSrc}
+                            alt="preview"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Icon className="w-5 h-5" />
+                        )}
+                      </div>
+
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-medium truncate max-w-[140px] text-foreground/90">
+                          {file.originalName}
+                        </span>
+                        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground uppercase tracking-wider">
+                          <span>{formatFileSize(file.size)}</span>
+                          <span className="w-0.5 h-0.5 rounded-full bg-muted-foreground/50" />
+                          <span>{file.category}</span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => removeAttachedFile(idx)}
+                        className={cn(
+                          "absolute -right-2 -top-2",
+                          "w-6 h-6 rounded-full flex items-center justify-center",
+                          "bg-background border border-border shadow-sm",
+                          "text-muted-foreground hover:text-red-500 hover:border-red-500/50",
+                          "transition-all opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100"
+                        )}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            </div>
+
             <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowFileUpload(!showFileUpload)}
+                disabled={isProcessing}
+                className={cn(
+                  "shrink-0",
+                  showFileUpload ? "text-primary" : "text-muted-foreground"
+                )}
+              >
+                <Paperclip className="h-5 w-5" />
+              </Button>
               <Input
                 ref={inputRef}
                 value={input}
