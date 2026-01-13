@@ -4,7 +4,15 @@ import cookieParser from "cookie-parser";
 import { createServer } from "http";
 import net from "net";
 import path from "path";
+import multer from "multer";
+import * as fs from "fs/promises";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
+import {
+  processFile,
+  processMultipleFiles,
+  generateFileContext,
+  type ProcessedFile,
+} from "../services/fileProcessor";
 import {
   registerAuthRoutes,
   ensureDefaultUser,
@@ -91,6 +99,137 @@ async function startServer() {
       dotfiles: "allow",
       index: false,
     })
+  );
+
+  // File upload configuration
+  const uploadDir = path.join(JARVIS_WORKSPACE_PATH, "uploads");
+  await fs.mkdir(uploadDir, { recursive: true });
+
+  const storage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, uploadDir),
+    filename: (_req, file, cb) => {
+      const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const ext = path.extname(file.originalname);
+      const baseName = path.basename(file.originalname, ext).slice(0, 50);
+      cb(null, `${baseName}-${uniqueSuffix}${ext}`);
+    },
+  });
+
+  const upload = multer({
+    storage,
+    limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
+  });
+
+  // Universal file upload endpoint
+  app.post(
+    "/api/files/upload",
+    upload.array("files", 10),
+    async (req, res): Promise<void> => {
+      try {
+        const files = req.files as Express.Multer.File[];
+        if (!files || files.length === 0) {
+          res.status(400).json({ error: "No files uploaded" });
+          return;
+        }
+
+        const analyzeWithVision = req.body.analyzeWithVision !== "false";
+        const transcribeAudio = req.body.transcribeAudio !== "false";
+        const extractVideoFrames = req.body.extractVideoFrames !== "false";
+        const customPrompt = req.body.prompt as string | undefined;
+
+        const fileInfos = files.map(f => ({
+          path: f.path,
+          mimeType: f.mimetype,
+          name: f.originalname,
+        }));
+
+        const processed = await processMultipleFiles(fileInfos, {
+          analyzeWithVision,
+          transcribeAudio,
+          extractVideoFrames,
+          customPrompt,
+        });
+
+        const context = generateFileContext(processed);
+
+        res.json({
+          success: true,
+          files: processed.map(p => ({
+            originalName: p.originalName,
+            mimeType: p.mimeType,
+            category: p.category,
+            size: p.size,
+            storagePath: p.storagePath,
+            downloadUrl: `/api/files/workspace/uploads/${path.basename(p.storagePath)}`,
+            hasText: !!p.extractedText,
+            hasAnalysis: !!p.analysis,
+            error: p.error,
+          })),
+          context,
+          processed,
+        });
+      } catch (error) {
+        console.error("[Upload] Error processing files:", error);
+        res.status(500).json({
+          error: "Failed to process files",
+          details: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }
+  );
+
+  // Single file processing endpoint (for already uploaded files)
+  app.post(
+    "/api/files/process",
+    express.json(),
+    async (req, res): Promise<void> => {
+      try {
+        const { filePath, mimeType, originalName, options } = req.body as {
+          filePath: string;
+          mimeType: string;
+          originalName: string;
+          options?: {
+            analyzeWithVision?: boolean;
+            transcribeAudio?: boolean;
+            extractVideoFrames?: boolean;
+            customPrompt?: string;
+          };
+        };
+
+        if (!filePath || !mimeType || !originalName) {
+          res.status(400).json({ error: "Missing required fields" });
+          return;
+        }
+
+        const fullPath = filePath.startsWith("/")
+          ? filePath
+          : path.join(JARVIS_WORKSPACE_PATH, filePath);
+
+        if (!fullPath.startsWith(JARVIS_WORKSPACE_PATH)) {
+          res.status(403).json({ error: "Access denied" });
+          return;
+        }
+
+        const processed = await processFile(
+          fullPath,
+          mimeType,
+          originalName,
+          options || {}
+        );
+
+        res.json({
+          success: true,
+          ...processed,
+          context: generateFileContext([processed]),
+        });
+      } catch (error) {
+        console.error("[Process] Error:", error);
+        res.status(500).json({
+          error: "Failed to process file",
+          details: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }
   );
 
   // Serve generated images (from DALL-E, Flux, etc.)

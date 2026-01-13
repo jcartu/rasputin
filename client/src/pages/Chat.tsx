@@ -381,9 +381,11 @@ export default function Chat() {
     [navigate, clearLogs]
   );
 
-  // Submit query - with WebSocket streaming or tRPC fallback
   const handleSubmitQuery = useCallback(
-    async (query: string) => {
+    async (query: string, fileContext?: string) => {
+      const fullQuery = fileContext
+        ? `[ATTACHED FILES]\n${fileContext}\n\n[USER QUESTION]\n${query}`
+        : query;
       if (!currentChatId || processingRef.current || !user) return;
 
       processingRef.current = true;
@@ -417,21 +419,19 @@ export default function Chat() {
         setPipelineStages([]);
       }
 
-      // Use WebSocket streaming if connected, otherwise fall back to tRPC
       if (useStreaming && isConnected) {
         startQuery({
           chatId: currentChatId,
-          query,
+          query: fullQuery,
           mode,
           speedTier,
           userId: user.id,
         });
       } else {
-        // Fallback to tRPC mutation
         try {
           const result = await submitQueryMutation.mutateAsync({
             chatId: currentChatId,
-            query,
+            query: fullQuery,
             mode,
             speedTier,
           });
