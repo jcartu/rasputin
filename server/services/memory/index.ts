@@ -6,6 +6,11 @@
 
 export * from "./types";
 export * from "./memoryService";
+export * from "./warmMemory";
 
-// Re-export main service for convenience
 export { getMemoryService } from "./memoryService";
+export {
+  consolidateMemories,
+  getWarmContext,
+  runMemoryConsolidationJob,
+} from "./warmMemory";
