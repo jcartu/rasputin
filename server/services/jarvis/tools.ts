@@ -15,6 +15,7 @@ import { eq, and } from "drizzle-orm";
 import { getCachedResult, setCachedResult } from "../knowledgeCache";
 import * as crypto from "crypto";
 import { scaffoldProject, type ScaffoldConfig } from "../webApp/scaffolder";
+import { generateSchemaFromDescription } from "../webApp/schemaGenerator";
 import {
   getSelfEvolutionTools,
   executeSelfEvolutionTool,
@@ -5323,6 +5324,54 @@ Next steps:
 3. npm run dev`;
 }
 
+async function generateSchemaTool(
+  description: string,
+  databaseType?: string,
+  outputPath?: string
+): Promise<string> {
+  const validDbTypes = ["mysql", "postgresql", "sqlite"];
+  const dbType = (databaseType || "mysql") as "mysql" | "postgresql" | "sqlite";
+  if (!validDbTypes.includes(dbType)) {
+    return `Error: Invalid database type. Must be one of: ${validDbTypes.join(", ")}`;
+  }
+
+  const result = await generateSchemaFromDescription(description, dbType);
+
+  if (!result.success) {
+    return `Error generating schema: ${result.error}`;
+  }
+
+  const schemaContent = result.schema;
+  const entitiesSummary = result.entities
+    .map(e => `  - ${e.name} (${e.fields.length} fields)`)
+    .join("\n");
+
+  if (outputPath) {
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
+    await fs.writeFile(outputPath, schemaContent, "utf-8");
+    return `Database schema generated successfully!
+
+Output file: ${outputPath}
+Database type: ${dbType}
+Entities created:
+${entitiesSummary}
+
+The schema file has been written and is ready to use with Drizzle ORM.
+Run 'pnpm db:push' or equivalent to apply the schema to your database.`;
+  }
+
+  return `Database schema generated successfully!
+
+Database type: ${dbType}
+Entities created:
+${entitiesSummary}
+
+Generated Schema:
+\`\`\`typescript
+${schemaContent}
+\`\`\``;
+}
+
 async function startDevServerTool(
   projectPath: string,
   command?: string
@@ -8098,6 +8147,12 @@ export async function executeTool(
         input.authentication as string | undefined,
         input.features as string[] | undefined
       );
+    case "generate_schema":
+      return generateSchemaTool(
+        input.description as string,
+        input.databaseType as string | undefined,
+        input.outputPath as string | undefined
+      );
     case "stop_dev_server":
       return stopDevServerTool(input.projectPath as string);
     case "get_dev_server_output":
@@ -8879,6 +8934,32 @@ export function getAvailableTools(): Array<{
         maxIterations: {
           type: "number",
           description: "Maximum iterations before giving up (default: 30)",
+          required: false,
+        },
+      },
+    },
+    // === DATABASE SCHEMA TOOLS ===
+    {
+      name: "generate_schema",
+      description:
+        "Generate a Drizzle ORM database schema from a natural language description. Analyzes the description using AI to extract entities, fields, and relationships, then generates TypeScript code compatible with Drizzle ORM.",
+      parameters: {
+        description: {
+          type: "string",
+          description:
+            "Natural language description of the data model (e.g., 'A blog platform with users, posts, comments, and tags. Users can author multiple posts. Posts can have many comments. Posts can have multiple tags.')",
+          required: true,
+        },
+        databaseType: {
+          type: "string",
+          description:
+            "Target database type: 'mysql', 'postgresql', or 'sqlite' (default: mysql)",
+          required: false,
+        },
+        outputPath: {
+          type: "string",
+          description:
+            "Optional file path to write the schema. If not provided, returns the schema as text.",
           required: false,
         },
       },

@@ -40,7 +40,7 @@
 
 ### Web App Development - Future Enhancements
 
-- [ ] Database schema generator
+- [x] Database schema generator (generate_schema tool - creates Drizzle ORM schemas from natural language)
 - [ ] UI component library integration
 - [ ] Docker containerization for deployments
 - [ ] Test runner integration
