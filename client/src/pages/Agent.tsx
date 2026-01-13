@@ -70,6 +70,10 @@ import {
   Webhook,
   StopCircle,
   Shield,
+  Download,
+  ExternalLink,
+  Maximize2,
+  X,
 } from "lucide-react";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { WorkspaceIDE } from "@/components/WorkspaceIDE";
@@ -530,6 +534,232 @@ function AgentStepsPanel({
   );
 }
 
+interface GeneratedImage {
+  url: string;
+  prompt?: string;
+  timestamp: number;
+}
+
+function extractGeneratedImages(steps?: AgentStep[]): GeneratedImage[] {
+  if (!steps) return [];
+
+  const images: GeneratedImage[] = [];
+
+  for (const step of steps) {
+    if (
+      step.tool === "generate_image" &&
+      step.status === "success" &&
+      step.output
+    ) {
+      const urlMatch = step.output.match(
+        /(https?:\/\/[^\s\n]+\.(jpg|jpeg|png|gif|webp)[^\s\n]*)/i
+      );
+      if (urlMatch) {
+        let prompt: string | undefined;
+        try {
+          const input = step.input ? JSON.parse(step.input) : null;
+          prompt = input?.prompt;
+        } catch {
+          prompt = undefined;
+        }
+        images.push({
+          url: urlMatch[1],
+          prompt,
+          timestamp: step.timestamp,
+        });
+      }
+    }
+  }
+
+  return images;
+}
+
+function GeneratedImagesDisplay({ images }: { images: GeneratedImage[] }) {
+  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
+  const [errorImages, setErrorImages] = useState<Set<string>>(new Set());
+  const [imageDimensions, setImageDimensions] = useState<
+    Record<string, { width: number; height: number }>
+  >({});
+
+  if (images.length === 0) return null;
+
+  const handleImageLoad = (url: string, img: HTMLImageElement) => {
+    setLoadedImages(prev => new Set(prev).add(url));
+    setImageDimensions(prev => ({
+      ...prev,
+      [url]: { width: img.naturalWidth, height: img.naturalHeight },
+    }));
+  };
+
+  return (
+    <>
+      <div className="space-y-4">
+        {images.map((image, idx) => (
+          <div
+            key={idx}
+            className="rounded-xl border border-border bg-gradient-to-b from-purple-500/5 to-cyan-500/5 overflow-hidden"
+          >
+            <div className="relative group">
+              {!loadedImages.has(image.url) && !errorImages.has(image.url) && (
+                <div className="absolute inset-0 flex items-center justify-center bg-muted/50 min-h-[200px]">
+                  <div className="animate-pulse flex flex-col items-center gap-2">
+                    <ImageIcon className="h-10 w-10 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      Loading image...
+                    </span>
+                  </div>
+                </div>
+              )}
+              {errorImages.has(image.url) ? (
+                <div className="flex flex-col items-center gap-3 p-8 bg-muted/30">
+                  <ImageIcon className="h-10 w-10 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">
+                    Failed to load image
+                  </span>
+                  <Button variant="outline" size="sm" asChild>
+                    <a
+                      href={image.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="h-3 w-3 mr-2" />
+                      Open URL
+                    </a>
+                  </Button>
+                </div>
+              ) : (
+                <img
+                  src={image.url}
+                  alt={image.prompt || "Generated image"}
+                  className={cn(
+                    "w-full max-h-[500px] object-contain cursor-pointer transition-all duration-200",
+                    loadedImages.has(image.url) ? "opacity-100" : "opacity-0",
+                    "hover:scale-[1.01]"
+                  )}
+                  onClick={() => setFullscreenImage(image.url)}
+                  onError={() =>
+                    setErrorImages(prev => new Set(prev).add(image.url))
+                  }
+                  onLoad={e => handleImageLoad(image.url, e.currentTarget)}
+                />
+              )}
+              {loadedImages.has(image.url) && (
+                <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-9 px-3 bg-black/70 hover:bg-black/90 text-white border-0 backdrop-blur-sm"
+                    onClick={() => setFullscreenImage(image.url)}
+                  >
+                    <Maximize2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-border/50 bg-background/50">
+              {image.prompt && (
+                <p className="text-sm text-foreground/90 mb-3 leading-relaxed">
+                  {image.prompt}
+                </p>
+              )}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <ImageIcon className="h-3.5 w-3.5 text-purple-400" />
+                    <span>AI Generated</span>
+                  </div>
+                  {imageDimensions[image.url] && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-cyan-400">
+                        {imageDimensions[image.url].width}
+                      </span>
+                      <span>×</span>
+                      <span className="text-cyan-400">
+                        {imageDimensions[image.url].height}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-3 text-xs"
+                    asChild
+                  >
+                    <a
+                      href={image.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="h-3 w-3 mr-1.5" />
+                      Open
+                    </a>
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="h-8 px-4 text-xs bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600"
+                    asChild
+                  >
+                    <a
+                      href={image.url}
+                      download={`generated-image-${idx + 1}.png`}
+                    >
+                      <Download className="h-3 w-3 mr-1.5" />
+                      Download
+                    </a>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Dialog
+        open={!!fullscreenImage}
+        onOpenChange={() => setFullscreenImage(null)}
+      >
+        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95 border-border">
+          <DialogTitle className="sr-only">Image Preview</DialogTitle>
+          <div className="relative flex flex-col h-full">
+            <div className="absolute top-3 right-3 z-10 flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="bg-black/60 hover:bg-black/80"
+                asChild
+              >
+                <a href={fullscreenImage || ""} download>
+                  <Download className="h-4 w-4" />
+                </a>
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="bg-black/60 hover:bg-black/80"
+                onClick={() => setFullscreenImage(null)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            {fullscreenImage && (
+              <img
+                src={fullscreenImage}
+                alt="Fullscreen preview"
+                className="w-full h-full object-contain p-4"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function AgentMessageView({
   message,
   isLive,
@@ -604,6 +834,9 @@ function AgentMessageView({
             {message.steps && message.steps.length > 0 && (
               <AgentStepsPanel steps={message.steps} isLive={isLive} />
             )}
+            <GeneratedImagesDisplay
+              images={extractGeneratedImages(message.steps)}
+            />
             {message.content && (
               <div className="relative p-4 rounded-lg bg-muted/30 text-foreground prose prose-sm prose-invert max-w-none">
                 <div className="absolute top-2 right-2 z-10">

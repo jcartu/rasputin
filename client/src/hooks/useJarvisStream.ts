@@ -287,6 +287,21 @@ export function useJarvisStream() {
             assistantSummary: event.summary,
           };
         }
+
+        const steps = prev.steps.map(step => {
+          if (step.type === "tool" && step.tool?.status === "running") {
+            return {
+              ...step,
+              tool: {
+                ...step.tool,
+                status: "completed" as const,
+                endTime: event.timestamp || Date.now(),
+              },
+            };
+          }
+          return step;
+        });
+
         return {
           ...prev,
           isStreaming: false,
@@ -295,6 +310,7 @@ export function useJarvisStream() {
           durationMs: event.durationMs,
           currentIteration: event.iterationCount,
           exchanges,
+          steps,
         };
       });
       activeTaskIdRef.current = null;
@@ -307,11 +323,27 @@ export function useJarvisStream() {
 
       setState(prev => {
         if (!prev.isStreaming) return prev;
+
+        const steps = prev.steps.map(step => {
+          if (step.type === "tool" && step.tool?.status === "running") {
+            return {
+              ...step,
+              tool: {
+                ...step.tool,
+                status: "failed" as const,
+                endTime: Date.now(),
+              },
+            };
+          }
+          return step;
+        });
+
         return {
           ...prev,
           isStreaming: false,
           error: event.error,
           success: false,
+          steps,
         };
       });
       activeTaskIdRef.current = null;

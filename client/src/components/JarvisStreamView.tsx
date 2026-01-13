@@ -773,100 +773,124 @@ function CompletionCard({
               )}
 
               {artifacts && artifacts.length > 0 && (
-                <div className="mt-6 pt-4 border-t border-border/50">
-                  <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-                    <Download className="h-4 w-4" />
-                    Downloads & Files
-                  </h4>
-                  <div className="grid gap-2">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="mt-6 pt-4 border-t border-border/50"
+                >
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-cyan-500/20">
+                      <Download className="h-5 w-5 text-purple-400" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-semibold">Generated Files</h4>
+                      <p className="text-xs text-muted-foreground">
+                        {artifacts.length} file{artifacts.length > 1 ? "s" : ""}{" "}
+                        ready for download
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid gap-3">
                     {artifacts.map((artifact, idx) => (
-                      <div
+                      <motion.div
                         key={idx}
-                        className="flex items-center gap-3 p-3 rounded-lg bg-gradient-to-r from-muted/40 to-muted/20 border border-border/50 hover:border-primary/30 transition-colors"
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.1 * idx }}
+                        className="group relative flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-muted/50 via-muted/30 to-transparent border border-border/50 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300"
                       >
-                        {artifact.type === "image" && (
-                          <div className="shrink-0 w-12 h-12 rounded-md overflow-hidden bg-muted">
-                            <img
-                              src={artifact.url}
-                              alt="Preview"
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        )}
-                        {artifact.type === "video" && (
-                          <div className="shrink-0 w-12 h-12 rounded-md bg-purple-500/20 flex items-center justify-center">
-                            <FileText className="h-6 w-6 text-purple-400" />
-                          </div>
-                        )}
-                        {artifact.type === "pdf" && (
-                          <div className="shrink-0 w-12 h-12 rounded-md bg-red-500/20 flex items-center justify-center">
-                            <File className="h-6 w-6 text-red-400" />
-                          </div>
-                        )}
-                        {artifact.type === "file" && (
-                          <div className="shrink-0 w-12 h-12 rounded-md bg-cyan-500/20 flex items-center justify-center">
-                            <FileText className="h-6 w-6 text-cyan-400" />
-                          </div>
-                        )}
-                        {artifact.type === "html" && (
-                          <div className="shrink-0 w-12 h-12 rounded-md bg-orange-500/20 flex items-center justify-center">
-                            <Code className="h-6 w-6 text-orange-400" />
-                          </div>
-                        )}
+                        <button
+                          onClick={() => {
+                            const a = document.createElement("a");
+                            a.href = artifact.downloadUrl || artifact.url || "";
+                            a.download = artifact.filename || "download";
+                            a.click();
+                            toast.success("Download started");
+                          }}
+                          className="shrink-0 cursor-pointer hover:scale-105 active:scale-95 transition-transform"
+                          title="Click to download"
+                        >
+                          {artifact.type === "image" && (
+                            <div className="w-14 h-14 rounded-xl overflow-hidden bg-gradient-to-br from-pink-500/20 to-purple-500/20 ring-2 ring-pink-500/20 hover:ring-pink-500/40">
+                              <img
+                                src={artifact.url}
+                                alt="Preview"
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          )}
+                          {artifact.type === "video" && (
+                            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500/30 to-pink-500/30 flex items-center justify-center ring-2 ring-purple-500/20 hover:ring-purple-500/40">
+                              <FileText className="h-7 w-7 text-purple-400" />
+                            </div>
+                          )}
+                          {artifact.type === "pdf" && (
+                            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-red-500/30 to-orange-500/30 flex items-center justify-center ring-2 ring-red-500/20 hover:ring-red-500/40">
+                              <File className="h-7 w-7 text-red-400" />
+                            </div>
+                          )}
+                          {artifact.type === "file" && (
+                            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan-500/30 to-blue-500/30 flex items-center justify-center ring-2 ring-cyan-500/20 hover:ring-cyan-500/40">
+                              <FileText className="h-7 w-7 text-cyan-400" />
+                            </div>
+                          )}
+                          {artifact.type === "html" && (
+                            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-orange-500/30 to-amber-500/30 flex items-center justify-center ring-2 ring-orange-500/20 hover:ring-orange-500/40">
+                              <Code className="h-7 w-7 text-orange-400" />
+                            </div>
+                          )}
+                        </button>
 
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">
+                          <p className="text-sm font-semibold truncate group-hover:text-purple-300 transition-colors">
                             {artifact.filename ||
                               artifact.path?.split("/").pop() ||
                               `${artifact.type} file`}
                           </p>
-                          <p className="text-xs text-muted-foreground capitalize">
-                            {artifact.type}
+                          <p className="text-xs text-muted-foreground capitalize mt-0.5">
+                            {artifact.type === "html"
+                              ? "HTML Document"
+                              : artifact.type === "pdf"
+                                ? "PDF Document"
+                                : artifact.type === "image"
+                                  ? "Image"
+                                  : artifact.type === "video"
+                                    ? "Video"
+                                    : "File"}
                           </p>
                         </div>
 
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0">
                           {artifact.url && (
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
-                              className="h-8 px-2 text-xs"
+                              className="h-9 px-3 text-xs border-border/50 hover:border-purple-500/50 hover:bg-purple-500/10"
                               onClick={() =>
                                 window.open(artifact.url!, "_blank")
                               }
                             >
-                              <ExternalLink className="h-3.5 w-3.5" />
+                              <ExternalLink className="h-4 w-4" />
                             </Button>
                           )}
                           {artifact.downloadUrl && (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 px-2 text-xs"
-                                onClick={() => {
-                                  const url = `${window.location.origin}${artifact.downloadUrl}`;
-                                  navigator.clipboard.writeText(url);
-                                  toast.success("Link copied");
-                                }}
-                              >
-                                <Link className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 px-2 text-xs"
-                                onClick={() =>
-                                  window.open(artifact.downloadUrl!, "_blank")
-                                }
-                              >
-                                <ExternalLink className="h-3.5 w-3.5" />
-                              </Button>
-                            </>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-9 px-3 text-xs border-border/50 hover:border-cyan-500/50 hover:bg-cyan-500/10"
+                              onClick={() => {
+                                const url = `${window.location.origin}${artifact.downloadUrl}`;
+                                navigator.clipboard.writeText(url);
+                                toast.success("Link copied to clipboard");
+                              }}
+                            >
+                              <Link className="h-4 w-4" />
+                            </Button>
                           )}
                           <Button
                             size="sm"
-                            className="h-8 px-3 text-xs bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600"
+                            className="h-9 px-4 text-xs font-medium bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 transition-all duration-300"
                             onClick={() => {
                               const a = document.createElement("a");
                               a.href =
@@ -876,14 +900,14 @@ function CompletionCard({
                               toast.success("Download started");
                             }}
                           >
-                            <Download className="h-3.5 w-3.5 mr-1.5" />
+                            <Download className="h-4 w-4 mr-2" />
                             Download
                           </Button>
                         </div>
-                      </div>
+                      </motion.div>
                     ))}
                   </div>
-                </div>
+                </motion.div>
               )}
             </div>
           </div>
@@ -997,7 +1021,7 @@ export function JarvisStreamView({
     return match ? match[1] : null;
   };
 
-  const artifacts = state.steps
+  const writeTools = state.steps
     .filter(s => s.type === "tool" && s.tool)
     .map(s => s.tool!)
     .filter(
@@ -1007,7 +1031,9 @@ export function JarvisStreamView({
           t.name === "write_xlsx" ||
           t.name === "write_docx" ||
           t.name === "write_pptx")
-    )
+    );
+
+  const artifacts = writeTools
     .map(t => {
       // Handle document generation tools (write_xlsx, write_docx, write_pptx)
       if (
@@ -1019,13 +1045,11 @@ export function JarvisStreamView({
         const filePath = extractPathFromOutput(t.output);
         if (filePath) {
           const filename = filePath.split("/").pop() || filePath;
-          const relativePath = filePath.startsWith("/tmp/jarvis-workspace/")
-            ? filePath.replace("/tmp/jarvis-workspace/", "")
-            : filePath.startsWith("/tmp/")
-              ? filePath.replace("/tmp/", "")
-              : filePath.startsWith("/")
-                ? filePath.substring(1)
-                : filePath;
+          const relativePath = filePath
+            .replace(/^\/tmp\/jarvis-workspace\//, "")
+            .replace(/^jarvis-workspace\//, "")
+            .replace(/^\/tmp\//, "")
+            .replace(/^\//, "");
           const downloadUrl = `/api/files/workspace/${relativePath}`;
 
           const fileType =
@@ -1044,34 +1068,35 @@ export function JarvisStreamView({
         }
       }
 
-      if (
-        t.name === "write_file" &&
-        t.input &&
-        typeof t.input === "object" &&
-        "path" in t.input
-      ) {
-        const filePath = String((t.input as Record<string, unknown>).path);
-        const content = (t.input as Record<string, unknown>).content;
+      if (t.name === "write_file") {
+        let filePath: string | null = null;
+        let content: unknown = null;
+
+        if (t.input && typeof t.input === "object" && "path" in t.input) {
+          filePath = String((t.input as Record<string, unknown>).path);
+          content = (t.input as Record<string, unknown>).content;
+        } else if (t.output) {
+          filePath = extractPathFromOutput(t.output);
+        }
+
+        if (!filePath) return null;
+
         const filename = filePath.split("/").pop() || filePath;
-        const relativePath = filePath.startsWith("/tmp/jarvis-workspace/")
-          ? filePath.replace("/tmp/jarvis-workspace/", "")
-          : filePath.startsWith("/tmp/")
-            ? filePath.replace("/tmp/", "")
-            : filePath.startsWith("/")
-              ? filePath.substring(1)
-              : filePath;
+        let relativePath = filePath
+          .replace(/^\/tmp\/jarvis-workspace\//, "")
+          .replace(/^jarvis-workspace\//, "")
+          .replace(/^\/tmp\//, "")
+          .replace(/^\//, "");
         const downloadUrl = `/api/files/workspace/${relativePath}`;
 
-        if (filePath.endsWith(".html")) {
-          if (typeof content === "string") {
-            return {
-              type: "html",
-              content,
-              path: filePath,
-              filename,
-              downloadUrl,
-            };
-          }
+        if (filePath.endsWith(".html") && typeof content === "string") {
+          return {
+            type: "html",
+            content,
+            path: filePath,
+            filename,
+            downloadUrl,
+          };
         } else if (filePath.endsWith(".pdf")) {
           return { type: "pdf", path: filePath, filename, downloadUrl };
         } else if (filePath.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i)) {
@@ -1141,6 +1166,50 @@ export function JarvisStreamView({
         isStreaming={state.isStreaming}
         success={state.success}
       />
+
+      {/* Prominent Streaming Thinking Display */}
+      {state.isStreaming && latestThinking && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative"
+        >
+          <Card className="border-purple-500/30 bg-gradient-to-br from-purple-500/5 via-transparent to-cyan-500/5 overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 via-cyan-500 to-purple-500 animate-pulse" />
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <motion.div
+                  animate={{
+                    scale: [1, 1.1, 1],
+                    rotate: [0, 5, -5, 0],
+                  }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                  className="shrink-0 p-2 rounded-full bg-gradient-to-br from-purple-500/20 to-cyan-500/20"
+                >
+                  <Brain className="h-5 w-5 text-purple-400" />
+                </motion.div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-sm font-medium text-purple-400">
+                      JARVIS is thinking...
+                    </span>
+                    <motion.span
+                      animate={{ opacity: [1, 0.5, 1] }}
+                      transition={{ duration: 1.5, repeat: Infinity }}
+                      className="text-xs text-muted-foreground"
+                    >
+                      Streaming
+                    </motion.span>
+                  </div>
+                  <div className="prose prose-invert prose-sm max-w-none prose-p:text-foreground/90 prose-p:my-1 prose-headings:text-foreground prose-strong:text-foreground">
+                    <Streamdown>{latestThinking}</Streamdown>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {(tools.length > 0 || latestThinking) && (
         <ToolExecutionPanel
