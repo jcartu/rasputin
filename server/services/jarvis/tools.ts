@@ -9,7 +9,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { generateImage } from "../../_core/imageGeneration";
 import { SSHConnectionManager } from "../../ssh";
-import { getDb } from "../../db";
+import { getDb, createAgentFile } from "../../db";
 import { sshHosts } from "../../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { getCachedResult, setCachedResult } from "../knowledgeCache";
@@ -70,9 +70,41 @@ import {
   executeDynamicTool,
   loadDynamicToolsFromDatabase,
 } from "../selfEvolution/toolGenerator";
+import { getDesktopDaemon, parseAction, type Action } from "../desktop";
 
 const execAsync = promisify(exec);
 const USE_DOCKER_SANDBOX = process.env.USE_SANDBOX !== "false";
+
+const MIME_TYPES: Record<string, string> = {
+  ".txt": "text/plain",
+  ".md": "text/markdown",
+  ".html": "text/html",
+  ".css": "text/css",
+  ".js": "application/javascript",
+  ".ts": "application/typescript",
+  ".json": "application/json",
+  ".xml": "application/xml",
+  ".csv": "text/csv",
+  ".pdf": "application/pdf",
+  ".docx":
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".pptx":
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".svg": "image/svg+xml",
+  ".mp3": "audio/mpeg",
+  ".mp4": "video/mp4",
+  ".zip": "application/zip",
+};
+
+function getMimeType(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  return MIME_TYPES[ext] || "application/octet-stream";
+}
 
 type ToolResult = {
   success: boolean;
@@ -236,7 +268,9 @@ function resolveSandboxPath(filePath: string): string {
   if (filePath.startsWith("/")) {
     return path.join(JARVIS_SANDBOX, filePath.substring(1));
   }
-  return path.join(JARVIS_SANDBOX, filePath);
+  // Strip jarvis-workspace prefix to avoid double-nesting
+  const stripped = filePath.replace(/^jarvis-workspace\/?/, "");
+  return path.join(JARVIS_SANDBOX, stripped);
 }
 
 async function perplexitySearch(query: string): Promise<string> {
@@ -803,7 +837,8 @@ export async function readFile(filePath: string): Promise<string> {
 
 export async function writeFile(
   filePath: string,
-  content: string
+  content: string,
+  options?: { taskId?: number; userId?: number }
 ): Promise<string> {
   await ensureSandbox();
 
@@ -819,6 +854,28 @@ export async function writeFile(
     }
 
     const stats = await fs.stat(resolvedPath);
+
+    // Register file to database if taskId and userId provided
+    if (options?.taskId && options?.userId) {
+      try {
+        await createAgentFile({
+          taskId: options.taskId,
+          userId: options.userId,
+          fileName: path.basename(resolvedPath),
+          filePath: resolvedPath,
+          mimeType: getMimeType(resolvedPath),
+          fileSize: stats.size,
+          source: "generated",
+        });
+      } catch (dbError) {
+        console.warn(
+          "[writeFile] Failed to register file to database:",
+          dbError
+        );
+        // Don't fail the write if DB registration fails
+      }
+    }
+
     return `File written and verified: ${resolvedPath} (${stats.size} bytes)`;
   } catch (error) {
     return `Error writing file: ${error instanceof Error ? error.message : String(error)}`;
@@ -828,7 +885,8 @@ export async function writeFile(
 export async function writeDocx(
   filePath: string,
   content: string,
-  title?: string
+  title?: string,
+  options?: { taskId?: number; userId?: number }
 ): Promise<string> {
   await ensureSandbox();
 
@@ -930,6 +988,26 @@ export async function writeDocx(
     await fs.writeFile(finalPath, buffer);
 
     const stats = await fs.stat(finalPath);
+
+    if (options?.taskId && options?.userId) {
+      try {
+        await createAgentFile({
+          taskId: options.taskId,
+          userId: options.userId,
+          fileName: path.basename(finalPath),
+          filePath: finalPath,
+          mimeType: getMimeType(finalPath),
+          fileSize: stats.size,
+          source: "generated",
+        });
+      } catch (dbError) {
+        console.warn(
+          "[writeDocx] Failed to register file to database:",
+          dbError
+        );
+      }
+    }
+
     return `Word document created: ${finalPath} (${stats.size} bytes, ${lines.length} lines)`;
   } catch (error) {
     return `Error creating Word document: ${error instanceof Error ? error.message : String(error)}`;
@@ -954,7 +1032,13 @@ interface SlideDefinition {
 export async function writePptx(
   filePath: string,
   slides: SlideDefinition[] | unknown,
-  options?: { title?: string; author?: string; subject?: string }
+  options?: {
+    title?: string;
+    author?: string;
+    subject?: string;
+    taskId?: number;
+    userId?: number;
+  }
 ): Promise<string> {
   await ensureSandbox();
 
@@ -1175,10 +1259,29 @@ export async function writePptx(
       }
     }
 
-    // Write the file
     await pptx.writeFile({ fileName: finalPath });
 
     const stats = await fs.stat(finalPath);
+
+    if (options?.taskId && options?.userId) {
+      try {
+        await createAgentFile({
+          taskId: options.taskId,
+          userId: options.userId,
+          fileName: path.basename(finalPath),
+          filePath: finalPath,
+          mimeType: getMimeType(finalPath),
+          fileSize: stats.size,
+          source: "generated",
+        });
+      } catch (dbError) {
+        console.warn(
+          "[writePptx] Failed to register file to database:",
+          dbError
+        );
+      }
+    }
+
     return `PowerPoint presentation created: ${finalPath} (${stats.size} bytes, ${slideArray.length} slides)`;
   } catch (error) {
     return `Error creating PowerPoint: ${error instanceof Error ? error.message : String(error)}`;
@@ -1212,7 +1315,12 @@ interface SheetDefinition {
 export async function writeXlsx(
   filePath: string,
   sheets: SheetDefinition[] | unknown,
-  options?: { creator?: string; title?: string }
+  options?: {
+    creator?: string;
+    title?: string;
+    taskId?: number;
+    userId?: number;
+  }
 ): Promise<string> {
   await ensureSandbox();
 
@@ -1349,7 +1457,6 @@ export async function writeXlsx(
       }
     }
 
-    // Write the file
     await workbook.xlsx.writeFile(finalPath);
 
     const stats = await fs.stat(finalPath);
@@ -1358,6 +1465,25 @@ export async function writeXlsx(
       (sum, s) => sum + (s.data?.length || 0) + (s.headers ? 1 : 0),
       0
     );
+
+    if (options?.taskId && options?.userId) {
+      try {
+        await createAgentFile({
+          taskId: options.taskId,
+          userId: options.userId,
+          fileName: path.basename(finalPath),
+          filePath: finalPath,
+          mimeType: getMimeType(finalPath),
+          fileSize: stats.size,
+          source: "generated",
+        });
+      } catch (dbError) {
+        console.warn(
+          "[writeXlsx] Failed to register file to database:",
+          dbError
+        );
+      }
+    }
 
     return `Excel spreadsheet created: ${finalPath} (${stats.size} bytes, ${sheetArray.length} sheet(s): ${sheetNames}, ${totalRows} total rows)`;
   } catch (error) {
@@ -6025,6 +6151,47 @@ export async function generateSpeech(
   }
 }
 
+async function executeDesktopAction(
+  actionInput: Action | string,
+  taskId: number,
+  userId: number,
+  sessionId: string
+): Promise<string> {
+  try {
+    const daemon = getDesktopDaemon();
+    const status = daemon.getStatus();
+
+    if (!status.running) {
+      await daemon.start();
+    }
+
+    const action: Action =
+      typeof actionInput === "string" ? parseAction(actionInput) : actionInput;
+
+    const result = await daemon.executeAction(action, {
+      taskId,
+      userId,
+      sessionId,
+    });
+
+    if (result.success) {
+      let response = `Desktop action ${action.type} completed successfully.`;
+      if (result.postStateRef) {
+        response += `\nPost-action screenshot: ${result.postStateRef}`;
+      }
+      if (result.result) {
+        response += `\nResult: ${JSON.stringify(result.result)}`;
+      }
+      response += `\nDuration: ${result.durationMs}ms`;
+      return response;
+    } else {
+      return `Desktop action ${action.type} failed: ${result.error}`;
+    }
+  } catch (error) {
+    return `Desktop action error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 export async function executeTool(
   name: string,
   input: Record<string, unknown>
@@ -6256,12 +6423,19 @@ export async function executeTool(
     case "read_file":
       return readFile(input.path as string);
     case "write_file":
-      return writeFile(input.path as string, input.content as string);
+      return writeFile(input.path as string, input.content as string, {
+        taskId: input.taskId as number | undefined,
+        userId: input.userId as number | undefined,
+      });
     case "write_docx":
       return writeDocx(
         input.path as string,
         input.content as string,
-        input.title as string | undefined
+        input.title as string | undefined,
+        {
+          taskId: input.taskId as number | undefined,
+          userId: input.userId as number | undefined,
+        }
       );
     case "write_pptx":
       return writePptx(
@@ -6271,6 +6445,8 @@ export async function executeTool(
           title: input.title as string | undefined,
           author: input.author as string | undefined,
           subject: input.subject as string | undefined,
+          taskId: input.taskId as number | undefined,
+          userId: input.userId as number | undefined,
         }
       );
     case "write_xlsx":
@@ -6280,6 +6456,8 @@ export async function executeTool(
         {
           creator: input.creator as string | undefined,
           title: input.title as string | undefined,
+          taskId: input.taskId as number | undefined,
+          userId: input.userId as number | undefined,
         }
       );
     case "list_files":
@@ -6637,6 +6815,13 @@ export async function executeTool(
         timeout: input.timeout as number | undefined,
         expectedStatus: input.expectedStatus as number | undefined,
       });
+    case "desktop_action":
+      return executeDesktopAction(
+        input.action as Action | string,
+        input.taskId as number,
+        input.userId as number,
+        input.sessionId as string
+      );
     default:
       if (name.startsWith("self_")) {
         return executeSelfEvolutionTool(name, input, input.userId as number);
@@ -7224,6 +7409,35 @@ export function getAvailableTools(): Array<{
           type: "array",
           items: { type: "string" },
           description: "List of results/outputs from each tool",
+          required: true,
+        },
+      },
+    },
+    // === DESKTOP AUTOMATION ===
+    {
+      name: "desktop_action",
+      description:
+        "Execute desktop automation actions using xdotool. Supports mouse clicks, keyboard input, window management, screenshots, and more. The action can be provided as JSON or will be parsed from a JSON string.",
+      parameters: {
+        action: {
+          type: "object",
+          description:
+            "Action object with type and parameters. Types: CLICK (point, target, button, double, modifiers), TYPE (text, clear, submit), KEY (key, modifiers, hold, release), SCROLL (direction, amount, point), MOVE (point, smooth), DRAG (from, to, button), SCREENSHOT (region, format), WAIT (waitFor, durationMs, element), WINDOW (operation, window, position, size), LAUNCH (app, args, cwd, waitForWindow), CLIPBOARD (operation, text), ASSERT (assertType, target, point, color)",
+          required: true,
+        },
+        taskId: {
+          type: "number",
+          description: "Task ID for logging",
+          required: true,
+        },
+        userId: {
+          type: "number",
+          description: "User ID for logging",
+          required: true,
+        },
+        sessionId: {
+          type: "string",
+          description: "Session ID for logging",
           required: true,
         },
       },
