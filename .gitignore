@@ -105,3 +105,6 @@ temp/
 *.db
 *.sqlite
 *.sqlite3
+
+# Generated test outputs
+public/generated/
