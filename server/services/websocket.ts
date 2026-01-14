@@ -183,6 +183,82 @@ interface ServerToClientEvents {
     priority?: "normal" | "high";
     timestamp: number;
   }) => void;
+  "swarm:negotiation_start": (data: {
+    taskId: number;
+    taskDescription: string;
+    requiredCapabilities: string[];
+    timestamp: number;
+  }) => void;
+  "swarm:bid": (data: {
+    taskId: number;
+    agentId: number;
+    agentName: string;
+    agentType: string;
+    confidence: number;
+    availabilityScore: number;
+    experienceScore: number;
+    estimatedDuration: number;
+    timestamp: number;
+  }) => void;
+  "swarm:negotiation_complete": (data: {
+    taskId: number;
+    winningAgentId: number;
+    winningAgentName: string;
+    totalBids: number;
+    timestamp: number;
+  }) => void;
+  "swarm:team_forming": (data: {
+    teamId: string;
+    taskDescription: string;
+    requiredCapabilities: string[];
+    timestamp: number;
+  }) => void;
+  "swarm:team_member_added": (data: {
+    teamId: string;
+    agentId: number;
+    agentName: string;
+    agentType: string;
+    isLeader: boolean;
+    timestamp: number;
+  }) => void;
+  "swarm:team_formed": (data: {
+    teamId: string;
+    memberCount: number;
+    leaderId: number;
+    leaderName: string;
+    timestamp: number;
+  }) => void;
+  "swarm:team_disbanded": (data: { teamId: string; timestamp: number }) => void;
+  "swarm:consensus_start": (data: {
+    proposalId: string;
+    question: string;
+    participantCount: number;
+    timestamp: number;
+  }) => void;
+  "swarm:vote": (data: {
+    proposalId: string;
+    agentId: number;
+    agentName: string;
+    agentType: string;
+    vote: "approve" | "reject" | "abstain";
+    weight: number;
+    reasoning?: string;
+    timestamp: number;
+  }) => void;
+  "swarm:consensus_complete": (data: {
+    proposalId: string;
+    decision: "approved" | "rejected" | "tie";
+    approvalPercentage: number;
+    totalVotes: number;
+    timestamp: number;
+  }) => void;
+  "swarm:broadcast": (data: {
+    teamId: string;
+    fromAgentId: number;
+    fromAgentName: string;
+    message: string;
+    timestamp: number;
+  }) => void;
   error: (data: { message: string; code?: string }) => void;
 }
 
@@ -833,6 +909,127 @@ export function emitVoiceAnnouncement(data: {
       priority: data.priority || "normal",
       timestamp: Date.now(),
     });
+  }
+}
+
+export function emitSwarmNegotiationStart(data: {
+  taskId: number;
+  taskDescription: string;
+  requiredCapabilities: string[];
+}): void {
+  if (io) {
+    io.emit("swarm:negotiation_start", { ...data, timestamp: Date.now() });
+  }
+}
+
+export function emitSwarmBid(data: {
+  taskId: number;
+  agentId: number;
+  agentName: string;
+  agentType: string;
+  confidence: number;
+  availabilityScore: number;
+  experienceScore: number;
+  estimatedDuration: number;
+}): void {
+  if (io) {
+    io.emit("swarm:bid", { ...data, timestamp: Date.now() });
+  }
+}
+
+export function emitSwarmNegotiationComplete(data: {
+  taskId: number;
+  winningAgentId: number;
+  winningAgentName: string;
+  totalBids: number;
+}): void {
+  if (io) {
+    io.emit("swarm:negotiation_complete", { ...data, timestamp: Date.now() });
+  }
+}
+
+export function emitSwarmTeamForming(data: {
+  teamId: string;
+  taskDescription: string;
+  requiredCapabilities: string[];
+}): void {
+  if (io) {
+    io.emit("swarm:team_forming", { ...data, timestamp: Date.now() });
+  }
+}
+
+export function emitSwarmTeamMemberAdded(data: {
+  teamId: string;
+  agentId: number;
+  agentName: string;
+  agentType: string;
+  isLeader: boolean;
+}): void {
+  if (io) {
+    io.emit("swarm:team_member_added", { ...data, timestamp: Date.now() });
+  }
+}
+
+export function emitSwarmTeamFormed(data: {
+  teamId: string;
+  memberCount: number;
+  leaderId: number;
+  leaderName: string;
+}): void {
+  if (io) {
+    io.emit("swarm:team_formed", { ...data, timestamp: Date.now() });
+  }
+}
+
+export function emitSwarmTeamDisbanded(teamId: string): void {
+  if (io) {
+    io.emit("swarm:team_disbanded", { teamId, timestamp: Date.now() });
+  }
+}
+
+export function emitSwarmConsensusStart(data: {
+  proposalId: string;
+  question: string;
+  participantCount: number;
+}): void {
+  if (io) {
+    io.emit("swarm:consensus_start", { ...data, timestamp: Date.now() });
+  }
+}
+
+export function emitSwarmVote(data: {
+  proposalId: string;
+  agentId: number;
+  agentName: string;
+  agentType: string;
+  vote: "approve" | "reject" | "abstain";
+  weight: number;
+  reasoning?: string;
+}): void {
+  if (io) {
+    io.emit("swarm:vote", { ...data, timestamp: Date.now() });
+  }
+}
+
+export function emitSwarmConsensusComplete(data: {
+  proposalId: string;
+  decision: "approved" | "rejected" | "tie";
+  approvalPercentage: number;
+  totalVotes: number;
+}): void {
+  if (io) {
+    io.emit("swarm:consensus_complete", { ...data, timestamp: Date.now() });
+  }
+}
+
+export function emitSwarmBroadcast(data: {
+  teamId: string;
+  fromAgentId: number;
+  fromAgentName: string;
+  message: string;
+}): void {
+  if (io) {
+    io.emit("swarm:broadcast", { ...data, timestamp: Date.now() });
   }
 }
 

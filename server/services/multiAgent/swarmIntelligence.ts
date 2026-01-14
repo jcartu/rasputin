@@ -1,19 +1,22 @@
 import { getDb } from "../../db";
-import {
-  agents,
-  interAgentMessages,
-  agentSubtasks,
-} from "../../../drizzle/schema";
-import { eq, and, desc, gte, sql } from "drizzle-orm";
+import { agentSubtasks } from "../../../drizzle/schema";
+import { eq, and, sql } from "drizzle-orm";
 import { agentManager } from "./agentManager";
-import {
-  Agent,
-  AgentType,
-  AgentMessage,
-  TaskPriority,
-  AGENT_CONFIGS,
-} from "./types";
+import { Agent, AgentType, TaskPriority } from "./types";
 import { invokeLLM } from "../../_core/llm";
+import {
+  emitSwarmNegotiationStart,
+  emitSwarmBid,
+  emitSwarmNegotiationComplete,
+  emitSwarmTeamForming,
+  emitSwarmTeamMemberAdded,
+  emitSwarmTeamFormed,
+  emitSwarmTeamDisbanded,
+  emitSwarmConsensusStart,
+  emitSwarmVote,
+  emitSwarmConsensusComplete,
+  emitSwarmBroadcast,
+} from "../websocket";
 
 export interface NegotiationProposal {
   taskId: number;
@@ -76,6 +79,12 @@ class SwarmIntelligenceService {
     userId: number,
     proposal: NegotiationProposal
   ): Promise<NegotiationBid[]> {
+    emitSwarmNegotiationStart({
+      taskId: proposal.taskId,
+      taskDescription: proposal.taskDescription,
+      requiredCapabilities: proposal.targetCapabilities,
+    });
+
     const availableAgents = await this.findAvailableAgents(
       userId,
       proposal.targetCapabilities
@@ -90,6 +99,17 @@ class SwarmIntelligenceService {
     for (const agent of availableAgents) {
       const bid = await this.generateAgentBid(agent, proposal);
       bids.push(bid);
+
+      emitSwarmBid({
+        taskId: proposal.taskId,
+        agentId: agent.id,
+        agentName: agent.name,
+        agentType: agent.agentType,
+        confidence: bid.confidence,
+        availabilityScore: bid.availabilityScore,
+        experienceScore: bid.experienceScore,
+        estimatedDuration: bid.estimatedDuration,
+      });
     }
 
     bids.sort((a, b) => this.calculateBidScore(b) - this.calculateBidScore(a));
@@ -258,6 +278,15 @@ class SwarmIntelligenceService {
     const bestBid = bids[0];
     const agent = await agentManager.getAgent(bestBid.agentId);
 
+    if (agent) {
+      emitSwarmNegotiationComplete({
+        taskId,
+        winningAgentId: agent.id,
+        winningAgentName: agent.name,
+        totalBids: bids.length,
+      });
+    }
+
     this.activeNegotiations.delete(taskId);
 
     return agent;
@@ -290,6 +319,12 @@ class SwarmIntelligenceService {
 
     this.pendingVotes.set(proposalId, []);
 
+    emitSwarmConsensusStart({
+      proposalId,
+      question,
+      participantCount: agents.length,
+    });
+
     for (const agent of agents) {
       const vote = await this.getAgentVote(agent, proposalId, question);
       const votes = this.pendingVotes.get(proposalId)!;
@@ -317,7 +352,15 @@ Respond ONLY with a JSON object, no other text:
 {"vote": "approve|reject|abstain", "reasoning": "your reasoning"}`;
 
       const response = await invokeLLM({
-        messages: [{ role: "user", content: prompt }],
+        messages: [
+          {
+            role: "system",
+            content:
+              'You are a voting agent. Respond only with valid JSON: {"vote": "approve" or "reject" or "abstain", "reasoning": "brief explanation"}',
+          },
+          { role: "user", content: prompt },
+        ],
+        response_format: { type: "json_object" },
       });
 
       const rawContent = response.choices[0]?.message?.content;
@@ -327,21 +370,51 @@ Respond ONLY with a JSON object, no other text:
 
       const weight = this.calculateAgentWeight(agent);
 
-      return {
+      const vote: ConsensusVote = {
         agentId: agent.id,
         proposalId,
         vote: parsed.vote || "abstain",
         weight,
         reasoning: parsed.reasoning,
       };
-    } catch {
-      return {
+
+      emitSwarmVote({
+        proposalId,
+        agentId: agent.id,
+        agentName: agent.name,
+        agentType: agent.agentType,
+        vote: vote.vote,
+        weight: vote.weight,
+        reasoning: vote.reasoning,
+      });
+
+      return vote;
+    } catch (error) {
+      console.error(
+        `[SwarmIntelligence] Vote failed for agent ${agent.name}:`,
+        error instanceof Error ? error.message : String(error)
+      );
+      const weight = this.calculateAgentWeight(agent);
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      const vote: ConsensusVote = {
         agentId: agent.id,
         proposalId,
         vote: "abstain",
-        weight: this.calculateAgentWeight(agent),
-        reasoning: "Failed to process vote",
+        weight,
+        reasoning: `Vote failed: ${errorMsg.slice(0, 50)}`,
       };
+
+      emitSwarmVote({
+        proposalId,
+        agentId: agent.id,
+        agentName: agent.name,
+        agentType: agent.agentType,
+        vote: vote.vote,
+        weight: vote.weight,
+        reasoning: vote.reasoning,
+      });
+
+      return vote;
     }
   }
 
@@ -389,13 +462,22 @@ Respond ONLY with a JSON object, no other text:
 
     this.pendingVotes.delete(proposalId);
 
-    return {
+    const result: SwarmDecision = {
       proposalId,
       decision,
       approvalPercentage,
       totalVotes: votes.length,
       winningMargin,
     };
+
+    emitSwarmConsensusComplete({
+      proposalId,
+      decision: result.decision,
+      approvalPercentage: result.approvalPercentage,
+      totalVotes: result.totalVotes,
+    });
+
+    return result;
   }
 
   async formTeam(
@@ -433,6 +515,22 @@ Respond ONLY with a JSON object, no other text:
 
     const teamId = `team-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+    emitSwarmTeamForming({
+      teamId,
+      taskDescription: request.taskDescription,
+      requiredCapabilities: request.requiredCapabilities,
+    });
+
+    for (const agent of selectedAgents) {
+      emitSwarmTeamMemberAdded({
+        teamId,
+        agentId: agent.id,
+        agentName: agent.name,
+        agentType: agent.agentType,
+        isLeader: agent.id === leader.id,
+      });
+    }
+
     const team: FormedTeam = {
       teamId,
       members: selectedAgents,
@@ -442,6 +540,13 @@ Respond ONLY with a JSON object, no other text:
     };
 
     this.activeTeams.set(teamId, team);
+
+    emitSwarmTeamFormed({
+      teamId,
+      memberCount: selectedAgents.length,
+      leaderId: leader.id,
+      leaderName: leader.name,
+    });
 
     await this.notifyTeamMembers(team);
 
@@ -551,6 +656,8 @@ Respond ONLY with a JSON object, no other text:
     }
 
     this.activeTeams.delete(teamId);
+
+    emitSwarmTeamDisbanded(teamId);
   }
 
   async broadcastToTeam(
@@ -560,6 +667,15 @@ Respond ONLY with a JSON object, no other text:
   ): Promise<void> {
     const team = this.activeTeams.get(teamId);
     if (!team) return;
+
+    const fromAgent = team.members.find(m => m.id === fromAgentId);
+
+    emitSwarmBroadcast({
+      teamId,
+      fromAgentId,
+      fromAgentName: fromAgent?.name || `Agent ${fromAgentId}`,
+      message,
+    });
 
     for (const member of team.members) {
       if (member.id === fromAgentId) continue;

@@ -95,6 +95,7 @@ import { toast } from "sonner";
 import { Streamdown } from "streamdown";
 import { FileUpload, type ProcessedFile } from "@/components/FileUpload";
 import { motion, AnimatePresence } from "framer-motion";
+import { SwarmActivityPanel } from "@/components/SwarmActivityPanel";
 
 // Types for JARVIS
 interface ToolCall {
@@ -2869,6 +2870,8 @@ export default function AgentPage() {
           </div>
         </div>
       </div>
+
+      <SwarmActivityPanel />
     </div>
   );
 }
