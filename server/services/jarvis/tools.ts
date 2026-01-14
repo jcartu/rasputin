@@ -5298,7 +5298,10 @@ async function scaffoldProjectTool(
   uiTheme?: string,
   uiComponents?: string[],
   testing?: boolean,
-  testCoverage?: boolean
+  testCoverage?: boolean,
+  docker?: boolean,
+  dockerCompose?: boolean,
+  dockerServices?: string[]
 ): Promise<string> {
   const validTypes = [
     "react",
@@ -5339,6 +5342,18 @@ async function scaffoldProjectTool(
     config.testing = testCoverage ? { coverage: true } : true;
   }
 
+  if (docker) {
+    const { COMMON_DOCKER_SERVICES } = await import("../webApp/dockerSetup.js");
+    const services = dockerServices
+      ?.map(s => COMMON_DOCKER_SERVICES[s])
+      .filter(Boolean);
+    config.docker = {
+      includeDocker: true,
+      includeCompose: dockerCompose !== false,
+      services,
+    };
+  }
+
   const result = await scaffoldProject(config);
 
   if (!result.success) {
@@ -5358,6 +5373,10 @@ Files created: ${result.filesCreated.length}`;
     output += `\nTesting: Configured with sample tests`;
   }
 
+  if (config.docker) {
+    output += `\nDocker: Configured with Dockerfile and docker-compose.yml`;
+  }
+
   output += `
 
 Files:
@@ -5366,7 +5385,7 @@ ${result.filesCreated.map(f => `  - ${f}`).join("\n")}
 Next steps:
 1. cd ${result.projectPath}
 2. npm install (or pnpm install)
-3. npm run dev${testing ? "\n4. npm test (to run tests)" : ""}`;
+3. npm run dev${testing ? "\n4. npm test (to run tests)" : ""}${docker ? "\n5. docker-compose up --build (to run in container)" : ""}`;
 
   return output;
 }
@@ -8384,7 +8403,10 @@ export async function executeTool(
         input.uiTheme as string | undefined,
         input.uiComponents as string[] | undefined,
         input.testing as boolean | undefined,
-        input.testCoverage as boolean | undefined
+        input.testCoverage as boolean | undefined,
+        input.docker as boolean | undefined,
+        input.dockerCompose as boolean | undefined,
+        input.dockerServices as string[] | undefined
       );
     case "generate_schema":
       return generateSchemaTool(
@@ -10573,6 +10595,25 @@ export function getAvailableTools(): Array<{
           type: "boolean",
           description:
             "Include test coverage configuration (requires testing: true).",
+          required: false,
+        },
+        docker: {
+          type: "boolean",
+          description:
+            "Include Docker containerization (Dockerfile, .dockerignore). Generates production-ready multi-stage builds for each framework.",
+          required: false,
+        },
+        dockerCompose: {
+          type: "boolean",
+          description:
+            "Include docker-compose.yml for orchestration (requires docker: true). Default: true when docker is enabled.",
+          required: false,
+        },
+        dockerServices: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Additional Docker services to include in docker-compose: 'postgres', 'mysql', 'redis', 'mongodb'",
           required: false,
         },
       },

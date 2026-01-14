@@ -8,6 +8,11 @@ import * as path from "path";
 
 import { integrateUILibrary, type UIConfig } from "./uiComponents";
 import { setupTestFramework, type TestConfig } from "./testSetup";
+import {
+  setupDocker,
+  generateNginxConf,
+  type DockerConfig,
+} from "./dockerSetup";
 
 export interface ScaffoldConfig {
   projectName: string;
@@ -25,6 +30,7 @@ export interface ScaffoldConfig {
   outputPath: string;
   ui?: UIConfig;
   testing?: TestConfig | boolean;
+  docker?: DockerConfig | boolean;
 }
 
 export interface ScaffoldResult {
@@ -121,6 +127,26 @@ export async function scaffoldProject(
           testResult.devDependenciesToAdd,
           testResult.scripts
         );
+      }
+    }
+
+    if (config.docker) {
+      const dockerConfig =
+        typeof config.docker === "boolean" ? {} : config.docker;
+      const dockerResult = await setupDocker(
+        projectPath,
+        config.projectType,
+        config.projectName,
+        dockerConfig
+      );
+      filesCreated.push(...dockerResult.filesCreated);
+
+      const spaTypes = ["react", "vue", "svelte"];
+      if (spaTypes.includes(config.projectType)) {
+        const port = dockerConfig.exposePort || 80;
+        const nginxConf = generateNginxConf(port);
+        fs.writeFileSync(path.join(projectPath, "nginx.conf"), nginxConf);
+        filesCreated.push("nginx.conf");
       }
     }
 
