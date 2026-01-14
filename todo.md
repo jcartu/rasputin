@@ -98,11 +98,12 @@
 - [x] get_predicted_tasks and get_task_patterns tools for JARVIS
 - [x] Proactive monitoring and alerting (proactiveMonitor.ts with auto-trigger and configurable thresholds)
 
-### Swarm Intelligence
+### Swarm Intelligence - BASIC IMPLEMENTATION COMPLETE
 
-- [ ] Emergent behavior from agent interactions
-- [ ] Agents that negotiate and collaborate
-- [ ] Self-organizing team structures
+- [x] Agents that negotiate and collaborate (task negotiation with bidding)
+- [x] Self-organizing team structures (dynamic team formation with leader election)
+- [x] Consensus voting mechanism (weighted voting based on agent type/experience)
+- [ ] Emergent behavior from agent interactions (future: advanced swarm patterns)
 
 ---
 
@@ -119,6 +120,11 @@
   - Quiet hours support to avoid triggering during off-hours
   - User insights API for comprehensive task pattern analysis
   - Tools: get_proactive_monitor_status, configure_proactive_monitor, get_proactive_alerts, get_user_insights
+- [x] Swarm Intelligence basics
+  - Task negotiation with capability-based bidding
+  - Dynamic team formation with automatic leader election
+  - Consensus voting mechanism with weighted votes
+  - Tools: negotiate_task, accept_negotiation_bid, form_swarm_team, run_swarm_consensus, get_active_swarm_teams, disband_swarm_team, broadcast_to_team
 
 ## Previously Completed (Jan 13, 2026)
 

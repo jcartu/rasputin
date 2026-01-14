@@ -72,6 +72,15 @@ import {
 import { agentManager } from "../multiAgent/agentManager";
 import type { AgentType } from "../multiAgent/types";
 import {
+  swarmIntelligence,
+  initiateNegotiation,
+  formAgentTeam,
+  runConsensus,
+  type NegotiationBid,
+  type FormedTeam,
+  type SwarmDecision,
+} from "../multiAgent/swarmIntelligence";
+import {
   executeInSandbox,
   executePythonInSandbox,
   executeNodeInSandbox,
@@ -7101,6 +7110,201 @@ ${monitoringStatus}`;
   }
 }
 
+export async function negotiateTaskAssignment(
+  userId: number,
+  taskId: number,
+  taskDescription: string,
+  requiredCapabilities: string[] = [],
+  priority: string = "normal"
+): Promise<string> {
+  try {
+    const bids = await initiateNegotiation(
+      userId,
+      taskId,
+      taskDescription,
+      requiredCapabilities,
+      priority as "low" | "normal" | "high" | "urgent"
+    );
+
+    if (bids.length === 0) {
+      return "No agents available for this task. Consider spawning new agents.";
+    }
+
+    const lines = bids.map((bid, i) => {
+      const score = (
+        bid.confidence * 0.4 +
+        bid.availabilityScore * 0.3 +
+        bid.experienceScore * 0.2 +
+        bid.reasoningScore * 0.1
+      ).toFixed(2);
+      return `${i + 1}. Agent ${bid.agentId}
+   Confidence: ${Math.round(bid.confidence * 100)}%
+   Availability: ${Math.round(bid.availabilityScore * 100)}%
+   Experience: ${Math.round(bid.experienceScore * 100)}%
+   Overall Score: ${score}
+   Est. Duration: ${Math.round(bid.estimatedDuration / 1000)}s`;
+    });
+
+    return `Task Negotiation Results for Task ${taskId}:
+Task: ${taskDescription}
+
+Agent Bids (ranked by score):
+${lines.join("\n\n")}
+
+Use accept_negotiation_bid to assign the task to the best agent.`;
+  } catch (error) {
+    return `Negotiation failed: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function acceptNegotiationBid(taskId: number): Promise<string> {
+  try {
+    const agent = await swarmIntelligence.acceptBestBid(taskId);
+
+    if (!agent) {
+      return "No bids found for this task. Run negotiate_task first.";
+    }
+
+    return `Task ${taskId} assigned to Agent ${agent.id} (${agent.name})
+Agent Type: ${agent.agentType}
+Status: ${agent.status}
+
+The agent is now assigned to handle this task.`;
+  } catch (error) {
+    return `Failed to accept bid: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function formSwarmTeam(
+  userId: number,
+  taskDescription: string,
+  requiredCapabilities: string[] = [],
+  minAgents: number = 2,
+  maxAgents: number = 5
+): Promise<string> {
+  try {
+    const team = await formAgentTeam(
+      userId,
+      taskDescription,
+      requiredCapabilities,
+      minAgents,
+      maxAgents
+    );
+
+    const memberLines = team.members.map(
+      (m, i) =>
+        `${i + 1}. ${m.name} (${m.agentType})${m.id === team.leaderId ? " [LEADER]" : ""}`
+    );
+
+    return `Swarm Team Formed Successfully!
+
+Team ID: ${team.teamId}
+Task: ${team.taskDescription}
+Team Size: ${team.members.length} agents
+Leader: Agent ${team.leaderId}
+
+Members:
+${memberLines.join("\n")}
+
+Reason: ${team.formationReason}
+
+Use broadcast_to_team to communicate with all team members.`;
+  } catch (error) {
+    return `Team formation failed: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function runSwarmConsensus(
+  userId: number,
+  question: string
+): Promise<string> {
+  try {
+    const result = await runConsensus(userId, question);
+
+    const decisionEmoji =
+      result.decision === "approved"
+        ? "APPROVED"
+        : result.decision === "rejected"
+          ? "REJECTED"
+          : "TIE";
+
+    return `Swarm Consensus Result
+
+Question: ${question}
+
+Decision: ${decisionEmoji}
+Approval: ${result.approvalPercentage.toFixed(1)}%
+Total Votes: ${result.totalVotes}
+Winning Margin: ${result.winningMargin.toFixed(2)}
+
+The swarm has reached a ${result.decision} decision.`;
+  } catch (error) {
+    return `Consensus failed: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function getActiveSwarmTeams(userId: number): Promise<string> {
+  try {
+    const teams = await swarmIntelligence.getActiveTeams(userId);
+
+    if (teams.length === 0) {
+      return "No active swarm teams found.";
+    }
+
+    const teamSummaries = teams.map(team => {
+      const memberCount = team.members.length;
+      return `Team: ${team.teamId}
+  Task: ${team.taskDescription}
+  Members: ${memberCount}
+  Leader: Agent ${team.leaderId}`;
+    });
+
+    return `Active Swarm Teams (${teams.length}):
+
+${teamSummaries.join("\n\n")}`;
+  } catch (error) {
+    return `Failed to get teams: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function disbandSwarmTeam(teamId: string): Promise<string> {
+  try {
+    const team = await swarmIntelligence.getTeam(teamId);
+    if (!team) {
+      return `Team ${teamId} not found.`;
+    }
+
+    await swarmIntelligence.disbandTeam(teamId);
+
+    return `Team ${teamId} has been disbanded.
+${team.members.length} agents returned to idle status.`;
+  } catch (error) {
+    return `Failed to disband team: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function broadcastToSwarmTeam(
+  teamId: string,
+  fromAgentId: number,
+  message: string
+): Promise<string> {
+  try {
+    const team = await swarmIntelligence.getTeam(teamId);
+    if (!team) {
+      return `Team ${teamId} not found.`;
+    }
+
+    await swarmIntelligence.broadcastToTeam(teamId, fromAgentId, message);
+
+    return `Message broadcast to ${team.members.length - 1} team members.
+Team: ${teamId}
+From: Agent ${fromAgentId}
+Message: ${message}`;
+  } catch (error) {
+    return `Broadcast failed: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 export async function spawnSpecializedAgent(
   userId: number,
   agentType: AgentType,
@@ -8067,6 +8271,39 @@ export async function executeTool(
       );
     case "get_user_insights":
       return getUserInsights(input.userId as number);
+    case "negotiate_task":
+      return negotiateTaskAssignment(
+        input.userId as number,
+        input.taskId as number,
+        input.taskDescription as string,
+        input.requiredCapabilities as string[] | undefined,
+        input.priority as string | undefined
+      );
+    case "accept_negotiation_bid":
+      return acceptNegotiationBid(input.taskId as number);
+    case "form_swarm_team":
+      return formSwarmTeam(
+        input.userId as number,
+        input.taskDescription as string,
+        input.requiredCapabilities as string[] | undefined,
+        input.minAgents as number | undefined,
+        input.maxAgents as number | undefined
+      );
+    case "run_swarm_consensus":
+      return runSwarmConsensus(
+        input.userId as number,
+        input.question as string
+      );
+    case "get_active_swarm_teams":
+      return getActiveSwarmTeams(input.userId as number);
+    case "disband_swarm_team":
+      return disbandSwarmTeam(input.teamId as string);
+    case "broadcast_to_team":
+      return broadcastToSwarmTeam(
+        input.teamId as string,
+        input.fromAgentId as number,
+        input.message as string
+      );
     case "connect_mcp_server":
       return connectMCPServer(
         input.name as string,
@@ -10302,6 +10539,145 @@ export function getAvailableTools(): Array<{
         userId: {
           type: "number",
           description: "The user ID to get insights for",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "negotiate_task",
+      description:
+        "Initiate a task negotiation among available agents. Agents bid based on their capabilities, availability, and experience. Returns ranked bids.",
+      parameters: {
+        userId: {
+          type: "number",
+          description: "User ID for agent lookup",
+          required: true,
+        },
+        taskId: {
+          type: "number",
+          description: "Unique task identifier",
+          required: true,
+        },
+        taskDescription: {
+          type: "string",
+          description: "Description of the task to be assigned",
+          required: true,
+        },
+        requiredCapabilities: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Required capabilities: 'code', 'web', 'ssh', 'files', 'images', 'infrastructure'",
+          required: false,
+        },
+        priority: {
+          type: "string",
+          description: "Task priority: 'low', 'normal', 'high', 'urgent'",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "accept_negotiation_bid",
+      description:
+        "Accept the best bid from a task negotiation and assign the task to the winning agent.",
+      parameters: {
+        taskId: {
+          type: "number",
+          description: "Task ID from the negotiation",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "form_swarm_team",
+      description:
+        "Dynamically form a team of agents for a complex task. Automatically selects best agents and assigns a leader.",
+      parameters: {
+        userId: {
+          type: "number",
+          description: "User ID for agent lookup",
+          required: true,
+        },
+        taskDescription: {
+          type: "string",
+          description: "Description of the task the team will work on",
+          required: true,
+        },
+        requiredCapabilities: {
+          type: "array",
+          items: { type: "string" },
+          description: "Capabilities needed for the task",
+          required: false,
+        },
+        minAgents: {
+          type: "number",
+          description: "Minimum number of agents (default: 2)",
+          required: false,
+        },
+        maxAgents: {
+          type: "number",
+          description: "Maximum number of agents (default: 5)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "run_swarm_consensus",
+      description:
+        "Run a consensus vote among available agents on a question or proposal. Each agent votes based on their expertise.",
+      parameters: {
+        userId: {
+          type: "number",
+          description: "User ID for agent lookup",
+          required: true,
+        },
+        question: {
+          type: "string",
+          description: "Question or proposal for agents to vote on",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "get_active_swarm_teams",
+      description: "List all active swarm teams for a user.",
+      parameters: {
+        userId: {
+          type: "number",
+          description: "User ID to list teams for",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "disband_swarm_team",
+      description: "Disband a swarm team and return all agents to idle status.",
+      parameters: {
+        teamId: {
+          type: "string",
+          description: "Team ID to disband",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "broadcast_to_team",
+      description: "Broadcast a message to all members of a swarm team.",
+      parameters: {
+        teamId: {
+          type: "string",
+          description: "Team ID to broadcast to",
+          required: true,
+        },
+        fromAgentId: {
+          type: "number",
+          description: "Agent ID sending the message",
+          required: true,
+        },
+        message: {
+          type: "string",
+          description: "Message to broadcast",
           required: true,
         },
       },
