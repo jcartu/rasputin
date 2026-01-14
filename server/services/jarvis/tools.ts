@@ -33,6 +33,12 @@ import {
   analyzeTaskPatterns,
   predictNextTasks,
 } from "./predictiveTask";
+import {
+  proactiveMonitor,
+  startProactiveMonitor,
+  stopProactiveMonitor,
+  type MonitorConfig,
+} from "./proactiveMonitor";
 import { runAgentTeam, type TeamCallback } from "./agentTeams";
 import { webhookHandler } from "../events/webhookHandler";
 import { eventExecutor } from "../events/eventExecutor";
@@ -6971,6 +6977,130 @@ function formatIntervalMs(ms: number): string {
   return `${Math.round(weeks)} weeks`;
 }
 
+export async function getProactiveMonitorStatus(): Promise<string> {
+  try {
+    const status = await proactiveMonitor.getStatus();
+    return `Proactive Monitor Status:
+- Running: ${status.running ? "Yes" : "No"}
+- Enabled: ${status.config.enabled ? "Yes" : "No"}
+- Check Interval: ${status.config.checkIntervalMs / 1000 / 60} minutes
+- Auto-trigger Threshold: ${Math.round(status.config.autoTriggerThreshold * 100)}%
+- Alert Threshold: ${Math.round(status.config.alertThreshold * 100)}%
+- Max Auto-triggers/Day: ${status.config.maxAutoTriggersPerDay}
+- Monitored Users: ${status.monitoredUsersCount}
+- Total Alerts: ${status.alertsCount}
+- Last Check: ${status.lastCheckTime?.toISOString() || "Never"}`;
+  } catch (error) {
+    return `Failed to get monitor status: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function configureProactiveMonitor(
+  config: Partial<MonitorConfig>
+): Promise<string> {
+  try {
+    await proactiveMonitor.updateConfig(config);
+    const status = await proactiveMonitor.getStatus();
+
+    const changes = Object.entries(config)
+      .map(([k, v]) => `  ${k}: ${v}`)
+      .join("\n");
+
+    return `Proactive Monitor configuration updated:
+${changes}
+
+Current Status:
+- Running: ${status.running ? "Yes" : "No"}
+- Monitored Users: ${status.monitoredUsersCount}`;
+  } catch (error) {
+    return `Failed to configure monitor: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function getProactiveAlerts(
+  userId?: number,
+  limit: number = 20
+): Promise<string> {
+  try {
+    const alerts = proactiveMonitor.getAlerts(userId, limit);
+
+    if (alerts.length === 0) {
+      return "No proactive alerts found.";
+    }
+
+    const lines = alerts.map((a, i) => {
+      const confidence = Math.round(a.confidence * 100);
+      const time = a.createdAt.toLocaleString();
+      return `${i + 1}. [${a.suggestedAction.toUpperCase()}] ${a.taskDescription}
+   Confidence: ${confidence}%
+   Reason: ${a.reason}
+   Time: ${time}${userId ? "" : `\n   User: ${a.userId}`}`;
+    });
+
+    return `Proactive Alerts (${alerts.length}):\n\n${lines.join("\n\n")}`;
+  } catch (error) {
+    return `Failed to get alerts: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function getUserInsights(userId: number): Promise<string> {
+  try {
+    const insights = await proactiveMonitor.getUserInsights(userId);
+
+    const patternSummary =
+      insights.patterns.length > 0
+        ? insights.patterns
+            .slice(0, 5)
+            .map(
+              p =>
+                `  - "${p.pattern}" (${Math.round(p.confidence * 100)}% confidence)`
+            )
+            .join("\n")
+        : "  No patterns detected yet";
+
+    const predictionSummary =
+      insights.predictions.length > 0
+        ? insights.predictions
+            .slice(0, 5)
+            .map(
+              p =>
+                `  - ${p.taskDescription} (${Math.round(p.confidence * 100)}%)`
+            )
+            .join("\n")
+        : "  No predictions available";
+
+    const alertSummary =
+      insights.recentAlerts.length > 0
+        ? insights.recentAlerts
+            .slice(0, 3)
+            .map(a => `  - [${a.suggestedAction}] ${a.taskDescription}`)
+            .join("\n")
+        : "  No recent alerts";
+
+    const monitoringStatus = insights.userData
+      ? `Monitored since last check: ${insights.userData.lastCheck.toLocaleString()}
+Auto-triggers today: ${insights.userData.autoTriggersToday}
+Alerts sent today: ${insights.userData.alertsSent}`
+      : "User not currently monitored";
+
+    return `User Insights for User ${userId}:
+
+Detected Patterns:
+${patternSummary}
+
+Predicted Next Tasks:
+${predictionSummary}
+
+Recent Alerts:
+${alertSummary}
+
+Monitoring Status:
+${monitoringStatus}`;
+  } catch (error) {
+    return `Failed to get user insights: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 export async function spawnSpecializedAgent(
   userId: number,
   agentType: AgentType,
@@ -7926,6 +8056,17 @@ export async function executeTool(
       return getPredictedTasks(input.userId as number);
     case "get_task_patterns":
       return getTaskPatterns(input.userId as number);
+    case "get_proactive_monitor_status":
+      return getProactiveMonitorStatus();
+    case "configure_proactive_monitor":
+      return configureProactiveMonitor(input.config as Partial<MonitorConfig>);
+    case "get_proactive_alerts":
+      return getProactiveAlerts(
+        input.userId as number | undefined,
+        input.limit as number | undefined
+      );
+    case "get_user_insights":
+      return getUserInsights(input.userId as number);
     case "connect_mcp_server":
       return connectMCPServer(
         input.name as string,
@@ -10116,6 +10257,54 @@ export function getAvailableTools(): Array<{
       description:
         "Analyze and display detected patterns in user task history. Shows frequency, intervals, and keywords for recurring task types.",
       parameters: {},
+    },
+    {
+      name: "get_proactive_monitor_status",
+      description:
+        "Get the current status of the proactive monitoring system. Shows if it's running, configuration settings, and statistics.",
+      parameters: {},
+    },
+    {
+      name: "configure_proactive_monitor",
+      description:
+        "Configure the proactive monitoring system. Can enable/disable monitoring, set thresholds for auto-triggering tasks, and configure quiet hours.",
+      parameters: {
+        config: {
+          type: "object",
+          description:
+            "Configuration object with: enabled (bool), checkIntervalMs (number), autoTriggerThreshold (0-1), alertThreshold (0-1), maxAutoTriggersPerDay (number), quietHoursStart (0-23), quietHoursEnd (0-23)",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "get_proactive_alerts",
+      description:
+        "Get proactive alerts generated by the monitoring system. Shows tasks that were auto-triggered, notified, or suggested based on predictions.",
+      parameters: {
+        userId: {
+          type: "number",
+          description: "Filter alerts by user ID (optional)",
+          required: false,
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of alerts to return (default: 20)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "get_user_insights",
+      description:
+        "Get comprehensive insights about a user's task patterns, predictions, and monitoring status. Useful for understanding user behavior and proactive assistance.",
+      parameters: {
+        userId: {
+          type: "number",
+          description: "The user ID to get insights for",
+          required: true,
+        },
+      },
     },
     {
       name: "connect_mcp_server",

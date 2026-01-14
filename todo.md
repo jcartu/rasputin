@@ -42,7 +42,7 @@
 
 - [x] Database schema generator (generate_schema tool - creates Drizzle ORM schemas from natural language)
 - [x] UI component library integration (shadcn/ui, Radix UI, Headless UI with Tailwind)
-- [ ] Docker containerization for deployments
+- [x] Docker containerization for deployments (Dockerfile, docker-compose.yml, .dockerignore for all frameworks)
 - [x] Test runner integration (vitest, jest, pytest, minitest/rspec auto-setup)
 
 ### End-to-End Testing
@@ -96,7 +96,7 @@
 - [x] Anticipate user needs from patterns (analyzeTaskPatterns detects recurring tasks)
 - [x] Smart suggestions based on context (predictNextTasks considers time, topics, history)
 - [x] get_predicted_tasks and get_task_patterns tools for JARVIS
-- [ ] Proactive monitoring and alerting (future: auto-trigger based on predictions)
+- [x] Proactive monitoring and alerting (proactiveMonitor.ts with auto-trigger and configurable thresholds)
 
 ### Swarm Intelligence
 
@@ -113,6 +113,12 @@
 - [x] Test runner integration for scaffolded projects (vitest, jest, pytest, minitest)
 - [x] Predictive task initiation system (pattern analysis, suggestions, learning)
 - [x] scaffold_project tool now in getAvailableTools() with full parameter support
+- [x] Docker containerization for scaffolder (Dockerfile, docker-compose.yml, nginx.conf)
+- [x] Proactive monitoring service with auto-trigger capabilities
+  - Configurable thresholds (autoTriggerThreshold: 85%, alertThreshold: 60%)
+  - Quiet hours support to avoid triggering during off-hours
+  - User insights API for comprehensive task pattern analysis
+  - Tools: get_proactive_monitor_status, configure_proactive_monitor, get_proactive_alerts, get_user_insights
 
 ## Previously Completed (Jan 13, 2026)
 
