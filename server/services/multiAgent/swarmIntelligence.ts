@@ -337,8 +337,12 @@ class SwarmIntelligenceService {
   private async getAgentVote(
     agent: Agent,
     proposalId: string,
-    question: string
+    question: string,
+    retryCount = 0
   ): Promise<ConsensusVote> {
+    const maxRetries = 2;
+    const weight = this.calculateAgentWeight(agent);
+
     try {
       const prompt = `You are ${agent.name}, a ${agent.agentType} agent.
 
@@ -350,6 +354,10 @@ Based on your expertise and perspective, provide your vote:
 
 Respond ONLY with a JSON object, no other text:
 {"vote": "approve|reject|abstain", "reasoning": "your reasoning"}`;
+
+      console.info(
+        `[SwarmIntelligence] Getting vote from agent ${agent.name} (attempt ${retryCount + 1})`
+      );
 
       const response = await invokeLLM({
         messages: [
@@ -365,17 +373,24 @@ Respond ONLY with a JSON object, no other text:
 
       const rawContent = response.choices[0]?.message?.content;
       const content = typeof rawContent === "string" ? rawContent : "{}";
+      console.info(
+        `[SwarmIntelligence] Raw vote response from ${agent.name}: ${content.slice(0, 200)}`
+      );
+
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       const parsed = JSON.parse(jsonMatch?.[0] || "{}");
 
-      const weight = this.calculateAgentWeight(agent);
+      const validVotes = ["approve", "reject", "abstain"];
+      const voteValue = validVotes.includes(parsed.vote)
+        ? parsed.vote
+        : "abstain";
 
       const vote: ConsensusVote = {
         agentId: agent.id,
         proposalId,
-        vote: parsed.vote || "abstain",
+        vote: voteValue,
         weight,
-        reasoning: parsed.reasoning,
+        reasoning: parsed.reasoning || "No reasoning provided",
       };
 
       emitSwarmVote({
@@ -390,18 +405,36 @@ Respond ONLY with a JSON object, no other text:
 
       return vote;
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       console.error(
-        `[SwarmIntelligence] Vote failed for agent ${agent.name}:`,
-        error instanceof Error ? error.message : String(error)
+        `[SwarmIntelligence] Vote failed for agent ${agent.name} (attempt ${retryCount + 1}):`,
+        errorMsg
       );
-      const weight = this.calculateAgentWeight(agent);
-      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+
+      if (retryCount < maxRetries) {
+        const isTransient =
+          errorMsg.includes("rate") ||
+          errorMsg.includes("429") ||
+          errorMsg.includes("503") ||
+          errorMsg.includes("timeout") ||
+          errorMsg.includes("ECONNRESET");
+
+        if (isTransient) {
+          const delay = Math.pow(2, retryCount) * 1000;
+          console.info(
+            `[SwarmIntelligence] Retrying vote for ${agent.name} in ${delay}ms`
+          );
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return this.getAgentVote(agent, proposalId, question, retryCount + 1);
+        }
+      }
+
       const vote: ConsensusVote = {
         agentId: agent.id,
         proposalId,
         vote: "abstain",
         weight,
-        reasoning: `Vote failed: ${errorMsg.slice(0, 50)}`,
+        reasoning: `Vote failed: ${errorMsg.slice(0, 100)}`,
       };
 
       emitSwarmVote({

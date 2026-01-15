@@ -305,12 +305,8 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = normalizedToolChoice;
   }
 
-  payload.max_tokens = isOpenAiApi ? 16384 : 32768;
-
-  if (!isOpenAiApi) {
-    payload.thinking = {
-      budget_tokens: 128,
-    };
+  if (isOpenAiApi) {
+    payload.max_completion_tokens = 16384;
   }
 
   const normalizedResponseFormat = normalizeResponseFormat({
