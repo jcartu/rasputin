@@ -7305,6 +7305,347 @@ Message: ${message}`;
   }
 }
 
+// ============================================================================
+// EMERGENT SWARM BEHAVIOR TOOLS
+// ============================================================================
+
+/**
+ * Initiate collective problem solving - decompose a complex problem and assign
+ * sub-problems to agents for parallel solving
+ */
+export async function initiateCollectiveProblem(
+  userId: number,
+  problemDescription: string,
+  teamId?: string
+): Promise<string> {
+  try {
+    const problem = await swarmIntelligence.initiateCollectiveProblemSolving(
+      userId,
+      problemDescription,
+      teamId
+    );
+
+    const subProblemLines = problem.subProblems.map((sp, i) => {
+      const assignee = sp.assignedAgentId
+        ? `Agent ${sp.assignedAgentId}`
+        : "Unassigned";
+      return `${i + 1}. ${sp.description}
+   Status: ${sp.status}
+   Assigned to: ${assignee}
+   Dependencies: ${sp.dependencies.length > 0 ? sp.dependencies.join(", ") : "None"}`;
+    });
+
+    return `Collective Problem Solving Initiated!
+
+Problem ID: ${problem.problemId}
+Description: ${problem.description}
+Phase: ${problem.currentPhase}
+Contributors: ${problem.contributors.length} agents
+
+Sub-Problems (${problem.subProblems.length}):
+${subProblemLines.join("\n\n")}
+
+Use solve_sub_problem to submit solutions for each sub-problem.
+Use contribute_swarm_knowledge to share insights.
+Use synthesize_collective_solution when all sub-problems are solved.`;
+  } catch (error) {
+    return `Failed to initiate collective problem: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Contribute knowledge to the swarm during collective problem solving
+ */
+export async function contributeSwarmKnowledge(
+  problemId: string,
+  agentId: number,
+  content: string,
+  knowledgeType: "insight" | "constraint" | "solution" | "warning" = "insight"
+): Promise<string> {
+  try {
+    await swarmIntelligence.contributeKnowledge(
+      problemId,
+      agentId,
+      content,
+      knowledgeType
+    );
+
+    return `Knowledge contributed successfully!
+
+Problem ID: ${problemId}
+From: Agent ${agentId}
+Type: ${knowledgeType}
+Content: ${content.slice(0, 200)}${content.length > 200 ? "..." : ""}
+
+High-value insights are automatically propagated to other contributors.`;
+  } catch (error) {
+    return `Failed to contribute knowledge: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Mark a sub-problem as solved with a solution
+ */
+export async function solveSubProblem(
+  problemId: string,
+  subProblemId: string,
+  solution: string,
+  confidence: number = 0.8
+): Promise<string> {
+  try {
+    await swarmIntelligence.solveSubProblem(
+      problemId,
+      subProblemId,
+      solution,
+      Math.max(0, Math.min(1, confidence))
+    );
+
+    const problem = swarmIntelligence.getCollectiveProblem(problemId);
+    const solved =
+      problem?.subProblems.filter(sp => sp.status === "solved").length || 0;
+    const total = problem?.subProblems.length || 0;
+
+    return `Sub-problem solved!
+
+Problem ID: ${problemId}
+Sub-problem: ${subProblemId}
+Solution: ${solution.slice(0, 300)}${solution.length > 300 ? "..." : ""}
+Confidence: ${Math.round(confidence * 100)}%
+
+Progress: ${solved}/${total} sub-problems solved
+${solved === total ? "\nAll sub-problems solved! Use synthesize_collective_solution to generate final answer." : ""}`;
+  } catch (error) {
+    return `Failed to solve sub-problem: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Synthesize solutions from all solved sub-problems into a coherent final solution
+ */
+export async function synthesizeCollectiveSolution(
+  problemId: string
+): Promise<string> {
+  try {
+    const result =
+      await swarmIntelligence.synthesizeCollectiveSolution(problemId);
+
+    if (!result) {
+      return `Cannot synthesize solution for problem ${problemId}. 
+Ensure all sub-problems are solved first using solve_sub_problem.`;
+    }
+
+    return `Collective Solution Synthesized!
+
+Problem ID: ${problemId}
+Overall Confidence: ${Math.round(result.confidence * 100)}%
+
+Final Solution:
+${result.solution}`;
+  } catch (error) {
+    return `Failed to synthesize solution: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Get the current status of a collective problem
+ */
+export async function getCollectiveProblemStatus(
+  problemId: string
+): Promise<string> {
+  try {
+    const problem = swarmIntelligence.getCollectiveProblem(problemId);
+
+    if (!problem) {
+      return `Problem ${problemId} not found.`;
+    }
+
+    const subProblemLines = problem.subProblems.map((sp, i) => {
+      const statusEmoji =
+        sp.status === "solved"
+          ? "✅"
+          : sp.status === "in_progress"
+            ? "🔄"
+            : "⏳";
+      return `${statusEmoji} ${i + 1}. ${sp.description.slice(0, 50)}... (${sp.status})`;
+    });
+
+    const knowledgeCount = problem.sharedKnowledge.length;
+    const highValueKnowledge = problem.sharedKnowledge.filter(
+      k => k.relevanceScore > 0.7
+    ).length;
+
+    return `Collective Problem Status
+
+Problem ID: ${problem.problemId}
+Phase: ${problem.currentPhase}
+Contributors: ${problem.contributors.length} agents
+Shared Knowledge: ${knowledgeCount} fragments (${highValueKnowledge} high-value)
+
+Sub-Problems:
+${subProblemLines.join("\n")}`;
+  } catch (error) {
+    return `Failed to get problem status: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Adapt an agent's role dynamically based on task needs
+ */
+export async function adaptAgentRole(
+  agentId: number,
+  newRole: AgentType,
+  reason: string
+): Promise<string> {
+  try {
+    const adaptation = await swarmIntelligence.adaptAgentRole(
+      agentId,
+      newRole,
+      reason
+    );
+
+    return `Agent Role Adaptation
+
+Agent ID: ${agentId}
+Original Role: ${adaptation.originalRole}
+Adapted Role: ${adaptation.adaptedRole}
+Reason: ${reason}
+
+The agent will now operate with ${newRole} capabilities.
+Use update_adaptation_performance to track how well the adaptation works.`;
+  } catch (error) {
+    return `Failed to adapt agent role: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Update the performance score of a role adaptation
+ */
+export async function updateAdaptationPerformance(
+  agentId: number,
+  performanceScore: number
+): Promise<string> {
+  try {
+    const normalizedScore = Math.max(0, Math.min(1, performanceScore));
+    await swarmIntelligence.updateAdaptationPerformance(
+      agentId,
+      normalizedScore
+    );
+
+    const message =
+      normalizedScore < 0.3
+        ? "Poor performance - adaptation has been reverted."
+        : normalizedScore < 0.7
+          ? "Moderate performance - adaptation continues."
+          : "Good performance - adaptation is successful!";
+
+    return `Adaptation Performance Updated
+
+Agent ID: ${agentId}
+Performance: ${Math.round(normalizedScore * 100)}%
+${message}`;
+  } catch (error) {
+    return `Failed to update adaptation performance: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Place a stigmergy marker for indirect agent coordination
+ */
+export async function placeStigmergyMarker(
+  agentId: number,
+  taskContext: string,
+  message: string,
+  markerType: "pheromone" | "artifact" | "signal" = "pheromone"
+): Promise<string> {
+  try {
+    const marker = await swarmIntelligence.placeStigmergyMarker(
+      agentId,
+      taskContext,
+      message,
+      markerType
+    );
+
+    return `Stigmergy Marker Placed
+
+Marker ID: ${marker.id}
+Type: ${marker.type}
+Context: ${taskContext}
+Message: ${message}
+Created by: Agent ${agentId}
+
+Other agents in the same context will discover this marker.
+Markers decay over time - current strength: ${Math.round(marker.decayingStrength * 100)}%`;
+  } catch (error) {
+    return `Failed to place marker: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Get stigmergy markers for a given task context
+ */
+export async function getStigmergyMarkers(
+  taskContext: string
+): Promise<string> {
+  try {
+    const markers = swarmIntelligence.getMarkersForContext(taskContext);
+
+    if (markers.length === 0) {
+      return `No active markers found for context: ${taskContext}`;
+    }
+
+    const markerLines = markers.map((m, i) => {
+      const typeEmoji =
+        m.type === "pheromone" ? "🔵" : m.type === "artifact" ? "📦" : "📡";
+      const strength = Math.round(m.decayingStrength * 100);
+      return `${typeEmoji} ${i + 1}. ${m.message}
+   Type: ${m.type} | Strength: ${strength}% | From: Agent ${m.createdBy}`;
+    });
+
+    return `Stigmergy Markers for Context: ${taskContext}
+
+${markerLines.join("\n\n")}
+
+Markers guide agent behavior through indirect coordination.`;
+  } catch (error) {
+    return `Failed to get markers: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Get recent swarm knowledge fragments
+ */
+export async function getSwarmKnowledge(limit: number = 20): Promise<string> {
+  try {
+    const knowledge = swarmIntelligence.getSwarmKnowledge(limit);
+
+    if (knowledge.length === 0) {
+      return "No swarm knowledge available yet. Agents share knowledge during collective problem solving.";
+    }
+
+    const knowledgeLines = knowledge.map((k, i) => {
+      const typeEmoji =
+        k.type === "insight"
+          ? "💡"
+          : k.type === "constraint"
+            ? "⚠️"
+            : k.type === "solution"
+              ? "✅"
+              : "🚨";
+      const relevance = Math.round(k.relevanceScore * 100);
+      return `${typeEmoji} ${i + 1}. [${k.type.toUpperCase()}] ${k.content.slice(0, 100)}...
+   Relevance: ${relevance}% | From: Agent ${k.contributorAgentId}`;
+    });
+
+    return `Recent Swarm Knowledge (${knowledge.length} fragments)
+
+${knowledgeLines.join("\n\n")}
+
+High-relevance knowledge is automatically propagated to relevant agents.`;
+  } catch (error) {
+    return `Failed to get swarm knowledge: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 export async function spawnSpecializedAgent(
   userId: number,
   agentType: AgentType,
@@ -8304,6 +8645,56 @@ export async function executeTool(
         input.fromAgentId as number,
         input.message as string
       );
+    case "initiate_collective_problem":
+      return initiateCollectiveProblem(
+        input.userId as number,
+        input.problemDescription as string,
+        input.teamId as string | undefined
+      );
+    case "contribute_swarm_knowledge":
+      return contributeSwarmKnowledge(
+        input.problemId as string,
+        input.agentId as number,
+        input.content as string,
+        (input.knowledgeType as
+          | "insight"
+          | "constraint"
+          | "solution"
+          | "warning") || "insight"
+      );
+    case "solve_sub_problem":
+      return solveSubProblem(
+        input.problemId as string,
+        input.subProblemId as string,
+        input.solution as string,
+        (input.confidence as number) || 0.8
+      );
+    case "synthesize_collective_solution":
+      return synthesizeCollectiveSolution(input.problemId as string);
+    case "get_collective_problem_status":
+      return getCollectiveProblemStatus(input.problemId as string);
+    case "adapt_agent_role":
+      return adaptAgentRole(
+        input.agentId as number,
+        input.newRole as AgentType,
+        input.reason as string
+      );
+    case "update_adaptation_performance":
+      return updateAdaptationPerformance(
+        input.agentId as number,
+        input.performanceScore as number
+      );
+    case "place_stigmergy_marker":
+      return placeStigmergyMarker(
+        input.agentId as number,
+        input.taskContext as string,
+        input.message as string,
+        (input.markerType as "pheromone" | "artifact" | "signal") || "pheromone"
+      );
+    case "get_stigmergy_markers":
+      return getStigmergyMarkers(input.taskContext as string);
+    case "get_swarm_knowledge":
+      return getSwarmKnowledge((input.limit as number) || 20);
     case "connect_mcp_server":
       return connectMCPServer(
         input.name as string,

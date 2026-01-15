@@ -259,6 +259,60 @@ interface ServerToClientEvents {
     message: string;
     timestamp: number;
   }) => void;
+  "swarm:collective_problem_start": (data: {
+    problemId: string;
+    description: string;
+    subProblemCount: number;
+    contributorCount: number;
+    timestamp: number;
+  }) => void;
+  "swarm:sub_problem_assigned": (data: {
+    problemId: string;
+    subProblemId: string;
+    description: string;
+    agentId: number;
+    agentName: string;
+    timestamp: number;
+  }) => void;
+  "swarm:sub_problem_solved": (data: {
+    problemId: string;
+    subProblemId: string;
+    agentId: number;
+    confidence: number;
+    solvedCount: number;
+    totalCount: number;
+    timestamp: number;
+  }) => void;
+  "swarm:knowledge_shared": (data: {
+    problemId: string;
+    agentId: number;
+    agentName: string;
+    knowledgeType: string;
+    relevanceScore: number;
+    timestamp: number;
+  }) => void;
+  "swarm:solution_synthesized": (data: {
+    problemId: string;
+    confidence: number;
+    subProblemsSolved: number;
+    timestamp: number;
+  }) => void;
+  "swarm:role_adaptation": (data: {
+    agentId: number;
+    agentName: string;
+    originalRole: string;
+    newRole: string;
+    reason: string;
+    timestamp: number;
+  }) => void;
+  "swarm:stigmergy_marker": (data: {
+    markerId: string;
+    agentId: number;
+    taskContext: string;
+    markerType: string;
+    message: string;
+    timestamp: number;
+  }) => void;
   error: (data: { message: string; code?: string }) => void;
 }
 
@@ -1030,6 +1084,91 @@ export function emitSwarmBroadcast(data: {
 }): void {
   if (io) {
     io.emit("swarm:broadcast", { ...data, timestamp: Date.now() });
+  }
+}
+
+export function emitCollectiveProblemStart(data: {
+  problemId: string;
+  description: string;
+  subProblemCount: number;
+  contributorCount: number;
+}): void {
+  if (io) {
+    io.emit("swarm:collective_problem_start", {
+      ...data,
+      timestamp: Date.now(),
+    });
+  }
+}
+
+export function emitSubProblemAssigned(data: {
+  problemId: string;
+  subProblemId: string;
+  description: string;
+  agentId: number;
+  agentName: string;
+}): void {
+  if (io) {
+    io.emit("swarm:sub_problem_assigned", { ...data, timestamp: Date.now() });
+  }
+}
+
+export function emitSubProblemSolved(data: {
+  problemId: string;
+  subProblemId: string;
+  agentId: number;
+  confidence: number;
+  solvedCount: number;
+  totalCount: number;
+}): void {
+  if (io) {
+    io.emit("swarm:sub_problem_solved", { ...data, timestamp: Date.now() });
+  }
+}
+
+export function emitKnowledgeShared(data: {
+  problemId: string;
+  agentId: number;
+  agentName: string;
+  knowledgeType: string;
+  relevanceScore: number;
+}): void {
+  if (io) {
+    io.emit("swarm:knowledge_shared", { ...data, timestamp: Date.now() });
+  }
+}
+
+export function emitSolutionSynthesized(data: {
+  problemId: string;
+  confidence: number;
+  subProblemsSolved: number;
+}): void {
+  if (io) {
+    io.emit("swarm:solution_synthesized", { ...data, timestamp: Date.now() });
+  }
+}
+
+export function emitRoleAdaptation(data: {
+  agentId: number;
+  agentName: string;
+  originalRole: string;
+  newRole: string;
+  reason: string;
+}): void {
+  if (io) {
+    io.emit("swarm:role_adaptation", { ...data, timestamp: Date.now() });
+  }
+}
+
+export function emitStigmergyMarker(data: {
+  markerId: string;
+  agentId: number;
+  taskContext: string;
+  markerType: string;
+  message: string;
+}): void {
+  if (io) {
+    io.emit("swarm:stigmergy_marker", { ...data, timestamp: Date.now() });
   }
 }
 

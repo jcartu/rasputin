@@ -16,6 +16,13 @@ import {
   emitSwarmVote,
   emitSwarmConsensusComplete,
   emitSwarmBroadcast,
+  emitCollectiveProblemStart,
+  emitSubProblemAssigned,
+  emitSubProblemSolved,
+  emitKnowledgeShared,
+  emitSolutionSynthesized,
+  emitRoleAdaptation,
+  emitStigmergyMarker,
 } from "../websocket";
 
 export interface NegotiationProposal {
@@ -62,6 +69,53 @@ export interface TeamFormationRequest {
   preferredAgentTypes?: AgentType[];
 }
 
+export interface CollectiveProblem {
+  problemId: string;
+  description: string;
+  subProblems: SubProblem[];
+  sharedKnowledge: KnowledgeFragment[];
+  currentPhase: "decomposition" | "solving" | "synthesis" | "complete";
+  contributors: number[];
+}
+
+export interface SubProblem {
+  id: string;
+  description: string;
+  assignedAgentId: number | null;
+  status: "pending" | "in_progress" | "solved" | "blocked";
+  solution: string | null;
+  dependencies: string[];
+  confidence: number;
+}
+
+export interface KnowledgeFragment {
+  id: string;
+  contributorAgentId: number;
+  content: string;
+  type: "insight" | "constraint" | "solution" | "warning";
+  relevanceScore: number;
+  timestamp: number;
+}
+
+export interface RoleAdaptation {
+  agentId: number;
+  originalRole: AgentType;
+  adaptedRole: AgentType;
+  reason: string;
+  timestamp: number;
+  performance: number;
+}
+
+export interface StigmergyMarker {
+  id: string;
+  type: "pheromone" | "artifact" | "signal";
+  taskContext: string;
+  decayingStrength: number;
+  message: string;
+  createdBy: number;
+  createdAt: number;
+}
+
 export interface FormedTeam {
   teamId: string;
   members: Agent[];
@@ -74,6 +128,10 @@ class SwarmIntelligenceService {
   private activeNegotiations: Map<number, NegotiationBid[]> = new Map();
   private pendingVotes: Map<string, ConsensusVote[]> = new Map();
   private activeTeams: Map<string, FormedTeam> = new Map();
+  private collectiveProblems: Map<string, CollectiveProblem> = new Map();
+  private roleAdaptations: Map<number, RoleAdaptation> = new Map();
+  private stigmergyMarkers: Map<string, StigmergyMarker[]> = new Map();
+  private swarmKnowledge: KnowledgeFragment[] = [];
 
   async initiateTaskNegotiation(
     userId: number,
@@ -743,6 +801,459 @@ Respond ONLY with a JSON object, no other text:
 
   getVotingStatus(proposalId: string): ConsensusVote[] | null {
     return this.pendingVotes.get(proposalId) || null;
+  }
+
+  async initiateCollectiveProblemSolving(
+    userId: number,
+    problemDescription: string,
+    teamId?: string
+  ): Promise<CollectiveProblem> {
+    const problemId = `problem-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    let agents: Agent[];
+    if (teamId) {
+      const team = this.activeTeams.get(teamId);
+      agents = team?.members || [];
+    } else {
+      agents = await agentManager.getUserAgents(userId);
+      agents = agents.filter(
+        a => a.status === "idle" || a.status === "waiting"
+      );
+    }
+
+    if (agents.length === 0) {
+      throw new Error("No agents available for collective problem solving");
+    }
+
+    const subProblems = await this.decomposeProblems(
+      problemDescription,
+      agents
+    );
+
+    const problem: CollectiveProblem = {
+      problemId,
+      description: problemDescription,
+      subProblems,
+      sharedKnowledge: [],
+      currentPhase: "decomposition",
+      contributors: agents.map(a => a.id),
+    };
+
+    this.collectiveProblems.set(problemId, problem);
+
+    emitCollectiveProblemStart({
+      problemId,
+      description: problemDescription,
+      subProblemCount: subProblems.length,
+      contributorCount: agents.length,
+    });
+
+    await this.assignSubProblems(problem, agents);
+
+    problem.currentPhase = "solving";
+    return problem;
+  }
+
+  private async decomposeProblems(
+    description: string,
+    agents: Agent[]
+  ): Promise<SubProblem[]> {
+    try {
+      const response = await invokeLLM({
+        messages: [
+          {
+            role: "system",
+            content: `You are a problem decomposition expert. Break down complex problems into smaller, parallelizable sub-problems.
+Respond with JSON: {"subProblems": [{"description": "...", "dependencies": ["id1"], "complexity": 1-10}]}`,
+          },
+          {
+            role: "user",
+            content: `Decompose this problem for ${agents.length} agents to solve collaboratively:\n\n${description}`,
+          },
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const rawContent = response.choices[0]?.message?.content;
+      const content = typeof rawContent === "string" ? rawContent : "{}";
+      const parsed = JSON.parse(content);
+
+      return (parsed.subProblems || []).map(
+        (
+          sp: {
+            description: string;
+            dependencies?: string[];
+            complexity?: number;
+          },
+          i: number
+        ) => ({
+          id: `sp-${i}`,
+          description: sp.description,
+          assignedAgentId: null,
+          status: "pending" as const,
+          solution: null,
+          dependencies: sp.dependencies || [],
+          confidence: 0,
+        })
+      );
+    } catch {
+      return [
+        {
+          id: "sp-0",
+          description,
+          assignedAgentId: null,
+          status: "pending" as const,
+          solution: null,
+          dependencies: [],
+          confidence: 0,
+        },
+      ];
+    }
+  }
+
+  private async assignSubProblems(
+    problem: CollectiveProblem,
+    agents: Agent[]
+  ): Promise<void> {
+    const unassigned = problem.subProblems.filter(sp => !sp.assignedAgentId);
+    const available = [...agents];
+
+    for (const subProblem of unassigned) {
+      if (available.length === 0) break;
+
+      const bestAgent = this.findBestAgentForSubProblem(subProblem, available);
+      if (bestAgent) {
+        subProblem.assignedAgentId = bestAgent.id;
+        subProblem.status = "in_progress";
+        available.splice(available.indexOf(bestAgent), 1);
+
+        emitSubProblemAssigned({
+          problemId: problem.problemId,
+          subProblemId: subProblem.id,
+          description: subProblem.description,
+          agentId: bestAgent.id,
+          agentName: bestAgent.name,
+        });
+      }
+    }
+  }
+
+  private findBestAgentForSubProblem(
+    subProblem: SubProblem,
+    agents: Agent[]
+  ): Agent | null {
+    if (agents.length === 0) return null;
+
+    const scored = agents.map(agent => {
+      let score = 50;
+
+      const adaptation = this.roleAdaptations.get(agent.id);
+      if (adaptation && adaptation.performance > 0.7) {
+        score += 20;
+      }
+
+      const agentMarkers = this.getMarkersForAgent(agent.id);
+      const relevantMarkers = agentMarkers.filter(m =>
+        subProblem.description
+          .toLowerCase()
+          .includes(m.message.toLowerCase().slice(0, 20))
+      );
+      score += relevantMarkers.length * 5;
+
+      if (agent.agentType === "specialist" || agent.agentType === "code") {
+        score += 10;
+      }
+
+      return { agent, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    return scored[0]?.agent || null;
+  }
+
+  async contributeKnowledge(
+    problemId: string,
+    agentId: number,
+    content: string,
+    type: KnowledgeFragment["type"]
+  ): Promise<void> {
+    const problem = this.collectiveProblems.get(problemId);
+    if (!problem) return;
+
+    const fragment: KnowledgeFragment = {
+      id: `kf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      contributorAgentId: agentId,
+      content,
+      type,
+      relevanceScore: this.calculateKnowledgeRelevance(content, problem),
+      timestamp: Date.now(),
+    };
+
+    problem.sharedKnowledge.push(fragment);
+    this.swarmKnowledge.push(fragment);
+
+    const agent = await agentManager.getAgent(agentId);
+    emitKnowledgeShared({
+      problemId,
+      agentId,
+      agentName: agent?.name || `Agent ${agentId}`,
+      knowledgeType: type,
+      relevanceScore: fragment.relevanceScore,
+    });
+
+    if (fragment.relevanceScore > 0.7) {
+      await this.propagateKnowledge(problem, fragment);
+    }
+  }
+
+  private calculateKnowledgeRelevance(
+    content: string,
+    problem: CollectiveProblem
+  ): number {
+    const contentLower = content.toLowerCase();
+    const descLower = problem.description.toLowerCase();
+
+    const words = descLower.split(/\s+/).filter(w => w.length > 3);
+    const matches = words.filter(w => contentLower.includes(w)).length;
+
+    return Math.min(1, matches / Math.max(words.length, 1));
+  }
+
+  private async propagateKnowledge(
+    problem: CollectiveProblem,
+    fragment: KnowledgeFragment
+  ): Promise<void> {
+    for (const agentId of problem.contributors) {
+      if (agentId === fragment.contributorAgentId) continue;
+
+      await agentManager.sendMessage(
+        fragment.contributorAgentId,
+        agentId,
+        "status",
+        `[Swarm Knowledge] ${fragment.type}: ${fragment.content}`,
+        { metadata: { problemId: problem.problemId, knowledgeId: fragment.id } }
+      );
+    }
+  }
+
+  async adaptAgentRole(
+    agentId: number,
+    newRole: AgentType,
+    reason: string
+  ): Promise<RoleAdaptation> {
+    const agent = await agentManager.getAgent(agentId);
+    if (!agent) throw new Error("Agent not found");
+
+    const adaptation: RoleAdaptation = {
+      agentId,
+      originalRole: agent.agentType,
+      adaptedRole: newRole,
+      reason,
+      timestamp: Date.now(),
+      performance: 0.5,
+    };
+
+    this.roleAdaptations.set(agentId, adaptation);
+
+    emitRoleAdaptation({
+      agentId,
+      agentName: agent.name,
+      originalRole: agent.agentType,
+      newRole,
+      reason,
+    });
+
+    return adaptation;
+  }
+
+  async updateAdaptationPerformance(
+    agentId: number,
+    performance: number
+  ): Promise<void> {
+    const adaptation = this.roleAdaptations.get(agentId);
+    if (!adaptation) return;
+
+    adaptation.performance = Math.max(0, Math.min(1, performance));
+
+    if (adaptation.performance < 0.3) {
+      this.roleAdaptations.delete(agentId);
+    }
+  }
+
+  async placeStigmergyMarker(
+    agentId: number,
+    taskContext: string,
+    message: string,
+    type: StigmergyMarker["type"] = "pheromone"
+  ): Promise<StigmergyMarker> {
+    const marker: StigmergyMarker = {
+      id: `marker-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      type,
+      taskContext,
+      decayingStrength: 1.0,
+      message,
+      createdBy: agentId,
+      createdAt: Date.now(),
+    };
+
+    const contextMarkers = this.stigmergyMarkers.get(taskContext) || [];
+    contextMarkers.push(marker);
+    this.stigmergyMarkers.set(taskContext, contextMarkers);
+
+    emitStigmergyMarker({
+      markerId: marker.id,
+      agentId,
+      taskContext,
+      markerType: type,
+      message,
+    });
+
+    return marker;
+  }
+
+  getMarkersForContext(taskContext: string): StigmergyMarker[] {
+    const markers = this.stigmergyMarkers.get(taskContext) || [];
+    const now = Date.now();
+    const decayRate = 0.1;
+
+    return markers
+      .map(m => ({
+        ...m,
+        decayingStrength: Math.max(
+          0,
+          m.decayingStrength - decayRate * ((now - m.createdAt) / 60000)
+        ),
+      }))
+      .filter(m => m.decayingStrength > 0.1);
+  }
+
+  private getMarkersForAgent(agentId: number): StigmergyMarker[] {
+    const allMarkers: StigmergyMarker[] = [];
+    for (const markers of Array.from(this.stigmergyMarkers.values())) {
+      allMarkers.push(
+        ...markers.filter((m: StigmergyMarker) => m.createdBy === agentId)
+      );
+    }
+    return allMarkers;
+  }
+
+  async synthesizeCollectiveSolution(
+    problemId: string
+  ): Promise<{ solution: string; confidence: number } | null> {
+    const problem = this.collectiveProblems.get(problemId);
+    if (!problem) return null;
+
+    const solvedSubProblems = problem.subProblems.filter(
+      sp => sp.status === "solved" && sp.solution
+    );
+
+    if (solvedSubProblems.length === 0) {
+      return null;
+    }
+
+    const highValueKnowledge = problem.sharedKnowledge
+      .filter(k => k.relevanceScore > 0.5)
+      .map(k => `[${k.type}] ${k.content}`)
+      .join("\n");
+
+    try {
+      const response = await invokeLLM({
+        messages: [
+          {
+            role: "system",
+            content: `You are a synthesis expert. Combine sub-solutions and shared knowledge into a coherent final solution.
+Respond with JSON: {"solution": "...", "confidence": 0.0-1.0}`,
+          },
+          {
+            role: "user",
+            content: `Original problem: ${problem.description}
+
+Sub-solutions:
+${solvedSubProblems.map(sp => `- ${sp.description}: ${sp.solution}`).join("\n")}
+
+Shared knowledge:
+${highValueKnowledge || "None"}
+
+Synthesize a complete solution.`,
+          },
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const rawSynthesisContent = response.choices[0]?.message?.content;
+      const synthContent =
+        typeof rawSynthesisContent === "string" ? rawSynthesisContent : "{}";
+      const parsed = JSON.parse(synthContent);
+
+      problem.currentPhase = "complete";
+
+      emitSolutionSynthesized({
+        problemId,
+        confidence: parsed.confidence || 0.5,
+        subProblemsSolved: solvedSubProblems.length,
+      });
+
+      return {
+        solution: parsed.solution || "No solution generated",
+        confidence: parsed.confidence || 0.5,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async solveSubProblem(
+    problemId: string,
+    subProblemId: string,
+    solution: string,
+    confidence: number
+  ): Promise<void> {
+    const problem = this.collectiveProblems.get(problemId);
+    if (!problem) return;
+
+    const subProblem = problem.subProblems.find(sp => sp.id === subProblemId);
+    if (!subProblem) return;
+
+    subProblem.solution = solution;
+    subProblem.confidence = confidence;
+    subProblem.status = "solved";
+
+    const solvedCount = problem.subProblems.filter(
+      sp => sp.status === "solved"
+    ).length;
+
+    emitSubProblemSolved({
+      problemId,
+      subProblemId,
+      agentId: subProblem.assignedAgentId || 0,
+      confidence,
+      solvedCount,
+      totalCount: problem.subProblems.length,
+    });
+
+    if (subProblem.assignedAgentId) {
+      await this.placeStigmergyMarker(
+        subProblem.assignedAgentId,
+        problemId,
+        `Solved: ${subProblem.description.slice(0, 50)}`,
+        "artifact"
+      );
+    }
+
+    const allSolved = problem.subProblems.every(sp => sp.status === "solved");
+    if (allSolved) {
+      problem.currentPhase = "synthesis";
+    }
+  }
+
+  getCollectiveProblem(problemId: string): CollectiveProblem | null {
+    return this.collectiveProblems.get(problemId) || null;
+  }
+
+  getSwarmKnowledge(limit: number = 50): KnowledgeFragment[] {
+    return this.swarmKnowledge
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, limit);
   }
 }
 
