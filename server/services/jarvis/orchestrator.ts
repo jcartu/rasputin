@@ -596,6 +596,83 @@ function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
+// Maximum context window for Anthropic is 200k tokens, but we want headroom
+const MAX_CONTEXT_TOKENS = 150000;
+
+// Trim messages to fit within context window, preserving first user message and recent context
+function trimMessagesToFitContext(
+  messages: OpenRouterMessage[],
+  systemPrompt: string
+): OpenRouterMessage[] {
+  const systemTokens = estimateTokens(systemPrompt);
+  const availableTokens = MAX_CONTEXT_TOKENS - systemTokens;
+
+  // Calculate total tokens
+  let totalTokens = 0;
+  for (const msg of messages) {
+    const content =
+      typeof msg.content === "string"
+        ? msg.content
+        : JSON.stringify(msg.content);
+    totalTokens += estimateTokens(content);
+  }
+
+  // If we're under the limit, return as-is
+  if (totalTokens <= availableTokens) {
+    return messages;
+  }
+
+  console.warn(
+    `[JARVIS] Context too large (${totalTokens} tokens), trimming to ${availableTokens}`
+  );
+
+  // Strategy: Keep first message (original task) and as many recent messages as possible
+  // Also keep all tool_result messages as they're essential for tool call continuity
+  const trimmed: OpenRouterMessage[] = [];
+  let usedTokens = 0;
+
+  // Always keep the first message (the task)
+  if (messages.length > 0) {
+    const firstContent =
+      typeof messages[0].content === "string"
+        ? messages[0].content
+        : JSON.stringify(messages[0].content);
+    usedTokens += estimateTokens(firstContent);
+    trimmed.push(messages[0]);
+  }
+
+  // Add a summary note that we trimmed context
+  const trimNote = {
+    role: "user" as const,
+    content:
+      "[Context trimmed for token limits. Earlier conversation history has been removed to stay within model limits. Please continue with the current task.]",
+  };
+  usedTokens += estimateTokens(trimNote.content);
+  trimmed.push(trimNote);
+
+  // Add messages from the end until we hit the limit
+  // Work backwards to get the most recent context
+  const recentMessages: OpenRouterMessage[] = [];
+  for (let i = messages.length - 1; i > 0; i--) {
+    const msg = messages[i];
+    const content =
+      typeof msg.content === "string"
+        ? msg.content
+        : JSON.stringify(msg.content);
+    const msgTokens = estimateTokens(content);
+
+    if (usedTokens + msgTokens > availableTokens) {
+      break;
+    }
+
+    usedTokens += msgTokens;
+    recentMessages.unshift(msg);
+  }
+
+  // Combine: first message + trim note + recent messages
+  return [...trimmed, ...recentMessages];
+}
+
 function calculateBackoffDelay(failures: number): number {
   const baseDelay = 500;
   const maxDelay = 10000;
@@ -1870,6 +1947,12 @@ Do NOT continue working - call task_complete immediately.`;
     );
 
     try {
+      const trimmedMessages = trimMessagesToFitContext(messages, systemPrompt);
+      if (trimmedMessages.length < messages.length) {
+        messages.length = 0;
+        messages.push(...trimmedMessages);
+      }
+
       const response = await callLLM(
         messages,
         systemPrompt,

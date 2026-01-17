@@ -11459,19 +11459,6 @@ export function getAvailableTools(): Array<{
       },
     },
     {
-      name: "get_weather",
-      description:
-        "Get current weather and 5-day forecast for any location. ALWAYS use this for weather queries - it has multiple fallback APIs and retries automatically. Returns a beautifully formatted weather card that MUST BE DISPLAYED EXACTLY AS RETURNED - do NOT summarize or rephrase the output, show the formatted card verbatim to the user.",
-      parameters: {
-        location: {
-          type: "string",
-          description:
-            "City name, optionally with country (e.g., 'Paris', 'Tokyo, Japan', 'New York, USA')",
-          required: true,
-        },
-      },
-    },
-    {
       name: "text_process",
       description: "Process text with various operations.",
       parameters: {
