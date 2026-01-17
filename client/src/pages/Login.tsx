@@ -111,7 +111,7 @@ function HexagonLogo() {
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { loading: authLoading } = useAuth();
+  const { loading: authLoading, refresh } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -143,6 +143,7 @@ export default function Login() {
         return;
       }
 
+      await refresh();
       setLocation(data.redirect || "/agent");
     } catch {
       setError("Connection failed. Please try again.");

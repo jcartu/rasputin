@@ -58,12 +58,22 @@ import {
   routeRequest as routeToProvider,
   type RoutingContext,
 } from "./intelligentRouter";
+import { getCachedLLMResponse, setCachedLLMResponse } from "../knowledgeCache";
+import {
+  getGlobalSwarmOrchestrator,
+  createFrontierExecutor,
+  analyzeTask as analyzeTaskV3,
+  type ExecutionContext as V3ExecutionContext,
+} from "./v3";
 
 // Get API keys from environment - Direct connections, no OpenRouter middleman
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const CEREBRAS_API_KEY = process.env.CEREBRAS_API_KEY || "";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const XAI_API_KEY = process.env.XAI_API_KEY || "";
+
+// V3 Swarm Mode - enables multi-agent orchestration with frontier APIs
+const SWARM_MODE_ENABLED = process.env.JARVIS_SWARM_MODE === "true";
 
 // Inference provider type
 type InferenceProvider = "anthropic" | "cerebras" | "gemini" | "grok";
@@ -172,10 +182,13 @@ For CREATING NEW PROJECTS:
   2. Then: install_dependencies to install packages
   3. Then: start_dev_server to run it
 
-For CURRENT DATA (prices, weather, news):
+For WEATHER DATA:
+  ALWAYS use get_weather tool - it has multiple fallback APIs and beautiful formatting!
+  Example: get_weather("Paris, France")
+
+For OTHER CURRENT DATA (prices, news, etc.):
   1. http_request to a known API (preferred - more reliable)
      - Crypto: https://api.coinbase.com/v2/prices/BTC-USD/spot
-     - Weather: https://wttr.in/CityName?format=j1
   2. web_search (fallback if no direct API)
   3. browse_url to a specific data page (last resort)
 
@@ -441,7 +454,8 @@ const MAX_EXPENSIVE_TOOL_RETRIES = 1;
 
 const MAX_IDENTICAL_CALLS_PER_APPROACH = 2;
 export const MAX_ITERATIONS = 25;
-export const MAX_TASK_DURATION_MS = 5 * 60 * 1000;
+export const MAX_TASK_DURATION_MS = 15 * 60 * 1000;
+export const MAX_TOOL_DURATION_MS = 3 * 60 * 1000;
 
 interface ToolExecutionContext {
   failedTools: Map<string, number>;
@@ -1419,7 +1433,16 @@ async function callGrok(
   return response.json();
 }
 
-// Main LLM call function with provider selection and fallback
+const LLM_MAX_RETRIES = 3;
+const LLM_BASE_DELAY_MS = 1000;
+const LLM_MAX_DELAY_MS = 10000;
+
+function calculateBackoff(attempt: number): number {
+  const delay = LLM_BASE_DELAY_MS * Math.pow(2, attempt);
+  const jitter = Math.random() * 500;
+  return Math.min(delay + jitter, LLM_MAX_DELAY_MS);
+}
+
 async function callLLM(
   messages: OpenRouterMessage[],
   systemPrompt: string,
@@ -1467,25 +1490,66 @@ async function callLLM(
     providers.unshift(current);
   }
 
+  const errors: string[] = [];
+
   for (const provider of providers) {
     if (!provider.hasKey) continue;
 
-    try {
-      console.info(`[JARVIS] Calling ${provider.name} API...`);
-      const streamCallback =
-        onChunk && provider.supportsStreaming ? onChunk : undefined;
-      console.info(
-        `[JARVIS] Streaming enabled: ${!!streamCallback}, provider supports: ${provider.supportsStreaming}`
-      );
-      const result = await provider.fn(messages, systemPrompt, streamCallback);
-      console.info(`[JARVIS] ${provider.name} call successful`);
-      return result;
-    } catch (error) {
-      console.error(`[JARVIS] ${provider.name} failed:`, error);
+    for (let attempt = 0; attempt < LLM_MAX_RETRIES; attempt++) {
+      try {
+        if (attempt > 0) {
+          const backoff = calculateBackoff(attempt);
+          console.info(
+            `[JARVIS] Retry ${attempt}/${LLM_MAX_RETRIES} for ${provider.name} after ${backoff}ms`
+          );
+          await new Promise(resolve => setTimeout(resolve, backoff));
+        }
+
+        console.info(
+          `[JARVIS] Calling ${provider.name} API (attempt ${attempt + 1})...`
+        );
+        const streamCallback =
+          onChunk && provider.supportsStreaming ? onChunk : undefined;
+        const result = await provider.fn(
+          messages,
+          systemPrompt,
+          streamCallback
+        );
+        console.info(`[JARVIS] ${provider.name} call successful`);
+        return result;
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        errors.push(`${provider.name}[${attempt + 1}]: ${errorMsg}`);
+
+        const isRateLimit =
+          errorMsg.includes("rate") ||
+          errorMsg.includes("429") ||
+          errorMsg.includes("quota");
+        const isTransient =
+          errorMsg.includes("timeout") ||
+          errorMsg.includes("ECONNRESET") ||
+          errorMsg.includes("502") ||
+          errorMsg.includes("503");
+
+        if (!isRateLimit && !isTransient && attempt < LLM_MAX_RETRIES - 1) {
+          console.error(
+            `[JARVIS] ${provider.name} permanent error, skipping retries:`,
+            errorMsg
+          );
+          break;
+        }
+
+        console.error(
+          `[JARVIS] ${provider.name} attempt ${attempt + 1} failed:`,
+          errorMsg
+        );
+      }
     }
   }
 
-  throw new Error("All LLM providers failed");
+  throw new Error(
+    `All LLM providers failed after retries. Errors: ${errors.slice(-5).join("; ")}`
+  );
 }
 
 export interface OrchestratorOptions {
@@ -1497,6 +1561,7 @@ export interface OrchestratorOptions {
   taskId?: number;
   sessionId?: string;
   enableMemoryInjection?: boolean;
+  useSwarmMode?: boolean;
 }
 
 export async function runOrchestrator(
@@ -1513,6 +1578,7 @@ export async function runOrchestrator(
     memoryContext = "",
     procedureGuidance = "",
     conversationHistory = [],
+    useSwarmMode = SWARM_MODE_ENABLED,
   } = options;
   const messages: OpenRouterMessage[] = [];
 
@@ -1531,6 +1597,88 @@ export async function runOrchestrator(
   }
 
   await eventLogger.logTaskStart(taskId, task, { userId, sessionId });
+
+  if (useSwarmMode) {
+    try {
+      callbacks.onThinking?.(
+        "Using swarm mode with frontier APIs for multi-agent coordination..."
+      );
+
+      const swarm = getGlobalSwarmOrchestrator();
+      const analysis = await swarm.analyzeAndPlan(task);
+
+      callbacks.onThinking?.(
+        `Task analysis: ${analysis.primaryAgent} agent (${analysis.estimatedComplexity}), ` +
+          `multi-agent: ${analysis.requiresMultiAgent}`
+      );
+
+      const v3Context: V3ExecutionContext = {
+        sessionId,
+        userId,
+        taskId: typeof taskId === "number" ? taskId : Date.now(),
+        params: {},
+        startTime: Date.now(),
+        leaseManager: {
+          acquire: async () => true,
+          release: async () => {},
+          isHeld: async () => false,
+          extend: async () => true,
+        },
+        qdrant: {
+          search: async () => [],
+          upsert: async () => {},
+          delete: async () => {},
+        },
+        redis: {
+          xadd: async () => "0-0",
+          xread: async () => [],
+          get: async () => null,
+          set: async () => {},
+          publish: async () => 0,
+        },
+      };
+
+      const executor = createFrontierExecutor(executeToolFn, {
+        enableConsensus: true,
+        swarmOrchestrator: swarm,
+      });
+      const result = await swarm.executeSwarmTask(task, v3Context, executor);
+
+      if (result.success) {
+        callbacks.onComplete?.(result.output, [
+          {
+            type: "swarm_result",
+            agentsUsed: result.agentsUsed,
+            tasksCompleted: result.tasksCompleted,
+            tasksFailed: result.tasksFailed,
+            durationMs: result.totalDurationMs,
+            learningsExtracted: result.learningsExtracted,
+          },
+        ]);
+      } else {
+        callbacks.onError?.(result.output);
+      }
+
+      await eventLogger.logTaskEnd(
+        typeof taskId === "number" ? taskId : Date.now(),
+        {
+          success: result.success,
+          summary: `Swarm: ${result.agentsUsed.join(", ")} (${result.totalDurationMs}ms)`,
+        },
+        { userId, sessionId }
+      );
+
+      return;
+    } catch (swarmError) {
+      console.warn(
+        "[JARVIS] Swarm mode failed, falling back to standard orchestrator:",
+        swarmError
+      );
+      callbacks.onThinking?.(
+        "Swarm mode encountered an error, falling back to standard mode..."
+      );
+    }
+  }
 
   for (const msg of conversationHistory) {
     messages.push({ role: msg.role, content: msg.content });
@@ -1794,6 +1942,35 @@ Do NOT continue working - call task_complete immediately.`;
           const usedFileWrite = fileWriteTools.some(tool =>
             executionContext.evolutionTracker.toolsUsed.has(tool)
           );
+
+          // Check for scaffold/portal tasks that require the scaffold tool
+          const scaffoldKeywords =
+            /\b(scaffold|portal|bilateral.*trade|trade.*portal|business.*portal)\b/i;
+          const taskRequestsScaffold = scaffoldKeywords.test(task);
+          const scaffoldTools = [
+            "scaffold_business_portal",
+            "scaffold_project",
+            "build_bilateral_portal_swarm",
+          ];
+          const usedScaffoldTool = scaffoldTools.some(tool =>
+            executionContext.evolutionTracker.toolsUsed.has(tool)
+          );
+
+          if (taskRequestsScaffold && !usedScaffoldTool) {
+            const rejectMessage = `⚠️ TASK COMPLETION REJECTED: You were asked to scaffold/create a portal but never called scaffold_business_portal or scaffold_project.
+You CANNOT simulate or fake the scaffold tool's output - it creates real files on disk.
+You MUST call the actual scaffold tool. Please do so now.`;
+
+            callbacks.onThinking?.(rejectMessage);
+
+            messages.push({
+              role: "tool",
+              content: rejectMessage,
+              tool_call_id: taskCompleteCall.id,
+            });
+
+            continue;
+          }
 
           if (taskRequestsFiles && !usedFileWrite) {
             // Reject premature completion - files were requested but not written

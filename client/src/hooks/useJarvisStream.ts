@@ -8,6 +8,8 @@ import {
   type JarvisIterationEvent,
   type JarvisCompleteEvent,
   type JarvisErrorEvent,
+  type JarvisRejoinStateEvent,
+  type StreamingStep as SocketStreamingStep,
 } from "@/lib/socket";
 
 export interface ConversationMessage {
@@ -145,6 +147,11 @@ export function useJarvisStream() {
     },
     []
   );
+
+  const rejoinTask = useCallback((userId: number) => {
+    const socket = getSocket();
+    socket.emit("jarvis:rejoin", { userId });
+  }, []);
 
   useEffect(() => {
     const socket = getSocket();
@@ -349,6 +356,55 @@ export function useJarvisStream() {
       activeTaskIdRef.current = null;
     };
 
+    const handleRejoinState = (event: JarvisRejoinStateEvent) => {
+      console.info("[JARVIS] rejoin_state:", event.taskId);
+      activeTaskIdRef.current = event.taskId;
+
+      const steps: StreamingStep[] = event.steps.map(
+        (step: SocketStreamingStep) => ({
+          id: step.id,
+          type: step.type,
+          content: step.content,
+          tool: step.tool
+            ? {
+                id: step.tool.id,
+                name: step.tool.name,
+                input: step.tool.input,
+                output: step.tool.output,
+                isError: step.tool.isError,
+                status: step.tool.status,
+                startTime: step.tool.startTime,
+                endTime: step.tool.endTime,
+                durationMs: step.tool.durationMs,
+              }
+            : undefined,
+          timestamp: step.timestamp,
+        })
+      );
+
+      setState(prev => ({
+        ...prev,
+        taskId: event.taskId,
+        isStreaming: true,
+        steps,
+        currentIteration: event.currentIteration,
+        maxIterations: event.maxIterations,
+        exchanges: [
+          ...prev.exchanges.filter(
+            e => !e.userQuery.includes(event.query.slice(0, 50))
+          ),
+          {
+            userQuery: event.query,
+            assistantSummary: null,
+            timestamp: event.startedAt,
+          },
+        ],
+        summary: null,
+        success: null,
+        error: null,
+      }));
+    };
+
     socket.on("jarvis:thinking", handleThinking);
     socket.on("jarvis:thinking_chunk", handleThinkingChunk);
     socket.on("jarvis:tool_start", handleToolStart);
@@ -356,6 +412,7 @@ export function useJarvisStream() {
     socket.on("jarvis:iteration", handleIteration);
     socket.on("jarvis:complete", handleComplete);
     socket.on("jarvis:error", handleError);
+    socket.on("jarvis:rejoin_state", handleRejoinState);
 
     return () => {
       socket.off("jarvis:thinking", handleThinking);
@@ -365,6 +422,7 @@ export function useJarvisStream() {
       socket.off("jarvis:iteration", handleIteration);
       socket.off("jarvis:complete", handleComplete);
       socket.off("jarvis:error", handleError);
+      socket.off("jarvis:rejoin_state", handleRejoinState);
     };
   }, []);
 
@@ -374,5 +432,6 @@ export function useJarvisStream() {
     cancelTask,
     reset,
     loadConversationHistory,
+    rejoinTask,
   };
 }

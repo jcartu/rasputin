@@ -15,6 +15,7 @@ import MultiAgent from "./pages/MultiAgent";
 import Codebase from "./pages/Codebase";
 import Events from "./pages/Events";
 import Hosts from "./pages/Hosts";
+import Memory from "./pages/Memory";
 
 function Router() {
   return (
@@ -29,6 +30,7 @@ function Router() {
       <Route path="/codebase" component={Codebase} />
       <Route path="/events" component={Events} />
       <Route path="/hosts" component={Hosts} />
+      <Route path="/memory" component={Memory} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

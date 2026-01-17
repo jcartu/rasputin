@@ -1,242 +1,237 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface SplashScreenProps {
   onComplete?: () => void;
   duration?: number;
 }
 
+const BOOT_LOGS = [
+  "INITIALIZING KERNEL v0.3...",
+  "LOADING NEURAL ENGINE...",
+  "BYPASSING SECURITY PROTOCOLS...",
+  "ESTABLISHING UPLINK...",
+  "SYNCHRONIZING DATABASES...",
+  "OPTIMIZING CORE THREADS...",
+  "SYSTEM CHECK: PASSED.",
+  "RASPUTIN OS READY.",
+];
+
 export default function SplashScreen({
   onComplete,
-  duration = 3500,
+  duration = 5000,
 }: SplashScreenProps) {
-  const [isExiting, setIsExiting] = useState(false);
-  const [textVisible, setTextVisible] = useState(false);
-  const [taglineVisible, setTaglineVisible] = useState(false);
+  const [bootStep, setBootStep] = useState(0);
+  const [showMain, setShowMain] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  // Sound Synthesis Logic
+  const playBootSound = () => {
+    try {
+      const AudioContext =
+        window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+
+      const ctx = new AudioContext();
+      audioContextRef.current = ctx;
+      const now = ctx.currentTime;
+
+      const masterGain = ctx.createGain();
+      masterGain.connect(ctx.destination);
+      masterGain.gain.setValueAtTime(0.4, now);
+
+      // 1. Cinematic Bass Swell
+      const oscBass = ctx.createOscillator();
+      const gainBass = ctx.createGain();
+      oscBass.type = "sawtooth";
+      oscBass.frequency.setValueAtTime(50, now);
+      oscBass.frequency.exponentialRampToValueAtTime(35, now + 3);
+
+      gainBass.gain.setValueAtTime(0, now);
+      gainBass.gain.linearRampToValueAtTime(0.6, now + 1);
+      gainBass.gain.exponentialRampToValueAtTime(0.001, now + 4);
+
+      const filterBass = ctx.createBiquadFilter();
+      filterBass.type = "lowpass";
+      filterBass.frequency.setValueAtTime(100, now);
+      filterBass.frequency.linearRampToValueAtTime(300, now + 2);
+
+      oscBass.connect(filterBass);
+      filterBass.connect(gainBass);
+      gainBass.connect(masterGain);
+      oscBass.start(now);
+      oscBass.stop(now + 4.5);
+
+      // 2. High-Tech Computer Data/Arp
+      const oscData = ctx.createOscillator();
+      const gainData = ctx.createGain();
+      oscData.type = "square";
+      gainData.gain.setValueAtTime(0, now);
+
+      const bleepCount = 12;
+      for (let i = 0; i < bleepCount; i++) {
+        const time = now + 0.5 + i * 0.15;
+        oscData.frequency.setValueAtTime(800 + Math.random() * 1000, time);
+        gainData.gain.setValueAtTime(0.05, time);
+        gainData.gain.setValueAtTime(0, time + 0.05);
+      }
+
+      oscData.connect(gainData);
+      gainData.connect(masterGain);
+      oscData.start(now);
+      oscData.stop(now + 3);
+
+      // 3. Futuristic Power Up Sweep
+      const oscSweep = ctx.createOscillator();
+      const gainSweep = ctx.createGain();
+      oscSweep.type = "sine";
+      oscSweep.frequency.setValueAtTime(200, now + 2);
+      oscSweep.frequency.exponentialRampToValueAtTime(2000, now + 3.5);
+
+      gainSweep.gain.setValueAtTime(0, now + 2);
+      gainSweep.gain.linearRampToValueAtTime(0.2, now + 3);
+      gainSweep.gain.linearRampToValueAtTime(0, now + 4);
+
+      oscSweep.connect(gainSweep);
+      gainSweep.connect(masterGain);
+      oscSweep.start(now);
+      oscSweep.stop(now + 4.5);
+    } catch (e) {
+      console.error("Audio play failed", e);
+    }
+  };
 
   useEffect(() => {
-    const textTimer = setTimeout(() => setTextVisible(true), 500);
-    const taglineTimer = setTimeout(() => setTaglineVisible(true), 1500);
+    playBootSound();
 
-    const exitTimer = setTimeout(() => {
-      setIsExiting(true);
-      setTimeout(() => {
-        onComplete?.();
-      }, 1000);
+    let step = 0;
+    const interval = setInterval(() => {
+      if (step < BOOT_LOGS.length - 1) {
+        setBootStep(prev => prev + 1);
+        step++;
+      } else {
+        clearInterval(interval);
+        setTimeout(() => setShowMain(true), 800);
+      }
+    }, 250);
+
+    const totalTimer = setTimeout(() => {
+      onComplete?.();
     }, duration);
 
     return () => {
-      clearTimeout(textTimer);
-      clearTimeout(taglineTimer);
-      clearTimeout(exitTimer);
+      clearInterval(interval);
+      clearTimeout(totalTimer);
+      if (
+        audioContextRef.current &&
+        audioContextRef.current.state !== "closed"
+      ) {
+        audioContextRef.current.close();
+      }
     };
   }, [duration, onComplete]);
 
   return (
-    <>
-      <style>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0) rotate(0deg); }
-          50% { transform: translateY(-20px) rotate(5deg); }
-        }
-        @keyframes spin-slow {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        @keyframes spin-reverse {
-          from { transform: rotate(360deg); }
-          to { transform: rotate(0deg); }
-        }
-        @keyframes pulse-glow {
-          0%, 100% { opacity: 0.5; transform: scale(1); filter: drop-shadow(0 0 10px rgba(139, 92, 246, 0.3)); }
-          50% { opacity: 1; transform: scale(1.1); filter: drop-shadow(0 0 20px rgba(139, 92, 246, 0.6)); }
-        }
-        @keyframes glitch {
-          0% { clip-path: inset(40% 0 61% 0); transform: translate(-2px, 2px); }
-          20% { clip-path: inset(92% 0 1% 0); transform: translate(0); }
-          40% { clip-path: inset(43% 0 1% 0); transform: translate(-2px, -2px); }
-          60% { clip-path: inset(25% 0 58% 0); transform: translate(2px, 2px); }
-          80% { clip-path: inset(54% 0 7% 0); transform: translate(-2px, 2px); }
-          100% { clip-path: inset(58% 0 43% 0); transform: translate(0); }
-        }
-        @keyframes scanline {
-          0% { transform: translateY(-100%); }
-          100% { transform: translateY(100%); }
-        }
-        @keyframes flicker {
-          0%, 19.999%, 22%, 62.999%, 64%, 64.999%, 70%, 100% { opacity: 1; }
-          20%, 21.999%, 63%, 63.999%, 65%, 69.999% { opacity: 0.4; }
-        }
-        @keyframes reveal {
-          0% { opacity: 0; filter: blur(10px); letter-spacing: 1em; }
-          100% { opacity: 1; filter: blur(0); letter-spacing: 0.2em; }
-        }
-        .animate-spin-slow { animation: spin-slow 20s linear infinite; }
-        .animate-spin-reverse { animation: spin-reverse 15s linear infinite; }
-        .animate-float { animation: float 6s ease-in-out infinite; }
-        .animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
-        .glitch-text::before, .glitch-text::after {
-          content: attr(data-text);
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-        }
-        .glitch-text::before {
-          left: 2px;
-          text-shadow: -1px 0 #ff00c1;
-          clip-path: inset(24% 0 29% 0);
-          animation: glitch 2.5s infinite linear alternate-reverse;
-        }
-        .glitch-text::after {
-          left: -2px;
-          text-shadow: -1px 0 #00fff9;
-          clip-path: inset(54% 0 21% 0);
-          animation: glitch 2s infinite linear alternate-reverse;
-        }
-        .bg-grid-pattern {
-          background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-                          linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-          background-size: 50px 50px;
-        }
-      `}</style>
-
-      <div
-        className={`fixed inset-0 z-50 flex flex-col items-center justify-center bg-black overflow-hidden transition-all duration-1000 ${
-          isExiting ? "opacity-0 scale-105 filter blur-xl" : "opacity-100"
-        }`}
-      >
-        <div className="absolute inset-0 bg-grid-pattern opacity-20 pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-radial from-violet-900/20 via-black to-black pointer-events-none" />
-
+    <div className="fixed inset-0 z-[9999] bg-[#050505] flex flex-col items-center justify-center overflow-hidden font-mono text-white select-none cursor-wait">
+      <div className="absolute inset-0 pointer-events-none opacity-20">
         <div
-          className="absolute inset-0 pointer-events-none opacity-10 z-10"
+          className="absolute inset-0"
           style={{
-            background:
-              "linear-gradient(to bottom, transparent 50%, rgba(0, 0, 0, 0.5) 51%)",
-            backgroundSize: "100% 4px",
+            backgroundImage: `
+               linear-gradient(to right, rgba(0, 255, 170, 0.05) 1px, transparent 1px),
+               linear-gradient(to bottom, rgba(0, 255, 170, 0.05) 1px, transparent 1px)
+             `,
+            backgroundSize: "60px 60px",
+            maskImage:
+              "radial-gradient(circle at center, black 30%, transparent 80%)",
           }}
         />
-        <div className="absolute inset-0 pointer-events-none opacity-[0.03] z-10 animate-[scanline_8s_linear_infinite] bg-gradient-to-b from-transparent via-white to-transparent h-full w-full" />
-
-        <div className="relative w-96 h-96 mb-12 flex items-center justify-center">
-          <div className="absolute inset-0 border border-violet-500/20 rounded-full animate-spin-slow pointer-events-none">
-            <div className="absolute -top-1 left-1/2 w-2 h-2 bg-violet-500 rounded-full shadow-[0_0_10px_#8b5cf6]" />
-            <div className="absolute -bottom-1 left-1/2 w-2 h-2 bg-violet-500 rounded-full shadow-[0_0_10px_#8b5cf6]" />
-          </div>
-
-          <div className="absolute inset-8 border border-cyan-500/20 rounded-full animate-spin-reverse pointer-events-none">
-            <div className="absolute top-1/2 -left-1 w-2 h-2 bg-cyan-500 rounded-full shadow-[0_0_10px_#06b6d4]" />
-            <div className="absolute top-1/2 -right-1 w-2 h-2 bg-cyan-500 rounded-full shadow-[0_0_10px_#06b6d4]" />
-          </div>
-
-          <div className="absolute inset-0 flex items-center justify-center animate-pulse-glow">
-            <svg
-              viewBox="0 0 200 200"
-              className="w-64 h-64 drop-shadow-[0_0_15px_rgba(139,92,246,0.5)]"
-            >
-              <path
-                d="M100 20 L150 180 L20 80 L180 80 L50 180 Z"
-                fill="none"
-                stroke="url(#mystic-gradient)"
-                strokeWidth="1"
-                className="opacity-60"
-              />
-              <circle
-                cx="100"
-                cy="100"
-                r="45"
-                fill="none"
-                stroke="rgba(139, 92, 246, 0.3)"
-                strokeWidth="1"
-              />
-              <circle
-                cx="100"
-                cy="100"
-                r="5"
-                fill="#fff"
-                className="animate-pulse"
-              />
-
-              <defs>
-                <linearGradient
-                  id="mystic-gradient"
-                  x1="0%"
-                  y1="0%"
-                  x2="100%"
-                  y2="100%"
-                >
-                  <stop offset="0%" stopColor="#8b5cf6" />
-                  <stop offset="100%" stopColor="#06b6d4" />
-                </linearGradient>
-              </defs>
-            </svg>
-          </div>
-
-          {[...Array(6)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-1 h-1 bg-white rounded-full animate-float opacity-50"
-              style={{
-                top: `${50 + 30 * Math.cos((i * 60 * Math.PI) / 180)}%`,
-                left: `${50 + 30 * Math.sin((i * 60 * Math.PI) / 180)}%`,
-                animationDelay: `${i * 0.5}s`,
-                boxShadow: "0 0 10px rgba(255,255,255,0.8)",
-              }}
-            />
-          ))}
-        </div>
-
-        <div className="relative z-20 text-center">
-          <div
-            className={`transition-all duration-1000 transform ${textVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"}`}
-          >
-            <h1
-              className="text-7xl md:text-8xl font-black tracking-[0.2em] text-transparent bg-clip-text bg-gradient-to-r from-white via-violet-200 to-white glitch-text filter drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]"
-              data-text="RASPUTIN"
-              style={{ fontFamily: '"Courier New", monospace' }}
-            >
-              RASPUTIN
-            </h1>
-          </div>
-
-          <div
-            className={`mt-6 transition-all duration-1000 delay-500 ${taglineVisible ? "opacity-100" : "opacity-0"}`}
-          >
-            <div className="flex items-center justify-center gap-4">
-              <div className="h-[1px] w-12 bg-gradient-to-r from-transparent to-cyan-500" />
-              <p className="text-cyan-400 font-mono text-sm tracking-[0.3em] uppercase animate-[flicker_4s_infinite]">
-                The All-Seeing Oracle
-              </p>
-              <div className="h-[1px] w-12 bg-gradient-to-l from-transparent to-cyan-500" />
-            </div>
-          </div>
-        </div>
-
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3">
-          <div className="flex gap-1">
-            {[...Array(3)].map((_, i) => (
-              <div
-                key={i}
-                className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce"
-                style={{ animationDelay: `${i * 0.2}s` }}
-              />
-            ))}
-          </div>
-          <span className="text-[10px] text-white/30 font-mono uppercase tracking-widest">
-            Synthesizing Models
-          </span>
-        </div>
-
-        <div
-          className={`absolute bottom-6 left-1/2 -translate-x-1/2 transition-all duration-1000 delay-1000 ${taglineVisible ? "opacity-100" : "opacity-0"}`}
-        >
-          <p className="text-[11px] text-white/20 tracking-[0.15em] font-light">
-            a <span className="text-white/40 font-medium">josh cartu</span>{" "}
-            project
-          </p>
-        </div>
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-500/5 to-transparent h-[10%] animate-scanline" />
       </div>
-    </>
+
+      <AnimatePresence mode="wait">
+        {!showMain ? (
+          <motion.div
+            key="boot-sequence"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, filter: "blur(10px)", scale: 0.95 }}
+            className="z-10 w-full max-w-lg p-8 font-mono text-sm tracking-wider"
+          >
+            {BOOT_LOGS.slice(0, bootStep + 1).map((log, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className={`${
+                  i === BOOT_LOGS.length - 1
+                    ? "text-emerald-400 font-bold"
+                    : "text-emerald-600/80"
+                } mb-1 flex items-center gap-3`}
+              >
+                <span className="text-[10px] opacity-50">
+                  {`00${i + 1}`.slice(-2)}
+                </span>
+                <span>{log}</span>
+              </motion.div>
+            ))}
+          </motion.div>
+        ) : (
+          <motion.div
+            key="main-logo"
+            initial={{ scale: 0.8, opacity: 0, filter: "blur(20px)" }}
+            animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }}
+            exit={{ scale: 1.1, opacity: 0 }}
+            transition={{ type: "spring", damping: 15, stiffness: 50 }}
+            className="z-20 flex flex-col items-center relative"
+          >
+            <div className="absolute -inset-20 bg-emerald-500/20 blur-[100px] rounded-full animate-pulse" />
+
+            <div className="relative flex flex-col items-center">
+              <motion.h1
+                className="text-5xl md:text-7xl font-black tracking-tighter text-white mb-2"
+                style={{ textShadow: "0 0 30px rgba(16, 185, 129, 0.6)" }}
+              >
+                RASPUTIN
+                <span className="text-emerald-500 ml-2">OS</span>
+              </motion.h1>
+
+              <motion.div
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: "100%", opacity: 1 }}
+                transition={{ delay: 0.5, duration: 0.8 }}
+                className="h-px bg-gradient-to-r from-transparent via-emerald-500 to-transparent w-full my-4"
+              />
+
+              <motion.div
+                initial={{ y: 10, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.8 }}
+                className="flex items-center gap-3"
+              >
+                <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 rounded text-emerald-400 text-xs font-bold tracking-widest">
+                  v0.3
+                </span>
+                <span className="text-neutral-500 text-xs tracking-[0.2em] uppercase">
+                  System Online
+                </span>
+              </motion.div>
+
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.5, duration: 1 }}
+                className="absolute -bottom-24 text-neutral-600 text-[10px] tracking-[0.4em] font-medium uppercase"
+              >
+                A Josh Cartu Project
+              </motion.p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="absolute inset-0 pointer-events-none z-50 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%),linear-gradient(90deg,rgba(255,0,0,0.03),rgba(0,255,0,0.01),rgba(0,0,255,0.03))] bg-[length:100%_4px,3px_100%] bg-repeat" />
+      <div className="absolute inset-0 pointer-events-none z-[51] shadow-[inset_0_0_100px_rgba(0,0,0,0.7)]" />
+    </div>
   );
 }

@@ -1,0 +1,285 @@
+syntax = "proto3";
+
+package jarvis.daemon.v1;
+
+message Capability {
+  string token = 1;
+  repeated string scopes = 2;
+  int64 expires_at = 3;
+  string session_id = 4;
+  string user_id = 5;
+}
+
+message Empty {}
+
+message Status {
+  bool success = 1;
+  string message = 2;
+  string error_code = 3;
+}
+
+message Rect {
+  int32 x = 1;
+  int32 y = 2;
+  int32 width = 3;
+  int32 height = 4;
+}
+
+message Point {
+  int32 x = 1;
+  int32 y = 2;
+}
+
+message Display {
+  int32 id = 1;
+  string name = 2;
+  int32 width = 3;
+  int32 height = 4;
+  float scale = 5;
+  bool primary = 6;
+}
+
+message ListDisplaysRequest {
+  Capability cap = 1;
+}
+
+message ListDisplaysResponse {
+  repeated Display displays = 1;
+}
+
+message ScreenshotRequest {
+  Capability cap = 1;
+  int32 display_id = 2;
+  Rect region = 3;
+  string format = 4;
+  int32 quality = 5;
+  bool include_cursor = 6;
+}
+
+message Screenshot {
+  bytes image_data = 1;
+  int64 timestamp_ms = 2;
+  Display display = 3;
+  Rect captured_region = 4;
+}
+
+message MouseMoveRequest {
+  Capability cap = 1;
+  int32 x = 2;
+  int32 y = 3;
+  int32 display_id = 4;
+  bool relative = 5;
+  int32 duration_ms = 6;
+}
+
+message MouseButtonRequest {
+  Capability cap = 1;
+  enum Button {
+    LEFT = 0;
+    RIGHT = 1;
+    MIDDLE = 2;
+  }
+  Button button = 2;
+  enum Action {
+    PRESS = 0;
+    RELEASE = 1;
+    CLICK = 2;
+    DOUBLE_CLICK = 3;
+  }
+  Action action = 3;
+  Point position = 4;
+  int32 display_id = 5;
+}
+
+message MouseScrollRequest {
+  Capability cap = 1;
+  int32 delta_x = 2;
+  int32 delta_y = 3;
+  Point position = 4;
+  int32 display_id = 5;
+}
+
+message KeyboardKeyRequest {
+  Capability cap = 1;
+  string key = 2;
+  enum Action {
+    PRESS = 0;
+    RELEASE = 1;
+    TAP = 2;
+  }
+  Action action = 3;
+  repeated string modifiers = 4;
+}
+
+message KeyboardTypeRequest {
+  Capability cap = 1;
+  string text = 2;
+  int32 delay_ms = 3;
+}
+
+message Window {
+  string id = 1;
+  string title = 2;
+  string app_name = 3;
+  string process_name = 4;
+  int32 pid = 5;
+  Rect bounds = 6;
+  bool focused = 7;
+  bool minimized = 8;
+  bool maximized = 9;
+  int32 display_id = 10;
+}
+
+message ListWindowsRequest {
+  Capability cap = 1;
+  bool include_minimized = 2;
+  bool include_hidden = 3;
+  string filter_app = 4;
+}
+
+message ListWindowsResponse {
+  repeated Window windows = 1;
+}
+
+message FocusWindowRequest {
+  Capability cap = 1;
+  string window_id = 2;
+}
+
+message FileInfo {
+  string path = 1;
+  string name = 2;
+  bool is_dir = 3;
+  int64 size = 4;
+  int64 modified_ms = 5;
+  int64 created_ms = 6;
+  string permissions = 7;
+}
+
+message ListFilesRequest {
+  Capability cap = 1;
+  string path = 2;
+  bool recursive = 3;
+  int32 max_depth = 4;
+  string pattern = 5;
+}
+
+message ListFilesResponse {
+  repeated FileInfo files = 1;
+}
+
+message ReadFileRequest {
+  Capability cap = 1;
+  string path = 2;
+  int64 offset = 3;
+  int64 max_bytes = 4;
+}
+
+message ReadFileResponse {
+  bytes data = 1;
+  bool truncated = 2;
+  int64 total_size = 3;
+}
+
+message WriteFileRequest {
+  Capability cap = 1;
+  string path = 2;
+  bytes data = 3;
+  bool create_dirs = 4;
+  bool atomic = 5;
+  string mode = 6;
+  bool append = 7;
+}
+
+message ProcessInfo {
+  int32 pid = 1;
+  int32 ppid = 2;
+  string name = 3;
+  string cmdline = 4;
+  string user = 5;
+  float cpu_percent = 6;
+  int64 memory_bytes = 7;
+  int64 started_ms = 8;
+  string status = 9;
+}
+
+message ListProcessesRequest {
+  Capability cap = 1;
+  string filter_name = 2;
+  string filter_user = 3;
+}
+
+message ListProcessesResponse {
+  repeated ProcessInfo processes = 1;
+}
+
+message StartProcessRequest {
+  Capability cap = 1;
+  string command = 2;
+  repeated string args = 3;
+  string working_dir = 4;
+  map<string, string> env = 5;
+  bool detached = 6;
+}
+
+message StartProcessResponse {
+  int32 pid = 1;
+}
+
+message KillProcessRequest {
+  Capability cap = 1;
+  int32 pid = 2;
+  string signal = 3;
+}
+
+message ShellExecRequest {
+  Capability cap = 1;
+  string command = 2;
+  string working_dir = 3;
+  map<string, string> env = 4;
+  int32 timeout_seconds = 5;
+}
+
+message ShellExecResponse {
+  int32 exit_code = 1;
+  bytes stdout = 2;
+  bytes stderr = 3;
+  int64 duration_ms = 4;
+}
+
+message GetClipboardRequest {
+  Capability cap = 1;
+}
+
+message GetClipboardResponse {
+  string text = 1;
+  bytes image = 2;
+  string mime_type = 3;
+}
+
+message SetClipboardRequest {
+  Capability cap = 1;
+  string text = 2;
+  bytes image = 3;
+}
+
+service DesktopDaemon {
+  rpc ListDisplays(ListDisplaysRequest) returns (ListDisplaysResponse);
+  rpc Screenshot(ScreenshotRequest) returns (Screenshot);
+  rpc MouseMove(MouseMoveRequest) returns (Status);
+  rpc MouseButton(MouseButtonRequest) returns (Status);
+  rpc MouseScroll(MouseScrollRequest) returns (Status);
+  rpc KeyboardKey(KeyboardKeyRequest) returns (Status);
+  rpc KeyboardType(KeyboardTypeRequest) returns (Status);
+  rpc ListWindows(ListWindowsRequest) returns (ListWindowsResponse);
+  rpc FocusWindow(FocusWindowRequest) returns (Status);
+  rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
+  rpc ReadFile(ReadFileRequest) returns (ReadFileResponse);
+  rpc WriteFile(WriteFileRequest) returns (Status);
+  rpc ListProcesses(ListProcessesRequest) returns (ListProcessesResponse);
+  rpc StartProcess(StartProcessRequest) returns (StartProcessResponse);
+  rpc KillProcess(KillProcessRequest) returns (Status);
+  rpc ShellExec(ShellExecRequest) returns (ShellExecResponse);
+  rpc GetClipboard(GetClipboardRequest) returns (GetClipboardResponse);
+  rpc SetClipboard(SetClipboardRequest) returns (Status);
+}

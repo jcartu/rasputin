@@ -1,0 +1,7923 @@
+import * as fs from "fs";
+import * as path from "path";
+import {
+  PortalScaffoldConfig,
+  PortalScaffoldConfigSchema,
+  Locale,
+  CountryCode,
+  COUNTRY_INFO,
+} from "./portalConfig";
+
+export interface ScaffoldResult {
+  success: boolean;
+  projectPath: string;
+  filesCreated: string[];
+  error?: string;
+}
+
+function writeFile(
+  projectPath: string,
+  relativePath: string,
+  content: string,
+  filesCreated: string[]
+): void {
+  const fullPath = path.join(projectPath, relativePath);
+  const dir = path.dirname(fullPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(fullPath, content, "utf-8");
+  filesCreated.push(relativePath);
+}
+
+function getCountryName(code: CountryCode, locale: Locale): string {
+  const names: Record<string, Record<string, string>> = {
+    CN: {
+      zh: "中国",
+      ru: "Китай",
+      en: "China",
+      ja: "中国",
+      vi: "Trung Quốc",
+      hi: "चीन",
+      ar: "الصين",
+      ko: "중국",
+      th: "จีน",
+      id: "Tiongkok",
+      ms: "China",
+      tr: "Çin",
+      pt: "China",
+      es: "China",
+      fr: "Chine",
+      de: "China",
+    },
+    RU: {
+      zh: "俄罗斯",
+      ru: "Россия",
+      en: "Russia",
+      ja: "ロシア",
+      vi: "Nga",
+      hi: "रूस",
+      ar: "روسيا",
+      ko: "러시아",
+      th: "รัสเซีย",
+      id: "Rusia",
+      ms: "Rusia",
+      tr: "Rusya",
+      pt: "Rússia",
+      es: "Rusia",
+      fr: "Russie",
+      de: "Russland",
+    },
+    IN: {
+      en: "India",
+      hi: "भारत",
+      zh: "印度",
+      ru: "Индия",
+      ja: "インド",
+      vi: "Ấn Độ",
+      ar: "الهند",
+      ko: "인도",
+      th: "อินเดีย",
+      id: "India",
+      ms: "India",
+      tr: "Hindistan",
+      pt: "Índia",
+      es: "India",
+      fr: "Inde",
+      de: "Indien",
+    },
+    AE: {
+      en: "UAE",
+      ar: "الإمارات",
+      zh: "阿联酋",
+      ru: "ОАЭ",
+      ja: "UAE",
+      vi: "UAE",
+      hi: "संयुक्त अरब अमीरात",
+      ko: "UAE",
+      th: "สหรัฐอาหรับเอมิเรตส์",
+      id: "UEA",
+      ms: "UAE",
+      tr: "BAE",
+      pt: "EAU",
+      es: "EAU",
+      fr: "EAU",
+      de: "VAE",
+    },
+    JP: {
+      en: "Japan",
+      ja: "日本",
+      zh: "日本",
+      ru: "Япония",
+      vi: "Nhật Bản",
+      hi: "जापान",
+      ar: "اليابان",
+      ko: "일본",
+      th: "ญี่ปุ่น",
+      id: "Jepang",
+      ms: "Jepun",
+      tr: "Japonya",
+      pt: "Japão",
+      es: "Japón",
+      fr: "Japon",
+      de: "Japan",
+    },
+    VN: {
+      en: "Vietnam",
+      vi: "Việt Nam",
+      zh: "越南",
+      ru: "Вьетнам",
+      ja: "ベトナム",
+      hi: "वियतनाम",
+      ar: "فيتنام",
+      ko: "베트남",
+      th: "เวียดนาม",
+      id: "Vietnam",
+      ms: "Vietnam",
+      tr: "Vietnam",
+      pt: "Vietnã",
+      es: "Vietnam",
+      fr: "Vietnam",
+      de: "Vietnam",
+    },
+    KR: {
+      en: "South Korea",
+      ko: "대한민국",
+      zh: "韩国",
+      ru: "Южная Корея",
+      ja: "韓国",
+      vi: "Hàn Quốc",
+      hi: "दक्षिण कोरिया",
+      ar: "كوريا الجنوبية",
+      th: "เกาหลีใต้",
+      id: "Korea Selatan",
+      ms: "Korea Selatan",
+      tr: "Güney Kore",
+      pt: "Coreia do Sul",
+      es: "Corea del Sur",
+      fr: "Corée du Sud",
+      de: "Südkorea",
+    },
+    SG: {
+      en: "Singapore",
+      zh: "新加坡",
+      ru: "Сингапур",
+      ja: "シンガポール",
+      vi: "Singapore",
+      hi: "सिंगापुर",
+      ar: "سنغافورة",
+      ko: "싱가포르",
+      th: "สิงคโปร์",
+      id: "Singapura",
+      ms: "Singapura",
+      tr: "Singapur",
+      pt: "Singapura",
+      es: "Singapur",
+      fr: "Singapour",
+      de: "Singapur",
+    },
+    ID: {
+      en: "Indonesia",
+      id: "Indonesia",
+      zh: "印度尼西亚",
+      ru: "Индонезия",
+      ja: "インドネシア",
+      vi: "Indonesia",
+      hi: "इंडोनेशिया",
+      ar: "إندونيسيا",
+      ko: "인도네시아",
+      th: "อินโดนีเซีย",
+      ms: "Indonesia",
+      tr: "Endonezya",
+      pt: "Indonésia",
+      es: "Indonesia",
+      fr: "Indonésie",
+      de: "Indonesien",
+    },
+    TR: {
+      en: "Turkey",
+      tr: "Türkiye",
+      zh: "土耳其",
+      ru: "Турция",
+      ja: "トルコ",
+      vi: "Thổ Nhĩ Kỳ",
+      hi: "तुर्की",
+      ar: "تركيا",
+      ko: "터키",
+      th: "ตุรกี",
+      id: "Turki",
+      ms: "Turki",
+      pt: "Turquia",
+      es: "Turquía",
+      fr: "Turquie",
+      de: "Türkei",
+    },
+    SA: {
+      en: "Saudi Arabia",
+      ar: "السعودية",
+      zh: "沙特阿拉伯",
+      ru: "Саудовская Аравия",
+      ja: "サウジアラビア",
+      vi: "Ả Rập Xê Út",
+      hi: "सऊदी अरब",
+      ko: "사우디아라비아",
+      th: "ซาอุดีอาระเบีย",
+      id: "Arab Saudi",
+      ms: "Arab Saudi",
+      tr: "Suudi Arabistan",
+      pt: "Arábia Saudita",
+      es: "Arabia Saudita",
+      fr: "Arabie saoudite",
+      de: "Saudi-Arabien",
+    },
+    BR: {
+      en: "Brazil",
+      pt: "Brasil",
+      zh: "巴西",
+      ru: "Бразилия",
+      ja: "ブラジル",
+      vi: "Brazil",
+      hi: "ब्राज़ील",
+      ar: "البرازيل",
+      ko: "브라질",
+      th: "บราซิล",
+      id: "Brasil",
+      ms: "Brazil",
+      tr: "Brezilya",
+      es: "Brasil",
+      fr: "Brésil",
+      de: "Brasilien",
+    },
+    DE: {
+      en: "Germany",
+      de: "Deutschland",
+      zh: "德国",
+      ru: "Германия",
+      ja: "ドイツ",
+      vi: "Đức",
+      hi: "जर्मनी",
+      ar: "ألمانيا",
+      ko: "독일",
+      th: "เยอรมนี",
+      id: "Jerman",
+      ms: "Jerman",
+      tr: "Almanya",
+      pt: "Alemanha",
+      es: "Alemania",
+      fr: "Allemagne",
+    },
+    FR: {
+      en: "France",
+      fr: "France",
+      zh: "法国",
+      ru: "Франция",
+      ja: "フランス",
+      vi: "Pháp",
+      hi: "फ्रांस",
+      ar: "فرنسا",
+      ko: "프랑스",
+      th: "ฝรั่งเศส",
+      id: "Prancis",
+      ms: "Perancis",
+      tr: "Fransa",
+      pt: "França",
+      es: "Francia",
+      de: "Frankreich",
+    },
+    GB: {
+      en: "United Kingdom",
+      zh: "英国",
+      ru: "Великобритания",
+      ja: "イギリス",
+      vi: "Anh",
+      hi: "यूनाइटेड किंगडम",
+      ar: "المملكة المتحدة",
+      ko: "영국",
+      th: "สหราชอาณาจักร",
+      id: "Inggris",
+      ms: "United Kingdom",
+      tr: "Birleşik Krallık",
+      pt: "Reino Unido",
+      es: "Reino Unido",
+      fr: "Royaume-Uni",
+      de: "Vereinigtes Königreich",
+    },
+    US: {
+      en: "United States",
+      zh: "美国",
+      ru: "США",
+      ja: "アメリカ",
+      vi: "Mỹ",
+      hi: "संयुक्त राज्य अमेरिका",
+      ar: "الولايات المتحدة",
+      ko: "미국",
+      th: "สหรัฐอเมริกา",
+      id: "Amerika Serikat",
+      ms: "Amerika Syarikat",
+      tr: "Amerika Birleşik Devletleri",
+      pt: "Estados Unidos",
+      es: "Estados Unidos",
+      fr: "États-Unis",
+      de: "Vereinigte Staaten",
+    },
+    EG: {
+      en: "Egypt",
+      ar: "مصر",
+      zh: "埃及",
+      ru: "Египет",
+      ja: "エジプト",
+      vi: "Ai Cập",
+      hi: "मिस्र",
+      ko: "이집트",
+      th: "อียิปต์",
+      id: "Mesir",
+      ms: "Mesir",
+      tr: "Mısır",
+      pt: "Egito",
+      es: "Egipto",
+      fr: "Égypte",
+      de: "Ägypten",
+    },
+    MY: {
+      en: "Malaysia",
+      ms: "Malaysia",
+      zh: "马来西亚",
+      ru: "Малайзия",
+      ja: "マレーシア",
+      vi: "Malaysia",
+      hi: "मलेशिया",
+      ar: "ماليزيا",
+      ko: "말레이시아",
+      th: "มาเลเซีย",
+      id: "Malaysia",
+      tr: "Malezya",
+      pt: "Malásia",
+      es: "Malasia",
+      fr: "Malaisie",
+      de: "Malaysia",
+    },
+    TH: {
+      en: "Thailand",
+      th: "ประเทศไทย",
+      zh: "泰国",
+      ru: "Таиланд",
+      ja: "タイ",
+      vi: "Thái Lan",
+      hi: "थाईलैंड",
+      ar: "تايلاند",
+      ko: "태국",
+      id: "Thailand",
+      ms: "Thailand",
+      tr: "Tayland",
+      pt: "Tailândia",
+      es: "Tailandia",
+      fr: "Thaïlande",
+      de: "Thailand",
+    },
+    PH: {
+      en: "Philippines",
+      zh: "菲律宾",
+      ru: "Филиппины",
+      ja: "フィリピン",
+      vi: "Philippines",
+      hi: "फिलीपींस",
+      ar: "الفلبين",
+      ko: "필리핀",
+      th: "ฟิลิปปินส์",
+      id: "Filipina",
+      ms: "Filipina",
+      tr: "Filipinler",
+      pt: "Filipinas",
+      es: "Filipinas",
+      fr: "Philippines",
+      de: "Philippinen",
+    },
+    MX: {
+      en: "Mexico",
+      es: "México",
+      zh: "墨西哥",
+      ru: "Мексика",
+      ja: "メキシコ",
+      vi: "Mexico",
+      hi: "मेक्सिको",
+      ar: "المكسيك",
+      ko: "멕시코",
+      th: "เม็กซิโก",
+      id: "Meksiko",
+      ms: "Mexico",
+      tr: "Meksika",
+      pt: "México",
+      fr: "Mexique",
+      de: "Mexiko",
+    },
+  };
+  return names[code]?.[locale] || names[code]?.["en"] || code;
+}
+
+export async function scaffoldBusinessPortal(
+  config: PortalScaffoldConfig
+): Promise<ScaffoldResult> {
+  const validatedConfig = PortalScaffoldConfigSchema.parse(config);
+  const {
+    projectName,
+    outputPath,
+    countryPair,
+    branding,
+    features,
+    geoDataSources,
+    rssSources,
+    database,
+  } = validatedConfig;
+
+  const projectPath = path.join(outputPath, projectName);
+  const filesCreated: string[] = [];
+
+  try {
+    const dirs = [
+      "src/app/[locale]",
+      "src/app/[locale]/laws",
+      "src/app/[locale]/calendar",
+      "src/app/[locale]/organizations",
+      "src/app/[locale]/news",
+      "src/app/[locale]/invest",
+      "src/app/[locale]/invest/[regionId]",
+      "src/app/[locale]/invest/[regionId]/[cityId]",
+      "src/app/[locale]/contact",
+      "src/app/api/rss",
+      "src/app/api/regions",
+      "src/app/api/events",
+      "src/app/api/contact",
+      "src/app/api/newsletter",
+      "src/components/globe",
+      "src/components/map",
+      "src/components/ui",
+      "src/components/layout",
+      "src/components/widgets",
+      "src/features/laws",
+      "src/features/calendar",
+      "src/features/organizations",
+      "src/features/news",
+      "src/features/invest",
+      "src/features/contact",
+      "src/lib/i18n",
+      "src/lib/geo",
+      "src/lib/rss",
+      "src/lib/db",
+      "src/content/ru",
+      "src/content/zh",
+      "src/content/en",
+      "messages",
+      "public/geo",
+      "scripts",
+      "types",
+    ];
+
+    dirs.forEach(dir => {
+      const fullPath = path.join(projectPath, dir);
+      if (!fs.existsSync(fullPath)) {
+        fs.mkdirSync(fullPath, { recursive: true });
+      }
+    });
+
+    writeFile(
+      projectPath,
+      "package.json",
+      generatePackageJson(projectName, features),
+      filesCreated
+    );
+    writeFile(projectPath, "tsconfig.json", generateTsConfig(), filesCreated);
+    writeFile(
+      projectPath,
+      "next.config.mjs",
+      generateNextConfig(countryPair.locales),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "tailwind.config.ts",
+      generateTailwindConfig(branding),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "postcss.config.js",
+      generatePostCssConfig(),
+      filesCreated
+    );
+    writeFile(projectPath, ".env.example", generateEnvExample(), filesCreated);
+    writeFile(projectPath, ".gitignore", generateGitIgnore(), filesCreated);
+
+    writeFile(
+      projectPath,
+      "src/middleware.ts",
+      generateMiddleware(countryPair.locales, countryPair.defaultLocale),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/lib/i18n/config.ts",
+      generateI18nConfig(countryPair),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/lib/i18n/request.ts",
+      generateI18nRequest(),
+      filesCreated
+    );
+
+    countryPair.locales.forEach(locale => {
+      writeFile(
+        projectPath,
+        `messages/${locale}.json`,
+        generateMessages(locale, branding, countryPair),
+        filesCreated
+      );
+    });
+
+    writeFile(
+      projectPath,
+      "src/app/[locale]/layout.tsx",
+      generateRootLayout(branding, countryPair),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/app/[locale]/page.tsx",
+      generateHomePage(branding, features),
+      filesCreated
+    );
+
+    writeFile(
+      projectPath,
+      "src/components/layout/Header.tsx",
+      generateHeader(branding, countryPair),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/components/layout/Footer.tsx",
+      generateFooter(branding, countryPair),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/components/layout/LocaleSwitcher.tsx",
+      generateLocaleSwitcher(countryPair.locales),
+      filesCreated
+    );
+
+    if (features.enable3DGlobe) {
+      writeFile(
+        projectPath,
+        "src/components/globe/Globe3D.tsx",
+        generateGlobe3D(branding, geoDataSources, countryPair),
+        filesCreated
+      );
+      writeFile(
+        projectPath,
+        "src/components/globe/GlobeWrapper.tsx",
+        generateGlobeWrapper(),
+        filesCreated
+      );
+    }
+
+    writeFile(
+      projectPath,
+      "src/components/map/RegionMap.tsx",
+      generateRegionMap(branding, geoDataSources),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/components/map/CityMap.tsx",
+      generateCityMap(branding),
+      filesCreated
+    );
+
+    if (features.enableLaws) {
+      writeFile(
+        projectPath,
+        "src/app/[locale]/laws/page.tsx",
+        generateLawsPage(),
+        filesCreated
+      );
+      writeFile(
+        projectPath,
+        "src/features/laws/LawsContent.tsx",
+        generateLawsContent(),
+        filesCreated
+      );
+      writeFile(
+        projectPath,
+        "src/features/laws/BusinessGuide.tsx",
+        generateBusinessGuide(),
+        filesCreated
+      );
+    }
+
+    if (features.enableCalendar) {
+      writeFile(
+        projectPath,
+        "src/app/[locale]/calendar/page.tsx",
+        generateCalendarPage(),
+        filesCreated
+      );
+      writeFile(
+        projectPath,
+        "src/features/calendar/EventList.tsx",
+        generateEventList(),
+        filesCreated
+      );
+      writeFile(
+        projectPath,
+        "src/features/calendar/EventCard.tsx",
+        generateEventCard(),
+        filesCreated
+      );
+    }
+
+    if (features.enableOrganizations) {
+      writeFile(
+        projectPath,
+        "src/app/[locale]/organizations/page.tsx",
+        generateOrganizationsPage(),
+        filesCreated
+      );
+      writeFile(
+        projectPath,
+        "src/features/organizations/OrgDirectory.tsx",
+        generateOrgDirectory(),
+        filesCreated
+      );
+    }
+
+    if (features.enableRssFeed) {
+      writeFile(
+        projectPath,
+        "src/app/[locale]/news/page.tsx",
+        generateNewsPage(),
+        filesCreated
+      );
+      writeFile(
+        projectPath,
+        "src/features/news/NewsFeed.tsx",
+        generateNewsFeed(),
+        filesCreated
+      );
+      writeFile(
+        projectPath,
+        "src/lib/rss/parser.ts",
+        generateRssParser(rssSources),
+        filesCreated
+      );
+      writeFile(
+        projectPath,
+        "src/app/api/rss/route.ts",
+        generateRssApiRoute(),
+        filesCreated
+      );
+    }
+
+    if (features.enableInvestMap) {
+      writeFile(
+        projectPath,
+        "src/app/[locale]/invest/page.tsx",
+        generateInvestPage(features),
+        filesCreated
+      );
+      writeFile(
+        projectPath,
+        "src/app/[locale]/invest/[regionId]/page.tsx",
+        generateRegionPage(),
+        filesCreated
+      );
+      writeFile(
+        projectPath,
+        "src/app/[locale]/invest/[regionId]/[cityId]/page.tsx",
+        generateCityPage(),
+        filesCreated
+      );
+      writeFile(
+        projectPath,
+        "src/features/invest/RegionDetail.tsx",
+        generateRegionDetail(),
+        filesCreated
+      );
+      writeFile(
+        projectPath,
+        "src/features/invest/CityDetail.tsx",
+        generateCityDetail(),
+        filesCreated
+      );
+      writeFile(
+        projectPath,
+        "src/features/invest/EconomicStats.tsx",
+        generateEconomicStats(),
+        filesCreated
+      );
+      writeFile(
+        projectPath,
+        "src/data/regionData.ts",
+        generateRegionData(),
+        filesCreated
+      );
+    }
+
+    writeFile(
+      projectPath,
+      "src/lib/db/schema.ts",
+      generateDbSchema(database),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/lib/db/client.ts",
+      generateDbClient(database),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "drizzle.config.ts",
+      generateDrizzleConfig(database),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "scripts/seed.ts",
+      generateSeedScript(countryPair),
+      filesCreated
+    );
+
+    writeFile(
+      projectPath,
+      "types/globe.gl.d.ts",
+      generateGlobeTypes(),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "types/react-simple-maps.d.ts",
+      generateReactSimpleMapsTypes(),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/app/globals.css",
+      generateGlobalCss(branding),
+      filesCreated
+    );
+
+    writeFile(
+      projectPath,
+      "src/components/widgets/CurrencyConverter.tsx",
+      generateCurrencyConverter(),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/components/widgets/NewsletterSignup.tsx",
+      generateNewsletterSignup(),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/components/widgets/SocialShare.tsx",
+      generateSocialShare(),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/components/widgets/BackToTop.tsx",
+      generateBackToTop(),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/components/widgets/Breadcrumbs.tsx",
+      generateBreadcrumbs(),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/components/widgets/LoadingSkeleton.tsx",
+      generateLoadingSkeleton(),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/components/widgets/RelatedRegions.tsx",
+      generateRelatedRegions(),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/components/widgets/SearchDialog.tsx",
+      generateSearchDialog(),
+      filesCreated
+    );
+
+    writeFile(
+      projectPath,
+      "src/app/[locale]/contact/page.tsx",
+      generateContactPage(),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/features/contact/ContactForm.tsx",
+      generateContactForm(),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/app/api/contact/route.ts",
+      generateContactApiRoute(),
+      filesCreated
+    );
+    writeFile(
+      projectPath,
+      "src/app/api/newsletter/route.ts",
+      generateNewsletterApiRoute(),
+      filesCreated
+    );
+
+    writeFile(
+      projectPath,
+      "README.md",
+      generateReadme(projectName, countryPair),
+      filesCreated
+    );
+
+    return { success: true, projectPath, filesCreated };
+  } catch (error) {
+    return {
+      success: false,
+      projectPath,
+      filesCreated,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function generatePackageJson(
+  name: string,
+  features: PortalScaffoldConfig["features"]
+): string {
+  const deps: Record<string, string> = {
+    next: "^14.2.0",
+    react: "^18.3.0",
+    "react-dom": "^18.3.0",
+    "next-intl": "^3.20.0",
+    "drizzle-orm": "^0.30.0",
+    pg: "^8.11.0",
+    zod: "^3.23.0",
+    "lucide-react": "^0.400.0",
+    clsx: "^2.1.0",
+    "tailwind-merge": "^2.3.0",
+  };
+
+  if (features.enable3DGlobe) {
+    deps["react-globe.gl"] = "^2.33.0";
+  }
+
+  if (features.enableAnimations) {
+    deps["framer-motion"] = "^11.0.0";
+  }
+
+  if (features.enableInvestMap) {
+    deps["react-simple-maps"] = "^3.0.0";
+    deps["d3-geo"] = "^3.1.0";
+  }
+
+  if (features.enableRssFeed) {
+    deps["rss-parser"] = "^3.13.0";
+  }
+
+  return JSON.stringify(
+    {
+      name,
+      version: "0.1.0",
+      private: true,
+      scripts: {
+        dev: "next dev",
+        build: "next build",
+        start: "next start",
+        lint: "next lint",
+        "db:generate": "drizzle-kit generate",
+        "db:migrate": "drizzle-kit migrate",
+        "db:push": "drizzle-kit push",
+        "db:seed": "tsx scripts/seed.ts",
+      },
+      dependencies: deps,
+      devDependencies: {
+        "@types/node": "^20",
+        "@types/react": "^18",
+        "@types/react-dom": "^18",
+        "@types/three": "0.137.0",
+        "@types/d3-geo": "^3.1.0",
+        "@types/pg": "^8.11.0",
+        typescript: "^5",
+        "drizzle-kit": "^0.21.0",
+        tailwindcss: "^3.4.0",
+        postcss: "^8.4.0",
+        autoprefixer: "^10.4.0",
+        tsx: "^4.15.0",
+      },
+    },
+    null,
+    2
+  );
+}
+
+function generateTsConfig(): string {
+  return JSON.stringify(
+    {
+      compilerOptions: {
+        target: "ES2017",
+        lib: ["dom", "dom.iterable", "esnext"],
+        allowJs: true,
+        skipLibCheck: true,
+        strict: true,
+        noEmit: true,
+        esModuleInterop: true,
+        module: "esnext",
+        moduleResolution: "bundler",
+        resolveJsonModule: true,
+        isolatedModules: true,
+        jsx: "preserve",
+        incremental: true,
+        plugins: [{ name: "next" }],
+        paths: { "@/*": ["./src/*"] },
+      },
+      include: [
+        "next-env.d.ts",
+        "**/*.ts",
+        "**/*.tsx",
+        ".next/types/**/*.ts",
+        "types/**/*.d.ts",
+      ],
+      exclude: ["node_modules"],
+    },
+    null,
+    2
+  );
+}
+
+function generateNextConfig(locales: Locale[]): string {
+  return `import createNextIntlPlugin from 'next-intl/plugin';
+
+const withNextIntl = createNextIntlPlugin('./src/lib/i18n/request.ts');
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  images: {
+    remotePatterns: [
+      { protocol: 'https', hostname: '**' },
+    ],
+  },
+};
+
+export default withNextIntl(nextConfig);
+`;
+}
+
+function generateTailwindConfig(
+  branding: PortalScaffoldConfig["branding"]
+): string {
+  return `import type { Config } from "tailwindcss";
+
+const config: Config = {
+  content: [
+    "./src/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        primary: {
+          DEFAULT: "${branding.primaryColor}",
+          50: "${branding.primaryColor}10",
+          100: "${branding.primaryColor}20",
+          500: "${branding.primaryColor}",
+          600: "${branding.primaryColor}",
+          700: "${branding.primaryColor}",
+        },
+        secondary: {
+          DEFAULT: "${branding.secondaryColor}",
+          500: "${branding.secondaryColor}",
+        },
+        accent: {
+          DEFAULT: "${branding.accentColor}",
+          500: "${branding.accentColor}",
+        },
+      },
+      animation: {
+        "fade-in": "fadeIn 0.5s ease-in-out",
+        "slide-up": "slideUp 0.5s ease-out",
+        "globe-rotate": "globeRotate 60s linear infinite",
+      },
+      keyframes: {
+        fadeIn: {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
+        slideUp: {
+          "0%": { transform: "translateY(20px)", opacity: "0" },
+          "100%": { transform: "translateY(0)", opacity: "1" },
+        },
+        globeRotate: {
+          "0%": { transform: "rotateY(0deg)" },
+          "100%": { transform: "rotateY(360deg)" },
+        },
+      },
+    },
+  },
+  plugins: [],
+};
+
+export default config;
+`;
+}
+
+function generatePostCssConfig(): string {
+  return `module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+};
+`;
+}
+
+function generateEnvExample(): string {
+  return `DATABASE_URL=postgresql://user:password@localhost:5432/portal
+NEXT_PUBLIC_GA_ID=
+`;
+}
+
+function generateGitIgnore(): string {
+  return `node_modules
+.next
+.env
+.env.local
+*.log
+.DS_Store
+`;
+}
+
+function generateMiddleware(locales: Locale[], defaultLocale: Locale): string {
+  return `import createMiddleware from 'next-intl/middleware';
+import { locales, defaultLocale } from '@/lib/i18n/config';
+
+export default createMiddleware({
+  locales,
+  defaultLocale,
+  localePrefix: 'always',
+});
+
+export const config = {
+  matcher: ['/', '/(ru|zh|en)/:path*'],
+};
+`;
+}
+
+function generateI18nConfig(
+  countryPair: PortalScaffoldConfig["countryPair"]
+): string {
+  const { countryA, countryB } = countryPair;
+  const infoA = COUNTRY_INFO[countryA];
+  const infoB = COUNTRY_INFO[countryB];
+
+  return `export const locales = ${JSON.stringify(countryPair.locales)} as const;
+export const defaultLocale = "${countryPair.defaultLocale}" as const;
+export type Locale = (typeof locales)[number];
+export type CountryCode = "${countryA}" | "${countryB}";
+
+export const targetingRules = ${JSON.stringify(countryPair.targetingRules, null, 2)} as const;
+
+export const COUNTRY_INFO: Record<string, { name: string; nativeName: string; flag: string; currency: string }> = {
+  "${countryA}": { name: "${infoA.name}", nativeName: "${infoA.nativeName}", flag: "${infoA.flag}", currency: "${infoA.currency}" },
+  "${countryB}": { name: "${infoB.name}", nativeName: "${infoB.nativeName}", flag: "${infoB.flag}", currency: "${infoB.currency}" },
+};
+
+export function getTargetCountry(locale: Locale): CountryCode {
+  const rule = targetingRules.find(r => r.locale === locale);
+  return (rule?.targetCountry ?? "${countryA}") as CountryCode;
+}
+
+export function getHomeCountry(locale: Locale): CountryCode {
+  const rule = targetingRules.find(r => r.locale === locale);
+  return (rule?.homeCountry ?? "${countryB}") as CountryCode;
+}
+
+export function getCountryName(code: CountryCode, locale: Locale): string {
+  const info = COUNTRY_INFO[code];
+  if (!info) return code;
+  if (locale !== "en" && info.nativeName) return info.nativeName;
+  return info.name;
+}
+`;
+}
+
+function generateI18nRequest(): string {
+  return `import { getRequestConfig } from 'next-intl/server';
+import { locales, type Locale } from './config';
+
+export default getRequestConfig(async ({ locale }) => {
+  if (!locales.includes(locale as Locale)) {
+    return { messages: {} };
+  }
+
+  return {
+    messages: (await import(\`../../../messages/\${locale}.json\`)).default,
+  };
+});
+`;
+}
+
+function generateMessages(
+  locale: Locale,
+  branding: PortalScaffoldConfig["branding"],
+  countryPair: PortalScaffoldConfig["countryPair"]
+): string {
+  const countryAName = getCountryName(countryPair.countryA, locale);
+  const countryBName = getCountryName(countryPair.countryB, locale);
+  const countryANameEn = getCountryName(countryPair.countryA, "en");
+  const countryBNameEn = getCountryName(countryPair.countryB, "en");
+  const countryANameRu = getCountryName(countryPair.countryA, "ru");
+  const countryBNameRu = getCountryName(countryPair.countryB, "ru");
+  const countryANameZh = getCountryName(countryPair.countryA, "zh");
+  const countryBNameZh = getCountryName(countryPair.countryB, "zh");
+
+  const messages: Record<string, Record<string, unknown>> = {
+    ru: {
+      meta: {
+        title: `${branding.name} - Инвестиции и торговля`,
+        description: `Ваш путеводитель по бизнесу между ${countryANameRu} и ${countryBNameRu}`,
+      },
+      nav: {
+        home: "Главная",
+        laws: "Законодательство",
+        calendar: "Календарь",
+        organizations: "Организации",
+        news: "Новости",
+        invest: "Куда инвестировать",
+        contact: "Контакты",
+      },
+      home: {
+        hero: {
+          title: `Мост между ${countryANameRu} и ${countryBNameRu}`,
+          subtitle: "Откройте для себя возможности инвестиций и торговли",
+        },
+        cta: "Начать исследование",
+      },
+      laws: {
+        title: "Законодательство",
+        agreements: "Торговые соглашения",
+        visas: "Визы и разрешения",
+        entities: "Юридические лица",
+        guide: "Руководство для инвесторов",
+      },
+      calendar: {
+        title: "Календарь мероприятий",
+        upcoming: "Предстоящие события",
+        past: "Прошедшие события",
+      },
+      organizations: {
+        title: "Организации",
+        national: "Федеральные",
+        regional: "Региональные",
+        municipal: "Муниципальные",
+      },
+      news: {
+        title: "Новости",
+        latest: "Последние новости",
+        business: "Бизнес",
+        trade: "Торговля",
+      },
+      invest: {
+        title: "Куда инвестировать",
+        selectRegion: "Выберите регион",
+        gdp: "ВВП",
+        population: "Население",
+        industries: "Отрасли",
+        sez: "Особые экономические зоны",
+        taxBenefits: "Налоговые льготы",
+        back: "Назад",
+        mapTitle: "Интерактивная карта инвестиций",
+        mapSelectRegion: "Выберите регион для изучения",
+        mapRegions: "Регионы",
+        mapInstructions: "Наведите на регион • Нажмите для подробностей",
+        mapClickToExplore: "Нажмите для изучения инвестиционных возможностей",
+        countryA: countryANameRu,
+        countryB: countryBNameRu,
+        opportunities: "Инвестиционные возможности",
+        keyProjects: "Ключевые проекты",
+        advantages: "Конкурентные преимущества",
+        contact: "Контакты для инвестиций",
+        majorCities: "Крупные города",
+        agency: "Агентство",
+        website: "Сайт",
+        email: "Эл. почта",
+        phone: "Телефон",
+        visitWebsite: "Посетить сайт",
+        partners: "Партнёры",
+        target: "Срок",
+        priority: "Приоритет",
+        active: "Активный",
+        upcoming: "Ожидается",
+        zones: "зон",
+        years: "лет",
+        cityOpportunitiesComingSoon:
+          "Подробности об инвестиционных возможностях этого города скоро появятся.",
+        viewRegionOpportunities: "Посмотреть возможности региона",
+        featuredOpportunities: "Приоритетные инвестиционные возможности",
+        allRegions: "Все регионы",
+        searchRegions: "Поиск регионов по названию или отрасли...",
+        noRegionsFound: "Регионы по вашему запросу не найдены.",
+        relatedRegions: "Похожие регионы",
+        whosWho: "Кто есть кто",
+        notableEntrepreneurs: "Известные предприниматели и бизнес-лидеры",
+        netWorth: "Состояние",
+        viewProfile: "Профиль",
+      },
+      common: {
+        learnMore: "Узнать больше",
+        viewAll: "Смотреть все",
+        loading: "Загрузка...",
+        error: "Ошибка",
+        back: "Назад",
+        allRightsReserved: "Все права защищены",
+        loadingMap: "Загрузка интерактивной карты...",
+        viewOfficialSource: "Официальный источник",
+        noNewsAvailable: "Новости пока недоступны.",
+        backTo: "Назад к",
+      },
+      widgets: {
+        currencyConverter: "Конвертер валют",
+        amount: "Сумма",
+        from: "Из",
+        to: "В",
+        result: "Результат",
+        lastUpdated: "Обновлено",
+        newsletter: "Рассылка",
+        newsletterDesc: "Получайте новости об инвестициях",
+        emailPlaceholder: "Введите email",
+        subscribe: "Подписаться",
+        subscribed: "Вы подписаны!",
+        subscribeError: "Ошибка подписки",
+        share: "Поделиться",
+        copyLink: "Копировать ссылку",
+        search: "Поиск",
+        searchPlaceholder: "Поиск регионов, городов, возможностей...",
+        noResults: "Ничего не найдено",
+        searchHint: "Начните вводить для поиска",
+      },
+      contact: {
+        title: "Связаться с нами",
+        subtitle:
+          "Готовы обсудить инвестиционные возможности? Свяжитесь с нашей командой.",
+        name: "Имя",
+        namePlaceholder: "Ваше имя",
+        email: "Email",
+        emailPlaceholder: "your@email.com",
+        company: "Компания",
+        companyPlaceholder: "Название компании",
+        subject: "Тема",
+        subjectPlaceholder: "Тема обращения",
+        message: "Сообщение",
+        messagePlaceholder: "Расскажите о вашем инвестиционном интересе...",
+        investmentRange: "Объём инвестиций",
+        selectRange: "Выберите диапазон",
+        submit: "Отправить",
+        successTitle: "Сообщение отправлено!",
+        successMessage: "Мы свяжемся с вами в ближайшее время.",
+        sendAnother: "Отправить ещё",
+        errorMessage: "Ошибка отправки. Попробуйте позже.",
+      },
+    },
+    zh: {
+      meta: {
+        title: `${branding.name} - 投资与贸易`,
+        description: `${countryANameZh}${countryBNameZh}商业指南`,
+      },
+      nav: {
+        home: "首页",
+        laws: "法规",
+        calendar: "日历",
+        organizations: "组织机构",
+        news: "新闻",
+        invest: "投资指南",
+        contact: "联系我们",
+      },
+      home: {
+        hero: {
+          title: `${countryANameZh}${countryBNameZh}商业桥梁`,
+          subtitle: "发现投资与贸易机会",
+        },
+        cta: "开始探索",
+      },
+      laws: {
+        title: "法规政策",
+        agreements: "贸易协议",
+        visas: "签证与许可",
+        entities: "企业类型",
+        guide: "投资者指南",
+      },
+      calendar: { title: "活动日历", upcoming: "即将举行", past: "已结束" },
+      organizations: {
+        title: "组织机构",
+        national: "国家级",
+        regional: "省级",
+        municipal: "市级",
+      },
+      news: {
+        title: "新闻资讯",
+        latest: "最新消息",
+        business: "商业",
+        trade: "贸易",
+      },
+      invest: {
+        title: "投资指南",
+        selectRegion: "选择地区",
+        gdp: "GDP",
+        population: "人口",
+        industries: "主要产业",
+        sez: "经济特区",
+        taxBenefits: "税收优惠",
+        back: "返回",
+        mapTitle: "互动投资地图",
+        mapSelectRegion: "选择一个地区进行探索",
+        mapRegions: "地区",
+        mapInstructions: "悬停查看地区 • 点击了解详情",
+        mapClickToExplore: "点击探索投资机会",
+        countryA: countryANameZh,
+        countryB: countryBNameZh,
+        opportunities: "投资机会",
+        keyProjects: "重点项目",
+        advantages: "竞争优势",
+        contact: "投资联系方式",
+        majorCities: "主要城市",
+        agency: "机构",
+        website: "网站",
+        email: "电子邮箱",
+        phone: "电话",
+        visitWebsite: "访问网站",
+        partners: "合作伙伴",
+        target: "目标",
+        priority: "优先",
+        active: "进行中",
+        upcoming: "即将推出",
+        zones: "个",
+        years: "年",
+        cityOpportunitiesComingSoon: "该城市的投资机会详情即将上线。",
+        viewRegionOpportunities: "查看地区投资机会",
+        featuredOpportunities: "重点投资机会",
+        allRegions: "所有地区",
+        searchRegions: "按名称或行业搜索地区...",
+        noRegionsFound: "未找到符合搜索条件的地区。",
+        relatedRegions: "相关地区",
+        whosWho: "名人堂",
+        notableEntrepreneurs: "知名企业家和商业领袖",
+        netWorth: "净资产",
+        viewProfile: "查看简介",
+      },
+      common: {
+        learnMore: "了解更多",
+        viewAll: "查看全部",
+        loading: "加载中...",
+        error: "错误",
+        back: "返回",
+        allRightsReserved: "版权所有",
+        loadingMap: "正在加载互动地图...",
+        viewOfficialSource: "查看官方来源",
+        noNewsAvailable: "暂无新闻。",
+        backTo: "返回",
+      },
+      widgets: {
+        currencyConverter: "货币转换器",
+        amount: "金额",
+        from: "从",
+        to: "到",
+        result: "结果",
+        lastUpdated: "更新时间",
+        newsletter: "邮件订阅",
+        newsletterDesc: "获取最新投资资讯",
+        emailPlaceholder: "输入邮箱",
+        subscribe: "订阅",
+        subscribed: "订阅成功！",
+        subscribeError: "订阅失败",
+        share: "分享",
+        copyLink: "复制链接",
+        search: "搜索",
+        searchPlaceholder: "搜索地区、城市、投资机会...",
+        noResults: "未找到结果",
+        searchHint: "输入关键词开始搜索",
+      },
+      contact: {
+        title: "联系我们",
+        subtitle: "准备好探讨投资机会了吗？请与我们的团队联系。",
+        name: "姓名",
+        namePlaceholder: "您的姓名",
+        email: "邮箱",
+        emailPlaceholder: "your@email.com",
+        company: "公司",
+        companyPlaceholder: "公司名称",
+        subject: "主题",
+        subjectPlaceholder: "咨询主题",
+        message: "留言",
+        messagePlaceholder: "请描述您的投资意向...",
+        investmentRange: "投资规模",
+        selectRange: "选择范围",
+        submit: "提交",
+        successTitle: "提交成功！",
+        successMessage: "我们会尽快与您联系。",
+        sendAnother: "再次提交",
+        errorMessage: "提交失败，请稍后重试。",
+      },
+    },
+    en: {
+      meta: {
+        title: `${branding.name} - Investment & Trade`,
+        description: `Your guide to ${countryANameEn}-${countryBNameEn} business`,
+      },
+      nav: {
+        home: "Home",
+        laws: "Laws",
+        calendar: "Calendar",
+        organizations: "Organizations",
+        news: "News",
+        invest: "Where to Invest",
+        contact: "Contact",
+      },
+      home: {
+        hero: {
+          title: `Bridge Between ${countryANameEn} and ${countryBNameEn}`,
+          subtitle: "Discover investment and trade opportunities",
+        },
+        cta: "Start Exploring",
+      },
+      laws: {
+        title: "Laws & Regulations",
+        agreements: "Trade Agreements",
+        visas: "Visas & Permits",
+        entities: "Legal Entities",
+        guide: "Investor Guide",
+      },
+      calendar: {
+        title: "Event Calendar",
+        upcoming: "Upcoming Events",
+        past: "Past Events",
+      },
+      organizations: {
+        title: "Organizations",
+        national: "National",
+        regional: "Regional",
+        municipal: "Municipal",
+      },
+      news: {
+        title: "News",
+        latest: "Latest News",
+        business: "Business",
+        trade: "Trade",
+      },
+      invest: {
+        title: "Where to Invest",
+        selectRegion: "Select a Region",
+        gdp: "GDP",
+        population: "Population",
+        industries: "Industries",
+        sez: "Special Economic Zones",
+        taxBenefits: "Tax Benefits",
+        back: "Back",
+        mapTitle: "Interactive Investment Map",
+        mapSelectRegion: "Select a region to explore",
+        mapRegions: "Regions",
+        mapInstructions: "Hover over a region • Click to explore",
+        mapClickToExplore: "Click to explore investment opportunities",
+        countryA: countryANameEn,
+        countryB: countryBNameEn,
+        opportunities: "Investment Opportunities",
+        keyProjects: "Key Projects",
+        advantages: "Competitive Advantages",
+        contact: "Investment Contact",
+        majorCities: "Major Cities",
+        agency: "Agency",
+        website: "Website",
+        email: "Email",
+        phone: "Phone",
+        visitWebsite: "Visit Website",
+        partners: "Partners",
+        target: "Target",
+        priority: "Priority",
+        active: "Active",
+        upcoming: "Upcoming",
+        zones: "zones",
+        years: "years",
+        cityOpportunitiesComingSoon:
+          "Investment opportunity details for this city are coming soon.",
+        viewRegionOpportunities: "View region opportunities",
+        featuredOpportunities: "Featured Priority Opportunities",
+        allRegions: "All Regions",
+        searchRegions: "Search regions by name or industry...",
+        noRegionsFound: "No regions found matching your search.",
+        relatedRegions: "Similar Regions",
+        whosWho: "Who's Who",
+        notableEntrepreneurs: "Notable Entrepreneurs & Business Leaders",
+        netWorth: "Net Worth",
+        viewProfile: "View Profile",
+      },
+      common: {
+        learnMore: "Learn More",
+        viewAll: "View All",
+        loading: "Loading...",
+        error: "Error",
+        back: "Back",
+        allRightsReserved: "All rights reserved",
+        loadingMap: "Loading interactive map...",
+        viewOfficialSource: "View Official Source",
+        noNewsAvailable: "No news available at the moment.",
+        backTo: "Back to",
+      },
+      widgets: {
+        currencyConverter: "Currency Converter",
+        amount: "Amount",
+        from: "From",
+        to: "To",
+        result: "Result",
+        lastUpdated: "Last updated",
+        newsletter: "Newsletter",
+        newsletterDesc: "Get investment updates in your inbox",
+        emailPlaceholder: "Enter your email",
+        subscribe: "Subscribe",
+        subscribed: "Successfully subscribed!",
+        subscribeError: "Subscription failed",
+        share: "Share",
+        copyLink: "Copy link",
+        search: "Search",
+        searchPlaceholder: "Search regions, cities, opportunities...",
+        noResults: "No results found",
+        searchHint: "Start typing to search",
+      },
+      contact: {
+        title: "Contact Us",
+        subtitle:
+          "Ready to discuss investment opportunities? Get in touch with our team.",
+        name: "Name",
+        namePlaceholder: "Your name",
+        email: "Email",
+        emailPlaceholder: "your@email.com",
+        company: "Company",
+        companyPlaceholder: "Company name",
+        subject: "Subject",
+        subjectPlaceholder: "Subject of inquiry",
+        message: "Message",
+        messagePlaceholder: "Tell us about your investment interest...",
+        investmentRange: "Investment Range",
+        selectRange: "Select range",
+        submit: "Send Message",
+        successTitle: "Message Sent!",
+        successMessage: "We will get back to you shortly.",
+        sendAnother: "Send Another",
+        errorMessage: "Failed to send. Please try again later.",
+      },
+    },
+  };
+  return JSON.stringify(messages[locale] || messages.en, null, 2);
+}
+
+function generateRootLayout(
+  branding: PortalScaffoldConfig["branding"],
+  countryPair: PortalScaffoldConfig["countryPair"]
+): string {
+  return `import { NextIntlClientProvider } from 'next-intl';
+import { getMessages, getTranslations } from 'next-intl/server';
+import { Inter } from 'next/font/google';
+import '../globals.css';
+import { Header } from '@/components/layout/Header';
+import { Footer } from '@/components/layout/Footer';
+
+const inter = Inter({ subsets: ['latin', 'cyrillic'] });
+
+export async function generateMetadata({ params: { locale } }: { params: { locale: string } }) {
+  const t = await getTranslations({ locale, namespace: 'meta' });
+  return {
+    title: t('title'),
+    description: t('description'),
+  };
+}
+
+export default async function RootLayout({
+  children,
+  params: { locale },
+}: {
+  children: React.ReactNode;
+  params: { locale: string };
+}) {
+  const messages = await getMessages();
+
+  return (
+    <html lang={locale} className="scroll-smooth">
+      <body className={inter.className}>
+        <NextIntlClientProvider messages={messages}>
+          <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+            <Header />
+            <main className="flex-1">{children}</main>
+            <Footer />
+          </div>
+        </NextIntlClientProvider>
+      </body>
+    </html>
+  );
+}
+`;
+}
+
+function generateHomePage(
+  branding: PortalScaffoldConfig["branding"],
+  features: PortalScaffoldConfig["features"]
+): string {
+  return `"use client";
+
+import { useTranslations } from 'next-intl';
+import { motion } from 'framer-motion';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
+import { ArrowRight, Scale, Calendar, Building2, Newspaper, MapPin } from 'lucide-react';
+
+${
+  features.enable3DGlobe
+    ? `const GlobeWrapper = dynamic(() => import('@/components/globe/GlobeWrapper').then(m => m.GlobeWrapper), {
+  ssr: false,
+  loading: () => <div className="w-full h-[600px] flex items-center justify-center"><div className="animate-spin w-12 h-12 border-4 border-primary border-t-transparent rounded-full" /></div>,
+});`
+    : ""
+}
+
+const features = [
+  { key: 'laws', icon: Scale, href: '/laws', color: 'from-blue-500 to-blue-600' },
+  { key: 'calendar', icon: Calendar, href: '/calendar', color: 'from-green-500 to-green-600' },
+  { key: 'organizations', icon: Building2, href: '/organizations', color: 'from-purple-500 to-purple-600' },
+  { key: 'news', icon: Newspaper, href: '/news', color: 'from-orange-500 to-orange-600' },
+  { key: 'invest', icon: MapPin, href: '/invest', color: 'from-red-500 to-red-600' },
+];
+
+export default function HomePage() {
+  const t = useTranslations();
+  const params = useParams();
+  const locale = params.locale as string;
+
+  return (
+    <div className="relative">
+      {/* Hero Section */}
+      <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-slate-900/50 to-slate-900 z-10" />
+        
+        ${
+          features.enable3DGlobe
+            ? `{/* 3D Globe Background */}
+        <div className="absolute inset-0 opacity-60">
+          <GlobeWrapper />
+        </div>`
+            : ""
+        }
+
+        <div className="relative z-20 text-center px-4 max-w-4xl mx-auto">
+          <motion.h1
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            className="text-5xl md:text-7xl font-bold text-white mb-6 bg-clip-text text-transparent bg-gradient-to-r from-white via-blue-100 to-white"
+          >
+            {t('home.hero.title')}
+          </motion.h1>
+          
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+            className="text-xl md:text-2xl text-slate-300 mb-10"
+          >
+            {t('home.hero.subtitle')}
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+          >
+            <Link
+              href={\`/\${locale}/invest\`}
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-primary to-secondary px-8 py-4 rounded-full text-white font-semibold text-lg hover:scale-105 transition-transform shadow-lg shadow-primary/25"
+            >
+              {t('home.cta')}
+              <ArrowRight className="w-5 h-5" />
+            </Link>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Features Grid */}
+      <section className="py-20 px-4">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {features.map((feature, index) => (
+              <motion.div
+                key={feature.key}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                viewport={{ once: true }}
+              >
+                <Link
+                  href={\`/\${locale}\${feature.href}\`}
+                  className="group block p-6 bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700/50 hover:border-slate-600 transition-all hover:shadow-xl hover:shadow-primary/10"
+                >
+                  <div className={\`inline-flex p-3 rounded-xl bg-gradient-to-r \${feature.color} mb-4\`}>
+                    <feature.icon className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-2 group-hover:text-primary transition-colors">
+                    {t(\`nav.\${feature.key}\`)}
+                  </h3>
+                  <p className="text-slate-400">
+                    {t(\`\${feature.key}.title\`)}
+                  </p>
+                  <div className="mt-4 flex items-center text-primary text-sm font-medium">
+                    {t('common.learnMore')}
+                    <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+`;
+}
+
+function generateHeader(
+  branding: PortalScaffoldConfig["branding"],
+  countryPair: PortalScaffoldConfig["countryPair"]
+): string {
+  return `"use client";
+
+import Link from 'next/link';
+import { useParams, usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
+import { motion } from 'framer-motion';
+import { Menu, X } from 'lucide-react';
+import { useState } from 'react';
+import { LocaleSwitcher } from './LocaleSwitcher';
+import { SearchDialog } from '@/components/widgets/SearchDialog';
+
+const navItems = ['laws', 'calendar', 'organizations', 'news', 'invest', 'contact'];
+
+export function Header() {
+  const t = useTranslations('nav');
+  const params = useParams();
+  const pathname = usePathname();
+  const locale = params.locale as string;
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  return (
+    <header className="sticky top-0 z-50 bg-slate-900/80 backdrop-blur-lg border-b border-slate-800">
+      <div className="max-w-7xl mx-auto px-4">
+        <div className="flex items-center justify-between h-16">
+          <Link href={\`/\${locale}\`} className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+              <span className="text-white font-bold text-sm">🌐</span>
+            </div>
+            <span className="text-xl font-bold text-white">${branding.name}</span>
+          </Link>
+
+          <nav className="hidden md:flex items-center gap-1">
+            {navItems.map((item) => {
+              const isActive = pathname.includes(\`/\${item}\`);
+              return (
+                <Link
+                  key={item}
+                  href={\`/\${locale}/\${item}\`}
+                  className={\`px-4 py-2 rounded-lg text-sm font-medium transition-colors \${
+                    isActive
+                      ? 'bg-primary/20 text-primary'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                  }\`}
+                >
+                  {t(item)}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="flex items-center gap-2">
+            <SearchDialog />
+            <LocaleSwitcher />
+            
+            <button
+              className="md:hidden p-2 text-slate-300 hover:text-white"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
+        </div>
+
+        {mobileMenuOpen && (
+          <motion.nav
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="md:hidden py-4 border-t border-slate-800"
+          >
+            {navItems.map((item) => (
+              <Link
+                key={item}
+                href={\`/\${locale}/\${item}\`}
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-4 py-3 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg"
+              >
+                {t(item)}
+              </Link>
+            ))}
+          </motion.nav>
+        )}
+      </div>
+    </header>
+  );
+}
+`;
+}
+
+function generateFooter(
+  branding: PortalScaffoldConfig["branding"],
+  countryPair: PortalScaffoldConfig["countryPair"]
+): string {
+  const flagA = COUNTRY_INFO[countryPair.countryA]?.flag || "🌍";
+  const flagB = COUNTRY_INFO[countryPair.countryB]?.flag || "🌍";
+  return `"use client";
+
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
+import { NewsletterSignup } from '@/components/widgets/NewsletterSignup';
+import { BackToTop } from '@/components/widgets/BackToTop';
+
+export function Footer() {
+  const t = useTranslations();
+  const params = useParams();
+  const locale = params.locale as string;
+
+  const socialLinks = [
+    { name: 'Telegram', href: 'https://t.me/silkroadportal', icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+      </svg>
+    )},
+    { name: 'WeChat', href: '#', icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.72-1.78 6.22.942 2.453 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.49.49 0 0 1 .176-.554c1.522-1.12 2.484-2.773 2.484-4.628 0-3.222-3.004-5.879-6.829-6.049-.065-.002-.13-.003-.194-.003-.065-.003-.13-.007-.196-.007l.177-.056zm-2.853 2.928c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.84 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z"/>
+      </svg>
+    )},
+    { name: 'LinkedIn', href: 'https://linkedin.com/company/silkroadportal', icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+      </svg>
+    )},
+  ];
+
+  const quickLinks = [
+    { key: 'laws', href: \`/\${locale}/laws\` },
+    { key: 'invest', href: \`/\${locale}/invest\` },
+    { key: 'news', href: \`/\${locale}/news\` },
+    { key: 'contact', href: \`/\${locale}/contact\` },
+  ];
+
+  return (
+    <>
+      <footer className="bg-slate-900 border-t border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 py-12">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+            <div className="md:col-span-2">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">🌐</span>
+                </div>
+                <span className="text-xl font-bold text-white">${branding.name}</span>
+              </div>
+              <p className="text-slate-400 text-sm mb-4 max-w-md">
+                {t('meta.description')}
+              </p>
+              <div className="flex items-center gap-3">
+                {socialLinks.map((link) => (
+                  <a
+                    key={link.name}
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors"
+                    title={link.name}
+                  >
+                    {link.icon}
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-white font-semibold mb-4">{t('common.learnMore')}</h3>
+              <ul className="space-y-2">
+                {quickLinks.map((link) => (
+                  <li key={link.key}>
+                    <Link
+                      href={link.href}
+                      className="text-slate-400 hover:text-white text-sm transition-colors"
+                    >
+                      {t(\`nav.\${link.key}\`)}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <NewsletterSignup />
+            </div>
+          </div>
+
+          <div className="border-t border-slate-800 pt-8">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="text-slate-400 text-sm">
+                © {new Date().getFullYear()} ${branding.name}. {t('common.allRightsReserved')}
+              </div>
+              <div className="flex items-center gap-4 text-slate-500 text-sm">
+                <span>${flagA} 🤝 ${flagB}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </footer>
+      <BackToTop />
+    </>
+  );
+}
+`;
+}
+
+function generateLocaleSwitcher(locales: Locale[]): string {
+  const localeDisplayNames: Record<Locale, string> = {
+    en: "🇬🇧 ENG",
+    zh: "🇨🇳 中文",
+    ru: "🇷🇺 РУС",
+    ja: "🇯🇵 日本語",
+    vi: "🇻🇳 Tiếng Việt",
+    hi: "🇮🇳 हिंदी",
+    ar: "🇸🇦 العربية",
+    ko: "🇰🇷 한국어",
+    th: "🇹🇭 ไทย",
+    id: "🇮🇩 Indonesia",
+    ms: "🇲🇾 Melayu",
+    tr: "🇹🇷 Türkçe",
+    pt: "🇧🇷 Português",
+    es: "🇲🇽 Español",
+    fr: "🇫🇷 Français",
+    de: "🇩🇪 Deutsch",
+  };
+
+  const localeNamesObj = locales.reduce(
+    (acc, locale) => {
+      acc[locale] = localeDisplayNames[locale] || locale.toUpperCase();
+      return acc;
+    },
+    {} as Record<string, string>
+  );
+
+  return `"use client";
+
+import { useParams, usePathname, useRouter } from 'next/navigation';
+import { Globe } from 'lucide-react';
+
+const localeNames: Record<string, string> = ${JSON.stringify(localeNamesObj, null, 2)};
+
+export function LocaleSwitcher() {
+  const params = useParams();
+  const pathname = usePathname();
+  const router = useRouter();
+  const currentLocale = params.locale as string;
+
+  const switchLocale = (newLocale: string) => {
+    const newPath = pathname.replace(\`/\${currentLocale}\`, \`/\${newLocale}\`);
+    router.push(newPath);
+  };
+
+  return (
+    <div className="relative group">
+      <button className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
+        <Globe className="w-4 h-4" />
+        <span className="text-sm">{localeNames[currentLocale as keyof typeof localeNames] || currentLocale}</span>
+      </button>
+      <div className="absolute right-0 top-full mt-1 bg-slate-800 rounded-lg border border-slate-700 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+        {${JSON.stringify(locales)}.map((locale) => (
+          <button
+            key={locale}
+            onClick={() => switchLocale(locale)}
+            className={\`block w-full px-4 py-2 text-left text-sm hover:bg-slate-700 transition-colors \${
+              locale === currentLocale ? 'text-primary' : 'text-slate-300'
+            }\`}
+          >
+            {localeNames[locale as keyof typeof localeNames]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+`;
+}
+
+function generateGlobe3D(
+  branding: PortalScaffoldConfig["branding"],
+  geoSources: PortalScaffoldConfig["geoDataSources"],
+  countryPair: PortalScaffoldConfig["countryPair"]
+): string {
+  // Build dynamic GEO_URLS from geoDataSources
+  const geoUrlEntries = geoSources
+    .map(src => `  ${src.country}: '${src.url}'`)
+    .join(",\n");
+
+  // Build dynamic MAP_CONFIG - use reasonable defaults per country
+  const mapConfigDefaults: Record<
+    string,
+    { viewBox: string; labelOffset: string }
+  > = {
+    CN: { viewBox: "'70 33 70 55'", labelOffset: "{ x: 0, y: 0 }" },
+    RU: { viewBox: "'15 5 175 50'", labelOffset: "{ x: 0, y: 0 }" },
+    DE: { viewBox: "'5 42 17 15'", labelOffset: "{ x: 0, y: 0 }" },
+    FR: { viewBox: "'-6 38 20 18'", labelOffset: "{ x: 0, y: 0 }" },
+    IN: { viewBox: "'65 5 40 40'", labelOffset: "{ x: 0, y: 0 }" },
+    AE: { viewBox: "'50 20 15 12'", labelOffset: "{ x: 0, y: 0 }" },
+    JP: { viewBox: "'125 25 25 25'", labelOffset: "{ x: 0, y: 0 }" },
+    VN: { viewBox: "'100 5 15 30'", labelOffset: "{ x: 0, y: 0 }" },
+    BR: { viewBox: "'-75 -35 50 45'", labelOffset: "{ x: 0, y: 0 }" },
+    TR: { viewBox: "'25 34 22 12'", labelOffset: "{ x: 0, y: 0 }" },
+    SA: { viewBox: "'35 15 25 20'", labelOffset: "{ x: 0, y: 0 }" },
+    EG: { viewBox: "'23 20 15 15'", labelOffset: "{ x: 0, y: 0 }" },
+    KR: { viewBox: "'124 32 10 10'", labelOffset: "{ x: 0, y: 0 }" },
+    GB: { viewBox: "'-12 48 20 15'", labelOffset: "{ x: 0, y: 0 }" },
+    US: { viewBox: "'-130 20 70 40'", labelOffset: "{ x: 0, y: 0 }" },
+    ID: { viewBox: "'95 -12 50 25'", labelOffset: "{ x: 0, y: 0 }" },
+    MY: { viewBox: "'98 -2 22 15'", labelOffset: "{ x: 0, y: 0 }" },
+    TH: { viewBox: "'96 4 12 18'", labelOffset: "{ x: 0, y: 0 }" },
+    SG: { viewBox: "'103 0 5 5'", labelOffset: "{ x: 0, y: 0 }" },
+    PH: { viewBox: "'115 4 15 20'", labelOffset: "{ x: 0, y: 0 }" },
+    MX: { viewBox: "'-120 12 40 25'", labelOffset: "{ x: 0, y: 0 }" },
+  };
+
+  const mapConfigEntries = geoSources
+    .map(src => {
+      const cfg = mapConfigDefaults[src.country] || {
+        viewBox: "'0 0 360 180'",
+        labelOffset: "{ x: 0, y: 0 }",
+      };
+      return `  ${src.country}: { viewBox: ${cfg.viewBox}, labelOffset: ${cfg.labelOffset} }`;
+    })
+    .join(",\n");
+
+  // Get country info for dynamic labels
+  const countryA = countryPair.countryA;
+  const countryB = countryPair.countryB;
+
+  return `"use client";
+
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslations } from 'next-intl';
+import { getTargetCountry, COUNTRY_INFO } from '@/lib/i18n/config';
+import type { Locale } from '@/lib/i18n/config';
+
+interface GlobeProps {
+  onRegionClick?: (regionId: string) => void;
+}
+
+const GEO_URLS: Record<string, string> = {
+${geoUrlEntries}
+};
+
+const MAP_CONFIG: Record<string, { viewBox: string; labelOffset: { x: number; y: number } }> = {
+${mapConfigEntries}
+};
+
+interface GeoFeature {
+  type: string;
+  properties: Record<string, any>;
+  geometry: {
+    type: string;
+    coordinates: any[];
+  };
+}
+
+function projectPoint(lon: number, lat: number): [number, number] {
+  const x = lon;
+  const y = -lat + 90;
+  return [x, y];
+}
+
+function coordsToPath(rings: number[][][]): string {
+  return rings.map((ring, i) => {
+    const points = ring.map((point) => {
+      const [x, y] = projectPoint(point[0], point[1]);
+      return \`\${x},\${y}\`;
+    });
+    return (i === 0 ? 'M' : 'M') + points.join('L') + 'Z';
+  }).join(' ');
+}
+
+function geometryToPath(geometry: GeoFeature['geometry']): string {
+  if (geometry.type === 'Polygon') {
+    return coordsToPath(geometry.coordinates);
+  } else if (geometry.type === 'MultiPolygon') {
+    return geometry.coordinates.map(poly => coordsToPath(poly)).join(' ');
+  }
+  return '';
+}
+
+function getRegionCenter(geometry: GeoFeature['geometry']): [number, number] {
+  let ring: number[][] = [];
+  if (geometry.type === 'Polygon') {
+    ring = geometry.coordinates[0] as number[][];
+  } else if (geometry.type === 'MultiPolygon') {
+    ring = geometry.coordinates[0][0] as number[][];
+  }
+  if (!ring.length) return [0, 0];
+  
+  const sumX = ring.reduce((a, point) => a + point[0], 0);
+  const sumY = ring.reduce((a, point) => a + point[1], 0);
+  return [sumX / ring.length, sumY / ring.length];
+}
+
+export function Globe3D({ onRegionClick }: GlobeProps) {
+  const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
+  const [clickedRegion, setClickedRegion] = useState<string | null>(null);
+  const [clickPosition, setClickPosition] = useState<{ x: number; y: number } | null>(null);
+  const [geoData, setGeoData] = useState<GeoFeature[]>([]);
+  const [loading, setLoading] = useState(true);
+  const params = useParams();
+  const router = useRouter();
+  const t = useTranslations('invest');
+  const locale = params.locale as Locale;
+  const targetCountry = getTargetCountry(locale);
+  const config = MAP_CONFIG[targetCountry];
+
+  const playClickSound = useCallback(() => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.05);
+      oscillator.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.1);
+      
+      gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+      
+      oscillator.start(audioCtx.currentTime);
+      oscillator.stop(audioCtx.currentTime + 0.15);
+    } catch (e) {
+      console.info('Audio not supported');
+    }
+  }, []);
+
+  useEffect(() => {
+    fetch(GEO_URLS[targetCountry])
+      .then(res => res.json())
+      .then(data => {
+        setGeoData(data.features || []);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Failed to load map data:', err);
+        setLoading(false);
+      });
+  }, [targetCountry]);
+
+  const getRegionName = useCallback((feature: GeoFeature): string => {
+    return feature.properties?.name || 
+           feature.properties?.NAME || 
+           feature.properties?.地名 || 
+           feature.properties?.name_en ||
+           'Unknown';
+  }, []);
+
+  const handleRegionClick = useCallback((feature: GeoFeature, event: React.MouseEvent) => {
+    const name = getRegionName(feature);
+    
+    playClickSound();
+    setClickedRegion(name);
+    setClickPosition({ x: event.clientX, y: event.clientY });
+    
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('selectedRegionGeometry', JSON.stringify(feature.geometry));
+      sessionStorage.setItem('selectedRegionName', name);
+    }
+    
+    setTimeout(() => {
+      if (onRegionClick) {
+        onRegionClick(name);
+      } else {
+        router.push(\`/\${locale}/invest/\${encodeURIComponent(name)}\`);
+      }
+    }, 400);
+  }, [locale, onRegionClick, router, getRegionName, playClickSound]);
+
+  const hoveredFeature = geoData.find(f => getRegionName(f) === hoveredRegion);
+
+  return (
+    <div className="relative w-full h-full rounded-2xl overflow-hidden">
+      {/* Gorgeous gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950" />
+      
+      {/* Animated particles */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {[...Array(50)].map((_, i) => (
+          <motion.div
+            key={i}
+            className="absolute w-1 h-1 bg-white/30 rounded-full"
+            style={{
+              left: \`\${Math.random() * 100}%\`,
+              top: \`\${Math.random() * 100}%\`,
+            }}
+            animate={{
+              opacity: [0, 0.5, 0],
+              scale: [0, 1, 0],
+            }}
+            transition={{
+              duration: 3 + Math.random() * 4,
+              repeat: Infinity,
+              delay: Math.random() * 5,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Glowing accent */}
+      <motion.div 
+        className="absolute w-[600px] h-[600px] rounded-full blur-[100px] pointer-events-none"
+        style={{ 
+          background: 'radial-gradient(circle, ${branding.primaryColor}15 0%, transparent 70%)',
+          left: '50%', 
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
+        }}
+        animate={{ scale: [1, 1.1, 1], opacity: [0.5, 0.8, 0.5] }}
+        transition={{ duration: 8, repeat: Infinity }}
+      />
+
+      {/* Map container */}
+      <div className="relative z-10 w-full h-full flex items-center justify-center p-4">
+        {loading ? (
+          <motion.div
+            className="w-16 h-16 border-4 border-t-transparent rounded-full"
+            style={{ borderColor: '${branding.primaryColor}' }}
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          />
+        ) : (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full h-full max-w-4xl"
+          >
+            <svg
+              viewBox={config.viewBox}
+              className="w-full h-full"
+              style={{ filter: 'drop-shadow(0 0 40px ${branding.primaryColor}30)' }}
+            >
+              <defs>
+                {/* Gradient for regions */}
+                <linearGradient id="regionGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="${branding.primaryColor}" stopOpacity="0.9" />
+                  <stop offset="100%" stopColor="${branding.primaryColor}" stopOpacity="0.6" />
+                </linearGradient>
+                
+                {/* Hover gradient */}
+                <linearGradient id="hoverGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="${branding.secondaryColor}" />
+                  <stop offset="100%" stopColor="${branding.primaryColor}" />
+                </linearGradient>
+                
+                {/* Glow filter */}
+                <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="0.5" result="blur" />
+                  <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
+                
+                {/* Strong glow for hover */}
+                <filter id="glowStrong" x="-100%" y="-100%" width="300%" height="300%">
+                  <feGaussianBlur stdDeviation="1" result="blur" />
+                  <feFlood floodColor="${branding.secondaryColor}" floodOpacity="0.8" />
+                  <feComposite in2="blur" operator="in" />
+                  <feMerge>
+                    <feMergeNode />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+
+              {/* Render all regions */}
+              {geoData.map((feature, index) => {
+                const name = getRegionName(feature);
+                const isHovered = hoveredRegion === name;
+                const isClicked = clickedRegion === name;
+                const path = geometryToPath(feature.geometry);
+                
+                return (
+                  <g key={index}>
+                    <motion.path
+                      d={path}
+                      fill={isClicked ? '#FFFFFF' : isHovered ? 'url(#hoverGradient)' : 'url(#regionGradient)'}
+                      stroke={isClicked ? '#FFFFFF' : isHovered ? '${branding.secondaryColor}' : 'rgba(255,255,255,0.4)'}
+                      strokeWidth={isClicked ? 0.3 : isHovered ? 0.15 : 0.08}
+                      filter={isClicked ? 'url(#glowStrong)' : isHovered ? 'url(#glowStrong)' : 'url(#glow)'}
+                      className="cursor-pointer"
+                      initial={false}
+                      animate={{
+                        opacity: isClicked ? 1 : isHovered ? 1 : 0.85,
+                        scale: isClicked ? 1.02 : 1,
+                      }}
+                      transition={{ duration: 0.15 }}
+                      onMouseEnter={() => setHoveredRegion(name)}
+                      onMouseLeave={() => setHoveredRegion(null)}
+                      onClick={(e) => handleRegionClick(feature, e as unknown as React.MouseEvent)}
+                    />
+                  </g>
+                );
+              })}
+            </svg>
+          </motion.div>
+        )}
+      </div>
+
+      {/* Click ripple effect */}
+      <AnimatePresence>
+        {clickPosition && clickedRegion && (
+          <motion.div
+            key={clickedRegion}
+            className="fixed pointer-events-none z-50"
+            style={{ left: clickPosition.x, top: clickPosition.y }}
+            initial={{ scale: 0, opacity: 1 }}
+            animate={{ scale: 8, opacity: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+          >
+            <div 
+              className="w-20 h-20 -ml-10 -mt-10 rounded-full"
+              style={{ background: 'radial-gradient(circle, ${branding.secondaryColor} 0%, transparent 70%)' }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Full screen flash on click */}
+      <AnimatePresence>
+        {clickedRegion && (
+          <motion.div
+            className="absolute inset-0 z-40 pointer-events-none"
+            style={{ background: 'radial-gradient(circle at center, ${branding.secondaryColor}40, transparent 70%)' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 1, 0] }}
+            transition={{ duration: 0.4 }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Region info tooltip */}
+      <AnimatePresence>
+        {hoveredRegion && hoveredFeature && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30"
+          >
+            <div 
+              className="px-6 py-4 rounded-2xl border shadow-2xl backdrop-blur-xl"
+              style={{
+                background: 'linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.9))',
+                borderColor: '${branding.primaryColor}40',
+                boxShadow: '0 0 40px ${branding.primaryColor}20',
+              }}
+            >
+              <div className="flex items-center gap-4">
+                <div 
+                  className="w-14 h-14 rounded-xl flex items-center justify-center"
+                  style={{ 
+                    background: 'linear-gradient(135deg, ${branding.primaryColor}, ${branding.secondaryColor})',
+                    boxShadow: '0 0 20px ${branding.primaryColor}50',
+                  }}
+                >
+                  <span className="text-2xl">📍</span>
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-xl">{hoveredRegion}</h3>
+                  <p className="text-slate-400 text-sm">{t('mapClickToExplore')}</p>
+                </div>
+                <motion.div
+                  className="ml-4 text-white/60"
+                  animate={{ x: [0, 5, 0] }}
+                  transition={{ duration: 1, repeat: Infinity }}
+                >
+                  →
+                </motion.div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Title */}
+      <div className="absolute top-6 left-6 z-30">
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+        >
+          <h2 
+            className="text-3xl font-bold text-white mb-1"
+            style={{ textShadow: '0 2px 20px rgba(0,0,0,0.5)' }}
+          >
+            {COUNTRY_INFO[targetCountry]?.flag || '🌍'} {COUNTRY_INFO[targetCountry]?.name || targetCountry}
+          </h2>
+          <p className="text-slate-400">{t('mapSelectRegion')}</p>
+        </motion.div>
+      </div>
+
+      {/* Stats badge */}
+      <div className="absolute top-6 right-6 z-30">
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="px-4 py-3 rounded-xl backdrop-blur-md border"
+          style={{
+            background: 'rgba(15,23,42,0.8)',
+            borderColor: 'rgba(255,255,255,0.1)',
+          }}
+        >
+          <p className="text-slate-400 text-xs uppercase tracking-wider">{t('mapRegions')}</p>
+          <p className="text-white text-2xl font-bold">{geoData.length}</p>
+        </motion.div>
+      </div>
+
+      {/* Instructions */}
+      <div className="absolute bottom-6 right-6 z-30">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1 }}
+          className="text-slate-500 text-sm"
+        >
+          {t('mapInstructions')}
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+`;
+}
+
+function generateGlobeWrapper(): string {
+  return `"use client";
+
+import dynamic from 'next/dynamic';
+import { Suspense } from 'react';
+
+const Globe3D = dynamic(() => import('./Globe3D').then(m => m.Globe3D), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full flex items-center justify-center bg-gradient-to-b from-slate-900 to-slate-800 rounded-xl">
+      <div className="flex flex-col items-center gap-4">
+        <div className="animate-spin w-12 h-12 border-4 border-primary border-t-transparent rounded-full" />
+        <p className="text-slate-400 text-sm">Loading interactive map...</p>
+      </div>
+    </div>
+  ),
+});
+
+export function GlobeWrapper() {
+  return (
+    <Suspense fallback={
+      <div className="w-full h-full flex items-center justify-center bg-gradient-to-b from-slate-900 to-slate-800 rounded-xl">
+        <div className="animate-spin w-12 h-12 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    }>
+      <Globe3D />
+    </Suspense>
+  );
+}
+`;
+}
+
+function generateRegionMap(
+  branding: PortalScaffoldConfig["branding"],
+  geoSources: PortalScaffoldConfig["geoDataSources"]
+): string {
+  const geoUrlEntries = geoSources
+    .map(src => `  ${src.country}: '${src.url}'`)
+    .join(",\n");
+
+  const mapConfigDefaults: Record<string, { center: string; scale: number }> = {
+    CN: { center: "[105, 35]", scale: 300 },
+    RU: { center: "[100, 62]", scale: 150 },
+    DE: { center: "[10, 51]", scale: 2000 },
+    FR: { center: "[2, 46]", scale: 1500 },
+    IN: { center: "[78, 22]", scale: 600 },
+    AE: { center: "[54, 24]", scale: 3000 },
+    JP: { center: "[138, 36]", scale: 1000 },
+    VN: { center: "[108, 16]", scale: 1200 },
+    BR: { center: "[-55, -15]", scale: 400 },
+    TR: { center: "[35, 39]", scale: 1200 },
+    SA: { center: "[45, 24]", scale: 800 },
+    EG: { center: "[30, 27]", scale: 1500 },
+    KR: { center: "[128, 36]", scale: 3000 },
+    GB: { center: "[-2, 54]", scale: 1500 },
+    US: { center: "[-95, 38]", scale: 400 },
+    ID: { center: "[118, -2]", scale: 600 },
+    MY: { center: "[109, 4]", scale: 1200 },
+    TH: { center: "[101, 15]", scale: 1500 },
+    SG: { center: "[103.8, 1.35]", scale: 50000 },
+    PH: { center: "[122, 12]", scale: 1200 },
+    MX: { center: "[-102, 24]", scale: 600 },
+  };
+
+  const mapConfigEntries = geoSources
+    .map(src => {
+      const cfg = mapConfigDefaults[src.country] || {
+        center: "[0, 0]",
+        scale: 200,
+      };
+      return `  ${src.country}: { center: ${cfg.center} as [number, number], scale: ${cfg.scale} }`;
+    })
+    .join(",\n");
+
+  return `"use client";
+
+import { useState } from 'react';
+import { ComposableMap, Geographies, Geography, ZoomableGroup, Marker } from 'react-simple-maps';
+import { useParams, useRouter } from 'next/navigation';
+import { getTargetCountry } from '@/lib/i18n/config';
+import type { Locale } from '@/lib/i18n/config';
+
+interface RegionMapProps {
+  onRegionClick?: (regionId: string) => void;
+  selectedRegion?: string | null;
+  cities?: Array<{ name: string; coordinates: [number, number] }>;
+}
+
+const MAP_CONFIG: Record<string, { center: [number, number]; scale: number }> = {
+${mapConfigEntries}
+};
+
+const GEO_URLS: Record<string, string> = {
+${geoUrlEntries}
+};
+
+export function RegionMap({ onRegionClick, selectedRegion, cities }: RegionMapProps) {
+  const params = useParams();
+  const router = useRouter();
+  const locale = params.locale as Locale;
+  const targetCountry = getTargetCountry(locale);
+  const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
+  const { center, scale } = MAP_CONFIG[targetCountry];
+
+  const handleClick = (geo: any) => {
+    const name = geo.properties?.name || geo.properties?.NAME || geo.properties?.地名;
+    if (onRegionClick) {
+      onRegionClick(String(name));
+    } else {
+      router.push(\`/\${locale}/invest/\${encodeURIComponent(String(name))}\`);
+    }
+  };
+
+  return (
+    <div className="w-full h-[500px] bg-slate-800/50 rounded-xl">
+      <ComposableMap
+        projection="geoMercator"
+        projectionConfig={{ center, scale }}
+        className="w-full h-full"
+      >
+        <ZoomableGroup center={[0, 0]} minZoom={0.5} maxZoom={4}>
+          <Geographies geography={GEO_URLS[targetCountry]}>
+            {({ geographies }) =>
+              geographies.map((geo) => {
+                const name = String(geo.properties?.name || geo.properties?.NAME || geo.properties?.地名 || '');
+                const isHovered = hoveredRegion === name;
+                const isSelected = selectedRegion === name;
+                
+                return (
+                  <Geography
+                    key={geo.rsmKey}
+                    geography={geo}
+                    onClick={() => handleClick(geo)}
+                    onMouseEnter={() => name && setHoveredRegion(name)}
+                    onMouseLeave={() => setHoveredRegion(null)}
+                    style={{
+                      default: {
+                        fill: isSelected ? '${branding.primaryColor}' : isHovered ? '${branding.secondaryColor}' : '#475569',
+                        stroke: '#1e293b',
+                        strokeWidth: 1,
+                        outline: 'none',
+                        cursor: 'pointer',
+                      },
+                      hover: {
+                        fill: '${branding.secondaryColor}',
+                        stroke: '#ffffff',
+                        strokeWidth: 1.5,
+                        outline: 'none',
+                        cursor: 'pointer',
+                      },
+                      pressed: {
+                        fill: '${branding.primaryColor}',
+                        stroke: '#ffffff',
+                        strokeWidth: 1.5,
+                        outline: 'none',
+                      },
+                    }}
+                  />
+                );
+              })
+            }
+          </Geographies>
+          
+          {cities?.map((city) => (
+            <Marker key={city.name} coordinates={city.coordinates}>
+              <circle r={4} fill="${branding.accentColor}" stroke="#fff" strokeWidth={1} />
+              <text
+                textAnchor="middle"
+                y={-10}
+                style={{ fontSize: '8px', fill: '#fff', fontWeight: 'bold' }}
+              >
+                {city.name}
+              </text>
+            </Marker>
+          ))}
+        </ZoomableGroup>
+      </ComposableMap>
+    </div>
+  );
+}
+`;
+}
+
+function generateCityMap(branding: PortalScaffoldConfig["branding"]): string {
+  return `"use client";
+
+interface CityMapProps {
+  cityName: string;
+  lat?: number;
+  lng?: number;
+}
+
+export function CityMap({ cityName, lat, lng }: CityMapProps) {
+  // Default to showing a map centered on the city name via Nominatim search
+  // If coordinates are provided, use them directly
+  const hasCoordinates = lat !== undefined && lng !== undefined;
+  
+  // OpenStreetMap embed URL
+  const mapUrl = hasCoordinates
+    ? \`https://www.openstreetmap.org/export/embed.html?bbox=\${lng - 0.1}%2C\${lat - 0.08}%2C\${lng + 0.1}%2C\${lat + 0.08}&layer=mapnik&marker=\${lat}%2C\${lng}\`
+    : \`https://www.openstreetmap.org/export/embed.html?bbox=-180%2C-90%2C180%2C90&layer=mapnik\`;
+  
+  const fullMapUrl = hasCoordinates
+    ? \`https://www.openstreetmap.org/?mlat=\${lat}&mlon=\${lng}#map=13/\${lat}/\${lng}\`
+    : \`https://www.openstreetmap.org/search?query=\${encodeURIComponent(cityName)}\`;
+
+  return (
+    <div className="w-full h-[400px] bg-slate-800/50 rounded-xl overflow-hidden relative">
+      {hasCoordinates ? (
+        <>
+          <iframe
+            width="100%"
+            height="100%"
+            frameBorder="0"
+            scrolling="no"
+            src={mapUrl}
+            style={{ border: 0 }}
+            className="rounded-xl"
+          />
+          <a
+            href={fullMapUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute bottom-3 right-3 bg-slate-900/80 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-slate-800 transition-colors flex items-center gap-2"
+          >
+            View larger map
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+        </>
+      ) : (
+        <div className="w-full h-full flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-4xl mb-4">🏙️</div>
+            <h3 className="text-xl font-semibold text-white">{cityName}</h3>
+            <a
+              href={fullMapUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline mt-2 inline-flex items-center gap-1"
+            >
+              View on OpenStreetMap
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+`;
+}
+
+function generateLawsPage(): string {
+  return `import { useTranslations } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
+import { LawsContent } from '@/features/laws/LawsContent';
+import { BusinessGuide } from '@/features/laws/BusinessGuide';
+
+export async function generateMetadata({ params: { locale } }: { params: { locale: string } }) {
+  const t = await getTranslations({ locale, namespace: 'laws' });
+  return { title: t('title') };
+}
+
+export default function LawsPage() {
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-12">
+      <LawsContent />
+      <BusinessGuide />
+    </div>
+  );
+}
+`;
+}
+
+function generateLawsContent(): string {
+  return `"use client";
+
+import { useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Scale, FileText, Stamp, Building, ExternalLink, ChevronDown, ChevronUp, Calendar, Shield, Briefcase } from 'lucide-react';
+
+// Real China-Russia bilateral agreements and legal frameworks
+const agreements = [
+  {
+    id: '1',
+    title: 'Treaty of Good-Neighborliness and Friendly Cooperation',
+    titleLocal: '中俄睦邻友好合作条约',
+    date: '2001-07-16',
+    category: 'agreements',
+    description: 'Foundation treaty establishing strategic partnership, mutual respect for sovereignty, and commitment to peaceful resolution of disputes. Renewed for 5 years in 2021.',
+    url: 'http://www.npc.gov.cn/wxzl/gongbao/2001-08/27/content_5277986.htm',
+  },
+  {
+    id: '2',
+    title: 'Joint Statement on New Era Comprehensive Strategic Partnership',
+    titleLocal: '新时代全面战略协作伙伴关系联合声明',
+    date: '2023-03-21',
+    category: 'agreements',
+    description: 'Upgraded bilateral relations to "new era comprehensive strategic partnership of coordination." Covers political, economic, security, and humanitarian cooperation.',
+    url: 'http://kremlin.ru/supplement/5920',
+  },
+  {
+    id: '3',
+    title: 'Agreement on Avoidance of Double Taxation',
+    titleLocal: '中俄避免双重征税协定',
+    date: '2014-10-13',
+    category: 'agreements',
+    description: 'Tax treaty covering income and capital, with withholding tax rates of 5-10% on dividends, 0% on interest, and 6% on royalties.',
+    url: 'https://www.chinatax.gov.cn/n810341/n810770/index.html',
+  },
+  {
+    id: '4',
+    title: 'Bilateral Investment Treaty (BIT)',
+    titleLocal: '中俄双边投资保护协定',
+    date: '2006-11-09',
+    category: 'agreements',
+    description: 'Provides legal protection for investors, including fair treatment, protection against expropriation, and free transfer of capital.',
+    url: 'https://investmentpolicy.unctad.org/international-investment-agreements/treaties/bilateral-investment-treaties/1010/china---russian-federation-bit-2006-',
+  },
+  {
+    id: '5',
+    title: 'Agreement on Customs Cooperation and Mutual Assistance',
+    titleLocal: '中俄海关合作与互助协定',
+    date: '2018-06-08',
+    category: 'agreements',
+    description: 'Streamlines customs procedures, enables data sharing, and establishes joint risk management for cross-border trade facilitation.',
+    url: 'http://www.customs.gov.cn/',
+  },
+  {
+    id: '6',
+    title: 'E-Commerce Cooperation Agreement',
+    titleLocal: '中俄电子商务合作协议',
+    date: '2019-06-05',
+    category: 'agreements',
+    description: 'Framework for cross-border e-commerce development, digital payments integration, and consumer protection standards.',
+    url: 'http://www.mofcom.gov.cn/',
+  },
+];
+
+const visaInfo = [
+  {
+    id: 'v1',
+    title: 'Business Visa (M Visa - China)',
+    category: 'visas',
+    description: 'For business activities, trade fairs, and investment. Valid 30-90 days, single/multiple entry. Requires invitation letter from Chinese company.',
+    requirements: ['Valid passport (6+ months)', 'Invitation letter', 'Company registration', 'Photo 33x48mm'],
+  },
+  {
+    id: 'v2',
+    title: 'Business Visa (Russia)',
+    category: 'visas',
+    description: 'Single/double/multiple entry for business purposes. Requires visa support letter from Russian organization.',
+    requirements: ['Valid passport (6+ months)', 'Visa invitation', 'Migration card', 'Photo 35x45mm'],
+  },
+  {
+    id: 'v3',
+    title: 'Work Visa (Z Visa - China)',
+    category: 'visas',
+    description: 'Required for employment. Must obtain work permit before visa application. Converts to residence permit after arrival.',
+    requirements: ['Work permit notification', 'Health certificate', 'Degree authentication', 'Background check'],
+  },
+  {
+    id: 'v4',
+    title: 'Highly Qualified Specialist (HQS - Russia)',
+    category: 'visas',
+    description: 'Simplified work permit for specialists with salary above threshold. 3-year validity with expedited processing.',
+    requirements: ['Employment contract', 'Salary above 167,000 RUB/month', 'Employer petition', 'No quota required'],
+  },
+];
+
+const entityTypes = [
+  {
+    id: 'e1',
+    title: 'Wholly Foreign-Owned Enterprise (WFOE) - China',
+    titleLocal: '外商独资企业',
+    category: 'entities',
+    description: '100% foreign ownership. Most common for manufacturing and trading. Requires registered capital (industry-dependent) and business scope approval.',
+    timeline: '2-3 months',
+    minCapital: 'Industry dependent',
+  },
+  {
+    id: 'e2',
+    title: 'Representative Office - China',
+    titleLocal: '代表处',
+    category: 'entities',
+    description: 'Liaison office for market research and coordination. Cannot engage in direct business activities or generate revenue in China.',
+    timeline: '1-2 months',
+    minCapital: 'None required',
+  },
+  {
+    id: 'e3',
+    title: 'Limited Liability Company (OOO) - Russia',
+    titleLocal: 'ООО (Общество с ограниченной ответственностью)',
+    category: 'entities',
+    description: 'Most common entity type. Minimum 10,000 RUB capital. Liability limited to contribution. Simple registration process.',
+    timeline: '3-5 business days',
+    minCapital: '10,000 RUB',
+  },
+  {
+    id: 'e4',
+    title: 'Joint Stock Company (AO) - Russia',
+    titleLocal: 'АО (Акционерное общество)',
+    category: 'entities',
+    description: 'For larger enterprises. Public (PAO) or private (NAO). Can issue shares. Stricter reporting requirements.',
+    timeline: '2-4 weeks',
+    minCapital: '100,000 RUB (PAO: 100M RUB)',
+  },
+  {
+    id: 'e5',
+    title: 'Special Economic Zone Entity',
+    titleLocal: '经济特区企业',
+    category: 'entities',
+    description: 'Preferential tax rates (0-15%), simplified customs, and regulatory benefits. Available in designated zones in both countries.',
+    timeline: 'Varies by zone',
+    minCapital: 'Zone-specific requirements',
+  },
+];
+
+const sections = [
+  { key: 'agreements', icon: FileText, color: 'from-blue-500 to-blue-600', data: agreements },
+  { key: 'visas', icon: Stamp, color: 'from-green-500 to-green-600', data: visaInfo },
+  { key: 'entities', icon: Building, color: 'from-purple-500 to-purple-600', data: entityTypes },
+];
+
+export function LawsContent() {
+  const t = useTranslations('laws');
+  const tc = useTranslations('common');
+  const [expandedSection, setExpandedSection] = useState<string | null>('agreements');
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
+
+  const toggleSection = (key: string) => {
+    setExpandedSection(expandedSection === key ? null : key);
+    setExpandedItem(null);
+  };
+
+  const toggleItem = (id: string) => {
+    setExpandedItem(expandedItem === id ? null : id);
+  };
+
+  return (
+    <div>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-center mb-12"
+      >
+        <div className="inline-flex p-4 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 mb-6">
+          <Scale className="w-8 h-8 text-white" />
+        </div>
+        <h1 className="text-4xl font-bold text-white mb-4">{t('title')}</h1>
+        <p className="text-slate-400 max-w-2xl mx-auto">
+          Comprehensive guide to bilateral agreements, visa requirements, and business entity formation for China-Russia trade.
+        </p>
+      </motion.div>
+
+      <div className="space-y-6">
+        {sections.map((section, sectionIndex) => (
+          <motion.div
+            key={section.key}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: sectionIndex * 0.1 }}
+            className="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden"
+          >
+            <button
+              onClick={() => toggleSection(section.key)}
+              className="w-full flex items-center justify-between p-6 hover:bg-slate-700/30 transition-colors"
+            >
+              <div className="flex items-center gap-4">
+                <div className={\`inline-flex p-3 rounded-xl bg-gradient-to-r \${section.color}\`}>
+                  <section.icon className="w-6 h-6 text-white" />
+                </div>
+                <div className="text-left">
+                  <h3 className="text-xl font-semibold text-white">{t(section.key)}</h3>
+                  <p className="text-slate-400 text-sm">{section.data.length} items</p>
+                </div>
+              </div>
+              {expandedSection === section.key ? (
+                <ChevronUp className="w-6 h-6 text-slate-400" />
+              ) : (
+                <ChevronDown className="w-6 h-6 text-slate-400" />
+              )}
+            </button>
+
+            <AnimatePresence>
+              {expandedSection === section.key && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="border-t border-slate-700"
+                >
+                  <div className="p-6 space-y-4">
+                    {section.data.map((item, itemIndex) => (
+                      <motion.div
+                        key={item.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: itemIndex * 0.05 }}
+                        className="bg-slate-900/50 rounded-lg border border-slate-700/50 overflow-hidden"
+                      >
+                        <button
+                          onClick={() => toggleItem(item.id)}
+                          className="w-full p-4 text-left hover:bg-slate-800/50 transition-colors"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <h4 className="text-lg font-medium text-white">{item.title}</h4>
+                              {'titleLocal' in item && item.titleLocal && (
+                                <p className="text-slate-500 text-sm">{item.titleLocal}</p>
+                              )}
+                              {'date' in item && (
+                                <div className="flex items-center gap-2 text-slate-400 text-sm mt-1">
+                                  <Calendar className="w-4 h-4" />
+                                  {new Date(item.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                </div>
+                              )}
+                            </div>
+                            {expandedItem === item.id ? (
+                              <ChevronUp className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                            ) : (
+                              <ChevronDown className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                            )}
+                          </div>
+                        </button>
+
+                        <AnimatePresence>
+                          {expandedItem === item.id && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="border-t border-slate-700/50"
+                            >
+                              <div className="p-4 space-y-4">
+                                <p className="text-slate-300">{item.description}</p>
+
+                                {'requirements' in item && item.requirements && (
+                                  <div>
+                                    <h5 className="text-sm font-medium text-white mb-2 flex items-center gap-2">
+                                      <Shield className="w-4 h-4" /> Requirements
+                                    </h5>
+                                    <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                      {item.requirements.map((req, i) => (
+                                        <li key={i} className="flex items-center gap-2 text-slate-400 text-sm">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
+                                          {req}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                {'timeline' in item && (
+                                  <div className="flex items-center gap-4 text-sm">
+                                    <div className="flex items-center gap-2 text-slate-400">
+                                      <Calendar className="w-4 h-4" />
+                                      <span>Timeline: {item.timeline}</span>
+                                    </div>
+                                    {'minCapital' in item && (
+                                      <div className="flex items-center gap-2 text-slate-400">
+                                        <Briefcase className="w-4 h-4" />
+                                        <span>Min Capital: {item.minCapital}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {'url' in item && item.url && (
+                                  <a
+                                    href={item.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 text-primary hover:text-primary/80 text-sm transition-colors"
+                                  >
+                                    <ExternalLink className="w-4 h-4" />
+                                    {tc('viewOfficialSource')}
+                                  </a>
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+`;
+}
+
+function generateBusinessGuide(): string {
+  return `"use client";
+
+import { useTranslations } from 'next-intl';
+import { useParams } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { getTargetCountry, getCountryName } from '@/lib/i18n/config';
+import type { Locale } from '@/lib/i18n/config';
+
+export function BusinessGuide() {
+  const t = useTranslations('laws');
+  const params = useParams();
+  const locale = params.locale as Locale;
+  const targetCountry = getTargetCountry(locale);
+  const countryName = getCountryName(targetCountry, locale);
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.3 }}
+      className="mt-12 bg-gradient-to-r from-primary/20 to-secondary/20 rounded-2xl p-8 border border-primary/30"
+    >
+      <h2 className="text-2xl font-bold text-white mb-4">{t('guide')}</h2>
+      <p className="text-slate-300 mb-6">
+        Step-by-step guide to doing business in {countryName}
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map((step) => (
+          <div key={step} className="bg-slate-800/50 rounded-lg p-4">
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold mb-3">
+              {step}
+            </div>
+            <h4 className="text-white font-medium mb-1">Step {step}</h4>
+            <p className="text-slate-400 text-sm">Guide content...</p>
+          </div>
+        ))}
+      </div>
+    </motion.section>
+  );
+}
+`;
+}
+
+function generateCalendarPage(): string {
+  return `import { getTranslations } from 'next-intl/server';
+import { EventList } from '@/features/calendar/EventList';
+
+export async function generateMetadata({ params: { locale } }: { params: { locale: string } }) {
+  const t = await getTranslations({ locale, namespace: 'calendar' });
+  return { title: t('title') };
+}
+
+export default function CalendarPage() {
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-12">
+      <EventList />
+    </div>
+  );
+}
+`;
+}
+
+function generateEventList(): string {
+  return `"use client";
+
+import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
+import { motion } from 'framer-motion';
+import { Calendar, MapPin, ExternalLink, Clock, CheckCircle } from 'lucide-react';
+import { EventCard } from './EventCard';
+
+const allEvents = [
+  {
+    id: '1',
+    title: 'Canton Fair (Spring Session)',
+    date: '2026-04-15',
+    endDate: '2026-05-05',
+    location: 'Guangzhou, China',
+    description: 'China Import and Export Fair - the largest trade fair in China with over 25,000 exhibitors. Three phases covering electronics, machinery, textiles, and consumer goods.',
+    url: 'https://www.cantonfair.org.cn',
+    country: 'CN',
+  },
+  {
+    id: '2',
+    title: 'Boao Forum for Asia 2026',
+    date: '2026-03-26',
+    endDate: '2026-03-29',
+    location: 'Hainan, China',
+    description: 'Asia\\'s Davos - premier forum for Asian economic integration. Russia participates at ministerial level. Focus on BRI cooperation and regional economic partnership.',
+    url: 'https://www.boaoforum.org',
+    country: 'CN',
+  },
+  {
+    id: '3',
+    title: 'St. Petersburg International Economic Forum (SPIEF)',
+    date: '2026-06-17',
+    endDate: '2026-06-20',
+    location: 'Saint Petersburg, Russia',
+    description: 'Premier annual Russian business forum since 1997. Key platform for discussing global economic issues and attracting foreign investment. 15,000+ participants from 130+ countries.',
+    url: 'https://forumspb.com',
+    country: 'RU',
+  },
+  {
+    id: '4',
+    title: 'China-Russia Expo 2026',
+    date: '2026-06-15',
+    endDate: '2026-06-19',
+    location: 'Harbin, China',
+    description: 'Dedicated bilateral trade expo alternating between China (Harbin) and Russia (Ekaterinburg). Direct B2B platform for cross-border trade and investment partnerships.',
+    url: 'https://www.russiachinaexpo.com',
+    country: 'CN',
+  },
+  {
+    id: '5',
+    title: 'INNOPROM Industrial Trade Fair',
+    date: '2026-07-06',
+    endDate: '2026-07-09',
+    location: 'Ekaterinburg, Russia',
+    description: 'Russia\\'s main industrial exhibition showcasing manufacturing, robotics, and Industry 4.0 technologies. Annual partner country format - China has participated multiple times.',
+    url: 'https://innoprom.com',
+    country: 'RU',
+  },
+  {
+    id: '6',
+    title: 'China International Fair for Trade in Services (CIFTIS)',
+    date: '2026-09-02',
+    endDate: '2026-09-06',
+    location: 'Beijing, China',
+    description: 'Global trade fair focused on service industries including finance, technology, healthcare, and tourism. Key platform for service trade between China and BRI countries.',
+    url: 'https://www.ciftis.org',
+    country: 'CN',
+  },
+  {
+    id: '7',
+    title: 'Eastern Economic Forum (EEF)',
+    date: '2026-09-09',
+    endDate: '2026-09-12',
+    location: 'Vladivostok, Russia',
+    description: 'Annual forum promoting development of Russian Far East and strengthening Asia-Pacific cooperation. Gateway for China-Russia investment projects in energy, infrastructure, and logistics.',
+    url: 'https://forumvostok.ru',
+    country: 'RU',
+  },
+  {
+    id: '8',
+    title: 'Canton Fair (Autumn Session)',
+    date: '2026-10-15',
+    endDate: '2026-11-04',
+    location: 'Guangzhou, China',
+    description: 'Fall edition of China Import and Export Fair. Strong Russian buyer participation with dedicated Russia-China trade zones and matchmaking events.',
+    url: 'https://www.cantonfair.org.cn',
+    country: 'CN',
+  },
+  {
+    id: '9',
+    title: 'Russian Energy Week',
+    date: '2026-10-20',
+    endDate: '2026-10-23',
+    location: 'Moscow, Russia',
+    description: 'International forum for energy cooperation. Key discussions on Power of Siberia pipeline, LNG projects, and nuclear energy cooperation with China.',
+    url: 'https://rusenergyweek.com',
+    country: 'RU',
+  },
+  {
+    id: '10',
+    title: 'China International Import Expo (CIIE)',
+    date: '2026-11-05',
+    endDate: '2026-11-10',
+    location: 'Shanghai, China',
+    description: 'World\\'s first import-themed national expo. Platform for foreign companies to access Chinese market. Russia is a key partner country with prominent national pavilion.',
+    url: 'https://www.ciie.org',
+    country: 'CN',
+  },
+  {
+    id: '11',
+    title: 'Boao Forum for Asia 2027',
+    date: '2027-03-25',
+    endDate: '2027-03-28',
+    location: 'Hainan, China',
+    description: 'Asia\\'s premier forum for economic integration. Russia participates at ministerial level with focus on BRI and SCO economic cooperation.',
+    url: 'https://www.boaoforum.org',
+    country: 'CN',
+  },
+  {
+    id: '12',
+    title: 'Canton Fair (Spring Session) 2027',
+    date: '2027-04-15',
+    endDate: '2027-05-05',
+    location: 'Guangzhou, China',
+    description: 'China Import and Export Fair - world\\'s largest trade fair. Premier platform for Russia-China business matching.',
+    url: 'https://www.cantonfair.org.cn',
+    country: 'CN',
+  },
+];
+
+export function EventList() {
+  const t = useTranslations('calendar');
+  const [today, setToday] = useState(new Date());
+  
+  useEffect(() => {
+    const checkDate = () => setToday(new Date());
+    checkDate();
+    const interval = setInterval(checkDate, 1000 * 60 * 60);
+    return () => clearInterval(interval);
+  }, []);
+
+  const sortedEvents = [...allEvents].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  
+  const upcomingEvents = sortedEvents.filter(e => {
+    const eventEnd = e.endDate ? new Date(e.endDate) : new Date(e.date);
+    return eventEnd >= today;
+  });
+  
+  const pastEvents = sortedEvents.filter(e => {
+    const eventEnd = e.endDate ? new Date(e.endDate) : new Date(e.date);
+    return eventEnd < today;
+  }).reverse();
+
+  return (
+    <div>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-center mb-12"
+      >
+        <div className="inline-flex p-4 rounded-2xl bg-gradient-to-r from-green-500 to-green-600 mb-6">
+          <Calendar className="w-8 h-8 text-white" />
+        </div>
+        <h1 className="text-4xl font-bold text-white mb-4">{t('title')}</h1>
+        <p className="text-slate-400">
+          {today.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        </p>
+      </motion.div>
+
+      {upcomingEvents.length > 0 && (
+        <div className="mb-12">
+          <div className="flex items-center gap-2 mb-6">
+            <Clock className="w-5 h-5 text-green-400" />
+            <h2 className="text-2xl font-semibold text-white">{t('upcoming')}</h2>
+            <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-sm rounded-full">{upcomingEvents.length}</span>
+          </div>
+          <div className="space-y-4">
+            {upcomingEvents.map((event, index) => (
+              <EventCard key={event.id} event={event} index={index} today={today} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {pastEvents.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-6">
+            <CheckCircle className="w-5 h-5 text-slate-500" />
+            <h2 className="text-2xl font-semibold text-slate-400">{t('past')}</h2>
+            <span className="px-2 py-0.5 bg-slate-700 text-slate-400 text-sm rounded-full">{pastEvents.length}</span>
+          </div>
+          <div className="space-y-4 opacity-60">
+            {pastEvents.slice(0, 5).map((event, index) => (
+              <EventCard key={event.id} event={event} index={index} today={today} isPast />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+`;
+}
+
+function generateEventCard(): string {
+  return `"use client";
+
+import { motion } from 'framer-motion';
+import { Calendar, MapPin, ExternalLink, Clock } from 'lucide-react';
+
+interface Event {
+  id: string;
+  title: string;
+  date: string;
+  endDate?: string;
+  location: string;
+  description: string;
+  url: string;
+  country: string;
+}
+
+interface EventCardProps {
+  event: Event;
+  index: number;
+  today: Date;
+  isPast?: boolean;
+}
+
+function getRelativeTime(eventDate: Date, endDate: Date | null, today: Date, isPast?: boolean): { text: string; urgent: boolean } {
+  const diffMs = eventDate.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (endDate && today >= eventDate && today <= endDate) {
+    return { text: 'Happening now', urgent: true };
+  }
+  
+  if (isPast || diffDays < 0) {
+    const pastDays = Math.abs(diffDays);
+    if (pastDays === 0) return { text: 'Ended today', urgent: false };
+    if (pastDays === 1) return { text: 'Ended yesterday', urgent: false };
+    if (pastDays < 30) return { text: \`\${pastDays} days ago\`, urgent: false };
+    const months = Math.floor(pastDays / 30);
+    return { text: \`\${months} month\${months > 1 ? 's' : ''} ago\`, urgent: false };
+  }
+  
+  if (diffDays === 0) return { text: 'Starts today', urgent: true };
+  if (diffDays === 1) return { text: 'Starts tomorrow', urgent: true };
+  if (diffDays <= 7) return { text: \`In \${diffDays} days\`, urgent: true };
+  if (diffDays <= 30) return { text: \`In \${diffDays} days\`, urgent: false };
+  if (diffDays <= 60) return { text: 'In about a month', urgent: false };
+  const months = Math.floor(diffDays / 30);
+  return { text: \`In \${months} months\`, urgent: false };
+}
+
+export function EventCard({ event, index, today, isPast }: EventCardProps) {
+  const countryFlag = event.country === 'CN' ? '🇨🇳' : '🇷🇺';
+  const eventDate = new Date(event.date);
+  const endDate = event.endDate ? new Date(event.endDate) : null;
+  const { text: relativeTime, urgent } = getRelativeTime(eventDate, endDate, today, isPast);
+  
+  const formatDateRange = () => {
+    const start = eventDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    if (endDate) {
+      const end = endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      return \`\${start} - \${end}\`;
+    }
+    return \`\${start}, \${eventDate.getFullYear()}\`;
+  };
+
+  return (
+    <motion.a
+      href={event.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.05 }}
+      className={\`block bg-slate-800/50 rounded-xl p-6 border transition-all group \${isPast ? 'border-slate-700/50' : 'border-slate-700 hover:border-primary/50'}\`}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <span className="text-2xl">{countryFlag}</span>
+            <h3 className={\`text-xl font-semibold transition-colors \${isPast ? 'text-slate-400' : 'text-white group-hover:text-primary'}\`}>
+              {event.title}
+            </h3>
+            {!isPast && (
+              <span className={\`px-2 py-0.5 text-xs rounded-full flex items-center gap-1 \${urgent ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'}\`}>
+                <Clock className="w-3 h-3" />
+                {relativeTime}
+              </span>
+            )}
+          </div>
+          <p className={\`mb-4 \${isPast ? 'text-slate-500' : 'text-slate-400'}\`}>{event.description}</p>
+          <div className={\`flex flex-wrap items-center gap-4 text-sm \${isPast ? 'text-slate-600' : 'text-slate-500'}\`}>
+            <span className="flex items-center gap-1">
+              <Calendar className="w-4 h-4" />
+              {formatDateRange()}
+            </span>
+            <span className="flex items-center gap-1">
+              <MapPin className="w-4 h-4" />
+              {event.location}
+            </span>
+          </div>
+        </div>
+        <ExternalLink className={\`w-5 h-5 transition-colors \${isPast ? 'text-slate-600' : 'text-slate-500 group-hover:text-primary'}\`} />
+      </div>
+    </motion.a>
+  );
+}
+`;
+}
+
+function generateOrganizationsPage(): string {
+  return `import { getTranslations } from 'next-intl/server';
+import { OrgDirectory } from '@/features/organizations/OrgDirectory';
+
+export async function generateMetadata({ params: { locale } }: { params: { locale: string } }) {
+  const t = await getTranslations({ locale, namespace: 'organizations' });
+  return { title: t('title') };
+}
+
+export default function OrganizationsPage() {
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-12">
+      <OrgDirectory />
+    </div>
+  );
+}
+`;
+}
+
+function generateOrgDirectory(): string {
+  return `"use client";
+
+import { useTranslations } from 'next-intl';
+import { useParams } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { Building2, Globe, Phone, Mail, ExternalLink } from 'lucide-react';
+import { getTargetCountry } from '@/lib/i18n/config';
+import type { Locale } from '@/lib/i18n/config';
+
+const mockOrgs = {
+  CN: [
+    { id: '1', name: 'Ministry of Commerce (MOFCOM)', nameLocal: '商务部', level: 'national', website: 'http://www.mofcom.gov.cn', description: 'Central government ministry formulating trade policies, managing foreign investment, and overseeing international economic cooperation. Key contact for market access and trade disputes.' },
+    { id: '2', name: 'China Council for Promotion of International Trade (CCPIT)', nameLocal: '中国国际贸易促进委员会', level: 'national', website: 'http://www.ccpit.org', description: 'China\\'s largest trade promotion organization. Issues certificates of origin, organizes trade delegations, and provides arbitration services through CIETAC.' },
+    { id: '3', name: 'China Chamber of International Commerce (CCOIC)', nameLocal: '中国国际商会', level: 'national', website: 'http://www.ccoic.cn', description: 'National business organization representing Chinese enterprises in international trade. Provides business matchmaking and legal consulting services.' },
+    { id: '4', name: 'China-Russia Chamber of Commerce', nameLocal: '中国俄罗斯商会', level: 'national', website: 'http://www.crcc.org.cn', description: 'Specialized chamber for China-Russia bilateral trade. Organizes business forums, trade missions, and provides market entry consulting.' },
+    { id: '5', name: 'Shanghai Municipal Commission of Commerce', nameLocal: '上海市商务委员会', level: 'regional', website: 'http://sww.sh.gov.cn', description: 'Shanghai\\'s trade authority managing free trade zone, foreign investment projects, and hosting major expos including CIIE.' },
+    { id: '6', name: 'Heilongjiang Department of Commerce', nameLocal: '黑龙江省商务厅', level: 'regional', website: 'http://swt.hlj.gov.cn', description: 'Key border province for Russia trade. Manages cross-border e-commerce zones and logistics hubs in Suifenhe and Heihe.' },
+  ],
+  RU: [
+    { id: '1', name: 'Ministry of Economic Development', nameLocal: 'Минэкономразвития России', level: 'national', website: 'https://economy.gov.ru', description: 'Federal ministry for economic strategy, investment climate, and special economic zones. Coordinates bilateral investment treaties and SEZ development.' },
+    { id: '2', name: 'Russian Export Center (REC)', nameLocal: 'Российский экспортный центр', level: 'national', website: 'https://exportcenter.ru', description: 'State institution providing export financing, insurance, and support services. Key partner for Russian companies entering Chinese market.' },
+    { id: '3', name: 'Russian Direct Investment Fund (RDIF)', nameLocal: 'РФПИ', level: 'national', website: 'https://rdif.ru', description: 'Russia\\'s sovereign wealth fund co-investing with foreign partners. Active in China-Russia infrastructure and technology projects.' },
+    { id: '4', name: 'Russian-Chinese Business Council', nameLocal: 'Российско-Китайский Деловой Совет', level: 'national', website: 'https://www.rcbc.ru', description: 'Premier bilateral business organization. Co-chaired by major corporations, organizes annual business forums and investment roadshows.' },
+    { id: '5', name: 'Chamber of Commerce and Industry of Russia', nameLocal: 'ТПП России', level: 'national', website: 'https://tpprf.ru', description: 'Federal chamber with 180+ regional branches. Provides export certificates, arbitration, and business verification services.' },
+    { id: '6', name: 'Far East Development Corporation (ERDC)', nameLocal: 'КРДВ', level: 'regional', website: 'https://erdc.ru', description: 'Manages Advanced Special Economic Zones and Free Port of Vladivostok. Gateway for Chinese investment in Russian Far East.' },
+    { id: '7', name: 'Primorsky Krai Investment Agency', nameLocal: 'Агентство по привлечению инвестиций', level: 'regional', website: 'https://invest.primorsky.ru', description: 'Regional investment promotion for Primorsky Krai. Key logistics hub connecting Trans-Siberian Railway to Chinese border.' },
+  ],
+};
+
+export function OrgDirectory() {
+  const t = useTranslations('organizations');
+  const params = useParams();
+  const locale = params.locale as Locale;
+  const targetCountry = getTargetCountry(locale);
+  const orgs = mockOrgs[targetCountry];
+
+  const levels = ['national', 'regional', 'municipal'] as const;
+
+  return (
+    <div>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-center mb-12"
+      >
+        <div className="inline-flex p-4 rounded-2xl bg-gradient-to-r from-purple-500 to-purple-600 mb-6">
+          <Building2 className="w-8 h-8 text-white" />
+        </div>
+        <h1 className="text-4xl font-bold text-white mb-4">{t('title')}</h1>
+      </motion.div>
+
+      {levels.map((level) => {
+        const levelOrgs = orgs.filter(o => o.level === level);
+        if (levelOrgs.length === 0) return null;
+
+        return (
+          <div key={level} className="mb-8">
+            <h2 className="text-xl font-semibold text-white mb-4 capitalize">{t(level)}</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {levelOrgs.map((org, index) => (
+                <motion.a
+                  key={org.id}
+                  href={org.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="bg-slate-800/50 rounded-xl p-5 border border-slate-700 hover:border-purple-500/50 transition-all group"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-semibold text-white group-hover:text-purple-400 transition-colors">
+                        {org.name}
+                      </h3>
+                      {org.nameLocal && (
+                        <p className="text-sm text-slate-500 mt-1">{org.nameLocal}</p>
+                      )}
+                      <p className="text-slate-400 text-sm mt-2">{org.description}</p>
+                    </div>
+                    <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-purple-400 flex-shrink-0" />
+                  </div>
+                </motion.a>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+`;
+}
+
+function generateNewsPage(): string {
+  return `import { getTranslations } from 'next-intl/server';
+import { NewsFeed } from '@/features/news/NewsFeed';
+
+export async function generateMetadata({ params: { locale } }: { params: { locale: string } }) {
+  const t = await getTranslations({ locale, namespace: 'news' });
+  return { title: t('title') };
+}
+
+export default function NewsPage() {
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-12">
+      <NewsFeed />
+    </div>
+  );
+}
+`;
+}
+
+function generateNewsFeed(): string {
+  return `"use client";
+
+import { useTranslations } from 'next-intl';
+import { motion } from 'framer-motion';
+import { Newspaper, ExternalLink, Clock } from 'lucide-react';
+import { useState, useEffect } from 'react';
+
+interface NewsItem {
+  id: string;
+  title: string;
+  description: string;
+  link: string;
+  pubDate: string;
+  source: string;
+}
+
+export function NewsFeed() {
+  const t = useTranslations('news');
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/rss')
+      .then(res => res.json())
+      .then(data => {
+        setNews(data.items || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  return (
+    <div>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-center mb-12"
+      >
+        <div className="inline-flex p-4 rounded-2xl bg-gradient-to-r from-orange-500 to-orange-600 mb-6">
+          <Newspaper className="w-8 h-8 text-white" />
+        </div>
+        <h1 className="text-4xl font-bold text-white mb-4">{t('title')}</h1>
+        <p className="text-slate-400">{t('latest')}</p>
+      </motion.div>
+
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <div className="animate-spin w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full" />
+        </div>
+      ) : news.length === 0 ? (
+        <div className="text-center py-12 text-slate-400">
+          {t('common.noNewsAvailable')}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {news.map((item, index) => (
+            <motion.a
+              key={item.id}
+              href={item.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: index * 0.05 }}
+              className="block bg-slate-800/50 rounded-xl p-5 border border-slate-700 hover:border-orange-500/50 transition-all group"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-white group-hover:text-orange-400 transition-colors mb-2">
+                    {item.title}
+                  </h3>
+                  <p className="text-slate-400 text-sm line-clamp-2 mb-3">{item.description}</p>
+                  <div className="flex items-center gap-4 text-xs text-slate-500">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {new Date(item.pubDate).toLocaleDateString()}
+                    </span>
+                    <span>{item.source}</span>
+                  </div>
+                </div>
+                <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-orange-400 flex-shrink-0" />
+              </div>
+            </motion.a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+`;
+}
+
+function generateRssParser(
+  sources: PortalScaffoldConfig["rssSources"]
+): string {
+  return `import Parser from 'rss-parser';
+
+const parser = new Parser();
+
+export interface RssItem {
+  id: string;
+  title: string;
+  description: string;
+  link: string;
+  pubDate: string;
+  source: string;
+}
+
+const RSS_SOURCES = ${JSON.stringify(sources, null, 2)};
+
+export async function fetchAllFeeds(): Promise<RssItem[]> {
+  const items: RssItem[] = [];
+
+  for (const source of RSS_SOURCES) {
+    try {
+      const feed = await parser.parseURL(source.url);
+      
+      for (const item of feed.items.slice(0, 10)) {
+        items.push({
+          id: \`\${source.name}-\${item.guid || item.link}\`,
+          title: item.title || '',
+          description: item.contentSnippet || item.content || '',
+          link: item.link || '',
+          pubDate: item.pubDate || new Date().toISOString(),
+          source: source.name,
+        });
+      }
+    } catch (error) {
+      console.error(\`Failed to fetch \${source.name}:\`, error);
+    }
+  }
+
+  return items.sort((a, b) => 
+    new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime()
+  );
+}
+`;
+}
+
+function generateRssApiRoute(): string {
+  return `import { NextResponse } from 'next/server';
+import { fetchAllFeeds } from '@/lib/rss/parser';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 3600;
+
+export async function GET() {
+  try {
+    const items = await fetchAllFeeds();
+    return NextResponse.json({ items });
+  } catch (error) {
+    console.error('RSS fetch error:', error);
+    return NextResponse.json({ items: [], error: 'Failed to fetch news' }, { status: 500 });
+  }
+}
+`;
+}
+
+function generateInvestPage(
+  features: PortalScaffoldConfig["features"]
+): string {
+  return `"use client";
+
+import { useTranslations, useLocale } from 'next-intl';
+import { motion } from 'framer-motion';
+import { MapPin, Search, Building2, TrendingUp, ChevronRight } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import Link from 'next/link';
+import dynamic from 'next/dynamic';
+import { CHINA_REGIONS, RUSSIA_REGIONS } from '@/data/regionData';
+import { RegionCardSkeleton } from '@/components/widgets/LoadingSkeleton';
+
+${
+  features.enable3DGlobe
+    ? `const GlobeWrapper = dynamic(() => import('@/components/globe/GlobeWrapper').then(m => m.GlobeWrapper), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-[600px] flex flex-col items-center justify-center bg-slate-800/30 rounded-2xl border border-slate-700">
+      <div className="animate-spin w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full mb-4" />
+      <p className="text-slate-400 text-sm">Loading interactive map...</p>
+    </div>
+  ),
+});`
+    : ""
+}
+
+export default function InvestPage() {
+  const t = useTranslations('invest');
+  const locale = useLocale();
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Get regions based on locale (Chinese users see Russia, others see China)
+  const regions = locale === 'zh' ? RUSSIA_REGIONS : CHINA_REGIONS;
+  const targetCountry = locale === 'zh' ? 'Russia' : 'China';
+  
+  // Filter regions based on search
+  const filteredRegions = useMemo(() => {
+    if (!searchQuery) return Object.entries(regions);
+    const query = searchQuery.toLowerCase();
+    return Object.entries(regions).filter(([key, region]) => 
+      key.toLowerCase().includes(query) || 
+      region.name.toLowerCase().includes(query) ||
+      region.industries.some(i => i.toLowerCase().includes(query))
+    );
+  }, [regions, searchQuery]);
+
+  // Get top opportunities across all regions
+  const featuredOpportunities = useMemo(() => {
+    const allOpps: Array<{region: string; opp: any}> = [];
+    Object.entries(regions).forEach(([key, region]) => {
+      region.opportunities
+        .filter(o => o.status === 'priority')
+        .slice(0, 1)
+        .forEach(opp => allOpps.push({ region: key, opp }));
+    });
+    return allOpps.slice(0, 4);
+  }, [regions]);
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-12">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-center mb-12"
+      >
+        <div className="inline-flex p-4 rounded-2xl bg-gradient-to-r from-red-500 to-red-600 mb-6">
+          <MapPin className="w-8 h-8 text-white" />
+        </div>
+        <h1 className="text-4xl font-bold text-white mb-4">{t('title')}</h1>
+        <p className="text-slate-400">{t('selectRegion')}</p>
+      </motion.div>
+
+      ${
+        features.enable3DGlobe
+          ? `{/* Interactive Map */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.2 }}
+        className="mb-8 md:mb-12"
+      >
+        <h2 className="text-lg md:text-xl font-semibold text-white mb-3 md:mb-4 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+          {t('mapTitle')}
+        </h2>
+        <div className="h-[400px] sm:h-[450px] md:h-[500px] lg:h-[550px] rounded-xl md:rounded-2xl overflow-hidden border border-slate-700 shadow-2xl shadow-primary/10">
+          <GlobeWrapper />
+        </div>
+      </motion.div>`
+          : ""
+      }
+
+      {/* Featured Priority Opportunities */}
+      {featuredOpportunities.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="mb-12"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg">
+              <TrendingUp className="w-5 h-5 text-white" />
+            </div>
+            <h2 className="text-xl font-semibold text-white">{t('featuredOpportunities')}</h2>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            {featuredOpportunities.map(({ region, opp }) => (
+              <Link
+                key={opp.id}
+                href={\`/\${locale}/invest/\${encodeURIComponent(region)}\`}
+                className="group bg-gradient-to-br from-slate-800/80 to-slate-800/40 rounded-xl p-5 border border-slate-700/50 hover:border-amber-500/50 transition-all hover:shadow-lg hover:shadow-amber-500/10"
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <span className="text-xs px-2 py-1 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">{t('priority')}</span>
+                  <span className="text-xs text-slate-500">{region}</span>
+                </div>
+                <h3 className="font-semibold text-white mb-2 group-hover:text-amber-400 transition-colors">
+                  {locale === 'ru' && opp.titleRu ? opp.titleRu : locale === 'zh' && opp.titleZh ? opp.titleZh : opp.title}
+                </h3>
+                <p className="text-sm text-slate-400 line-clamp-2 mb-3">
+                  {locale === 'ru' && opp.descriptionRu ? opp.descriptionRu : locale === 'zh' && opp.descriptionZh ? opp.descriptionZh : opp.description}
+                </p>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-emerald-400">{opp.investmentRange}</span>
+                  <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-amber-400 transition-colors" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Search and Region List */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+      >
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg">
+            <Building2 className="w-5 h-5 text-white" />
+          </div>
+          <h2 className="text-xl font-semibold text-white">{t('allRegions')}</h2>
+          <span className="text-sm text-slate-500">({filteredRegions.length})</span>
+        </div>
+        
+        {/* Search Input */}
+        <div className="relative mb-6">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t('searchRegions')}
+            className="w-full pl-12 pr-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
+          />
+        </div>
+        
+        {/* Region Grid */}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredRegions.map(([key, region], index) => (
+            <motion.div
+              key={key}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 + index * 0.02 }}
+            >
+              <Link
+                href={\`/\${locale}/invest/\${encodeURIComponent(key)}\`}
+                className="block bg-slate-800/50 rounded-xl p-5 border border-slate-700 hover:border-primary/50 transition-all hover:shadow-lg hover:shadow-primary/10 group"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <h3 className="font-semibold text-white group-hover:text-primary transition-colors">{locale === 'ru' ? (region.nameRu || region.name) : locale === 'zh' ? (region.nameZh || region.name) : region.name}</h3>
+                  <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-primary transition-colors" />
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <span className="font-medium text-emerald-400">{region.gdp}</span>
+                    <span className="text-slate-600">GDP</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {region.industries.slice(0, 3).map((ind, i) => (
+                      <span key={i} className="text-xs px-2 py-0.5 rounded bg-slate-700/50 text-slate-400">{ind}</span>
+                    ))}
+                  </div>
+                </div>
+              </Link>
+            </motion.div>
+          ))}
+        </div>
+        
+        {filteredRegions.length === 0 && (
+          <div className="text-center py-12">
+            <Search className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+            <p className="text-slate-400">{t('noRegionsFound')}</p>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+`;
+}
+
+function generateRegionPage(): string {
+  return `import { RegionDetail } from '@/features/invest/RegionDetail';
+
+export default function RegionPage({ params }: { params: { locale: string; regionId: string } }) {
+  return <RegionDetail regionId={decodeURIComponent(params.regionId)} />;
+}
+`;
+}
+
+function generateCityPage(): string {
+  return `import { CityDetail } from '@/features/invest/CityDetail';
+
+export default function CityPage({ params }: { params: { locale: string; regionId: string; cityId: string } }) {
+  return (
+    <CityDetail 
+      regionId={decodeURIComponent(params.regionId)} 
+      cityId={decodeURIComponent(params.cityId)} 
+    />
+  );
+}
+`;
+}
+
+function generateRegionDetail(): string {
+  return `"use client";
+
+import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
+import { useParams, useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { ArrowLeft, TrendingUp, Users, Factory, Building, Gift, Target, Briefcase, Rocket, MapPin, Zap, GraduationCap, Shield, Globe, Package, Cpu, Phone, Mail, ExternalLink, Clock, DollarSign, CheckCircle, AlertCircle, Star, Award, Building2 } from 'lucide-react';
+import Link from 'next/link';
+import { getTargetCountry } from '@/lib/i18n/config';
+import type { Locale } from '@/lib/i18n/config';
+import { getRegionData, CHINA_REGIONS, RUSSIA_REGIONS, type MajorCity, type InvestmentOpportunity, type KeyProject, type CompetitiveAdvantage, type NotableEntrepreneur } from '@/data/regionData';
+import { CurrencyConverter } from '@/components/widgets/CurrencyConverter';
+import { RelatedRegions } from '@/components/widgets/RelatedRegions';
+import { SocialShare } from '@/components/widgets/SocialShare';
+import { Breadcrumbs } from '@/components/widgets/Breadcrumbs';
+
+interface RegionDetailProps {
+  regionId: string;
+}
+
+function projectPoint(lon: number, lat: number): [number, number] {
+  return [lon, -lat + 90];
+}
+
+function geometryToPath(geometry: any): string {
+  const coordsToPath = (rings: number[][][]): string => {
+    return rings.map((ring, i) => {
+      const points = ring.map((point) => {
+        const [x, y] = projectPoint(point[0], point[1]);
+        return \`\${x},\${y}\`;
+      });
+      return 'M' + points.join('L') + 'Z';
+    }).join(' ');
+  };
+  
+  if (geometry.type === 'Polygon') {
+    return coordsToPath(geometry.coordinates);
+  } else if (geometry.type === 'MultiPolygon') {
+    return geometry.coordinates.map((poly: number[][][]) => coordsToPath(poly)).join(' ');
+  }
+  return '';
+}
+
+function getGeometryBounds(geometry: any): { minX: number; maxX: number; minY: number; maxY: number } {
+  let allCoords: number[][] = [];
+  
+  const extractCoords = (coords: any): void => {
+    if (typeof coords[0] === 'number') {
+      allCoords.push(coords);
+    } else {
+      coords.forEach((c: any) => extractCoords(c));
+    }
+  };
+  
+  extractCoords(geometry.coordinates);
+  
+  const xs = allCoords.map(c => c[0]);
+  const ys = allCoords.map(c => -c[1] + 90);
+  
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minY: Math.min(...ys),
+    maxY: Math.max(...ys),
+  };
+}
+
+export function RegionDetail({ regionId }: RegionDetailProps) {
+  const t = useTranslations('invest');
+  const params = useParams();
+  const locale = params.locale as Locale;
+  const targetCountry = getTargetCountry(locale);
+  const [pathData, setPathData] = useState<string>('');
+  const [viewBox, setViewBox] = useState<string>('0 0 100 100');
+  
+  const regionData = getRegionData(regionId, targetCountry);
+  const fallbackData = {
+    name: regionId,
+    nameRu: undefined as string | undefined,
+    nameZh: undefined as string | undefined,
+    gdp: '$50 Billion',
+    population: '10 Million',
+    industries: ['Manufacturing', 'Agriculture', 'Services', 'Trade'],
+    industriesRu: undefined as string[] | undefined,
+    industriesZh: undefined as string[] | undefined,
+    sezCount: 1,
+    taxBenefits: ['15% reduced corporate tax', 'VAT exemptions', 'Land use discounts'],
+    taxBenefitsRu: undefined as string[] | undefined,
+    taxBenefitsZh: undefined as string[] | undefined,
+    majorCities: [{ id: 'city-1', name: 'Major City 1' }, { id: 'city-2', name: 'Major City 2' }, { id: 'city-3', name: 'Major City 3' }] as MajorCity[],
+    overview: 'A dynamic region with diverse economic opportunities and strong growth potential.',
+    overviewRu: undefined as string | undefined,
+    overviewZh: undefined as string | undefined,
+    targetSectors: ['Manufacturing', 'Technology', 'Services'],
+    opportunities: [] as InvestmentOpportunity[],
+    keyProjects: [] as KeyProject[],
+    advantages: [] as CompetitiveAdvantage[],
+    notableEntrepreneurs: [] as NotableEntrepreneur[],
+    contactInfo: undefined as { investmentAgency: string; website: string; email?: string; phone?: string; } | undefined,
+  };
+  const data = regionData || fallbackData;
+
+  const getAdvantageIcon = (icon: string) => {
+    switch (icon) {
+      case 'location': return <MapPin className="w-5 h-5" />;
+      case 'infrastructure': return <Building className="w-5 h-5" />;
+      case 'talent': return <GraduationCap className="w-5 h-5" />;
+      case 'policy': return <Shield className="w-5 h-5" />;
+      case 'market': return <TrendingUp className="w-5 h-5" />;
+      case 'resources': return <Zap className="w-5 h-5" />;
+      case 'logistics': return <Package className="w-5 h-5" />;
+      case 'tech': return <Cpu className="w-5 h-5" />;
+      default: return <Star className="w-5 h-5" />;
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'priority': return <span className="px-2 py-1 text-xs font-medium bg-red-500/20 text-red-400 rounded-full flex items-center gap-1"><Star className="w-3 h-3" />{t('priority')}</span>;
+      case 'active': return <span className="px-2 py-1 text-xs font-medium bg-green-500/20 text-green-400 rounded-full flex items-center gap-1"><CheckCircle className="w-3 h-3" />{t('active')}</span>;
+      case 'upcoming': return <span className="px-2 py-1 text-xs font-medium bg-yellow-500/20 text-yellow-400 rounded-full flex items-center gap-1"><Clock className="w-3 h-3" />{t('upcoming')}</span>;
+      default: return null;
+    }
+  };
+
+  useEffect(() => {
+    const storedGeometry = sessionStorage.getItem('selectedRegionGeometry');
+    const storedName = sessionStorage.getItem('selectedRegionName');
+    
+    if (storedGeometry && storedName === regionId) {
+      try {
+        const geometry = JSON.parse(storedGeometry);
+        setPathData(geometryToPath(geometry));
+        
+        const bounds = getGeometryBounds(geometry);
+        const padding = 2;
+        const width = bounds.maxX - bounds.minX + padding * 2;
+        const height = bounds.maxY - bounds.minY + padding * 2;
+        setViewBox(\`\${bounds.minX - padding} \${bounds.minY - padding} \${width} \${height}\`);
+      } catch (e) {
+        console.error('Failed to parse region geometry');
+      }
+    }
+  }, [regionId]);
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-12">
+      <Breadcrumbs />
+      
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between flex-wrap gap-4 mb-6">
+        <Link
+          href={\`/\${locale}/invest\`}
+          className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          {t('back')}
+        </Link>
+        <SocialShare title={locale === 'ru' ? (data.nameRu || regionId) : locale === 'zh' ? (data.nameZh || regionId) : regionId} />
+      </motion.div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+        {pathData && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8, rotate: -10 }}
+            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+            transition={{ type: 'spring', bounce: 0.4, duration: 0.8 }}
+            className="lg:col-span-1 flex items-center justify-center"
+          >
+            <div className="relative w-64 h-64">
+              <div 
+                className="absolute inset-0 rounded-full blur-3xl opacity-30"
+                style={{ background: 'radial-gradient(circle, #DC2626 0%, transparent 70%)' }}
+              />
+              <svg
+                viewBox={viewBox}
+                className="w-full h-full drop-shadow-2xl"
+                style={{ filter: 'drop-shadow(0 0 30px #DC262660)' }}
+              >
+                <defs>
+                  <linearGradient id="regionFill" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#DC2626" />
+                    <stop offset="100%" stopColor="#FBBF24" />
+                  </linearGradient>
+                  <filter id="regionGlow">
+                    <feGaussianBlur stdDeviation="1" result="blur" />
+                    <feFlood floodColor="#FBBF24" floodOpacity="0.5" />
+                    <feComposite in2="blur" operator="in" />
+                    <feMerge>
+                      <feMergeNode />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+                <motion.path
+                  d={pathData}
+                  fill="url(#regionFill)"
+                  stroke="white"
+                  strokeWidth="0.5"
+                  filter="url(#regionGlow)"
+                  initial={{ pathLength: 0 }}
+                  animate={{ pathLength: 1 }}
+                  transition={{ duration: 1.5, ease: 'easeInOut' }}
+                />
+              </svg>
+            </div>
+          </motion.div>
+        )}
+        
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={\`\${pathData ? 'lg:col-span-2' : 'lg:col-span-3'} flex flex-col justify-center\`}
+        >
+          <h1 className="text-4xl lg:text-5xl font-bold text-white mb-4">{locale === 'ru' ? (data.nameRu || regionId) : locale === 'zh' ? (data.nameZh || regionId) : regionId}</h1>
+          <p className="text-slate-400 text-lg mb-4">{locale === 'ru' && data.overviewRu ? data.overviewRu : locale === 'zh' && data.overviewZh ? data.overviewZh : data.overview}</p>
+          {data.targetSectors && data.targetSectors.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {data.targetSectors.map((sector) => (
+                <span key={sector} className="px-3 py-1 bg-gradient-to-r from-primary/20 to-secondary/20 border border-primary/30 rounded-full text-sm text-primary">
+                  {sector}
+                </span>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-slate-800/50 rounded-xl p-6 border border-slate-700"
+        >
+          <div className="flex items-center gap-3 mb-2">
+            <TrendingUp className="w-5 h-5 text-green-500" />
+            <span className="text-slate-400">{t('gdp')}</span>
+          </div>
+          <p className="text-2xl font-bold text-white">{data.gdp}</p>
+        </motion.div>
+        
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="bg-slate-800/50 rounded-xl p-6 border border-slate-700"
+        >
+          <div className="flex items-center gap-3 mb-2">
+            <Users className="w-5 h-5 text-blue-500" />
+            <span className="text-slate-400">{t('population')}</span>
+          </div>
+          <p className="text-2xl font-bold text-white">{data.population}</p>
+        </motion.div>
+        
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-slate-800/50 rounded-xl p-6 border border-slate-700"
+        >
+          <div className="flex items-center gap-3 mb-2">
+            <Building className="w-5 h-5 text-purple-500" />
+            <span className="text-slate-400">{t('sez')}</span>
+          </div>
+          <p className="text-2xl font-bold text-white">{data.sezCount} {t('zones')}</p>
+        </motion.div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="bg-slate-800/50 rounded-xl p-6 border border-slate-700"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Factory className="w-5 h-5 text-orange-500" />
+            <h3 className="text-lg font-semibold text-white">{t('industries')}</h3>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(locale === 'ru' && data.industriesRu ? data.industriesRu : locale === 'zh' && data.industriesZh ? data.industriesZh : data.industries).map((industry, index) => (
+              <span key={index} className="px-3 py-1 bg-slate-700 rounded-full text-sm text-slate-300">
+                {industry}
+              </span>
+            ))}
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-gradient-to-r from-primary/20 to-secondary/20 rounded-xl p-6 border border-primary/30"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Gift className="w-5 h-5 text-primary" />
+            <h3 className="text-lg font-semibold text-white">{t('taxBenefits')}</h3>
+          </div>
+          <ul className="space-y-2">
+            {(locale === 'ru' && data.taxBenefitsRu ? data.taxBenefitsRu : locale === 'zh' && data.taxBenefitsZh ? data.taxBenefitsZh : data.taxBenefits).map((benefit, index) => (
+              <li key={index} className="flex items-center gap-2 text-slate-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                {benefit}
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+      </div>
+
+      {/* Investment Opportunities Section */}
+      {data.opportunities && data.opportunities.length > 0 && (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+          className="mt-8"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+              <Briefcase className="w-5 h-5 text-white" />
+            </div>
+            <h2 className="text-2xl font-semibold text-white">{t('opportunities')}</h2>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {data.opportunities.map((opp, index) => (
+              <motion.div
+                key={opp.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 + index * 0.05 }}
+                className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-green-500/50 transition-all"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <span className="px-2 py-1 text-xs font-medium bg-slate-700 text-slate-300 rounded">{opp.sector}</span>
+                  {getStatusBadge(opp.status)}
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">{opp.title}</h3>
+                <p className="text-slate-400 text-sm mb-4">{opp.description}</p>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="flex items-center gap-2 text-slate-300">
+                    <DollarSign className="w-4 h-4 text-green-500" />
+                    <span>{opp.investmentRange}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-300">
+                    <Clock className="w-4 h-4 text-blue-500" />
+                    <span>{opp.timeline}</span>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.section>
+      )}
+
+      {/* Key Projects Section */}
+      {data.keyProjects && data.keyProjects.length > 0 && (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="mt-8"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+              <Rocket className="w-5 h-5 text-white" />
+            </div>
+            <h2 className="text-2xl font-semibold text-white">{t('keyProjects')}</h2>
+          </div>
+          <div className="space-y-4">
+            {data.keyProjects.map((project, index) => (
+              <motion.div
+                key={project.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.55 + index * 0.05 }}
+                className="bg-gradient-to-r from-slate-800/50 to-slate-800/30 rounded-xl p-6 border border-slate-700"
+              >
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-lg font-semibold text-white">{project.name}</h3>
+                      <span className="px-2 py-1 text-xs font-medium bg-blue-500/20 text-blue-400 rounded">{project.sector}</span>
+                    </div>
+                    <p className="text-slate-400 text-sm mb-3">{project.description}</p>
+                    {project.partners && project.partners.length > 0 && (
+                      <div className="flex items-center gap-2 text-sm text-slate-500">
+                        <span>{t('partners')}:</span>
+                        {project.partners.map((partner, i) => (
+                          <span key={i} className="px-2 py-0.5 bg-slate-700 rounded text-slate-300">{partner}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-2xl font-bold text-green-400">{project.value}</span>
+                    {project.completionYear && (
+                      <span className="text-sm text-slate-500">{t('target')}: {project.completionYear}</span>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.section>
+      )}
+
+      {/* Competitive Advantages Section */}
+      {data.advantages && data.advantages.length > 0 && (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="mt-8"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center">
+              <Target className="w-5 h-5 text-white" />
+            </div>
+            <h2 className="text-2xl font-semibold text-white">{t('advantages')}</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {data.advantages.map((adv, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.65 + index * 0.05 }}
+                className="bg-slate-800/50 rounded-xl p-5 border border-slate-700"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                    {getAdvantageIcon(adv.icon)}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white mb-1">{adv.title}</h3>
+                    <p className="text-slate-400 text-sm">{adv.description}</p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.section>
+      )}
+
+      {/* Who's Who - Notable Entrepreneurs */}
+      {data.notableEntrepreneurs && data.notableEntrepreneurs.length > 0 && (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.65 }}
+          className="mt-8"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+              <Award className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-semibold text-white">{t('whosWho')}</h2>
+              <p className="text-sm text-slate-400">{t('notableEntrepreneurs')}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {data.notableEntrepreneurs.map((entrepreneur, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.7 + index * 0.05 }}
+                className="bg-slate-800/50 rounded-xl p-5 border border-slate-700 hover:border-amber-500/50 transition-all group"
+              >
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-500/20 to-orange-500/20 border-2 border-amber-500/30 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                    {entrepreneur.image ? (
+                      <img src={entrepreneur.image} alt={entrepreneur.name} className="w-full h-full rounded-full object-cover" />
+                    ) : (
+                      <span className="text-2xl font-bold text-amber-400">{entrepreneur.name.charAt(0)}</span>
+                    )}
+                  </div>
+                  <h3 className="font-semibold text-white mb-0.5">
+                    {locale === 'zh' && entrepreneur.nameZh ? entrepreneur.nameZh : locale === 'ru' && entrepreneur.nameRu ? entrepreneur.nameRu : entrepreneur.name}
+                  </h3>
+                  {locale !== 'en' && (
+                    <p className="text-xs text-slate-500 mb-2">{entrepreneur.name}</p>
+                  )}
+                  <div className="flex items-center gap-1 mb-2">
+                    <Building2 className="w-3 h-3 text-slate-500" />
+                    <span className="text-sm text-amber-400 font-medium">{entrepreneur.company}</span>
+                  </div>
+                  <span className="text-xs px-2 py-0.5 bg-slate-700/50 text-slate-400 rounded-full mb-2">{entrepreneur.industry}</span>
+                  {entrepreneur.netWorth && (
+                    <div className="flex items-center gap-1 text-green-400 text-sm font-semibold">
+                      <DollarSign className="w-3 h-3" />
+                      <span>{entrepreneur.netWorth}</span>
+                    </div>
+                  )}
+                  {entrepreneur.description && (
+                    <p className="text-xs text-slate-500 mt-2 line-clamp-2">{entrepreneur.description}</p>
+                  )}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.section>
+      )}
+
+      {/* Contact Information */}
+      {data.contactInfo && (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.75 }}
+          className="mt-8"
+        >
+          <div className="bg-gradient-to-r from-primary/10 to-secondary/10 rounded-xl p-6 border border-primary/20">
+            <div className="flex items-center gap-3 mb-4">
+              <Globe className="w-6 h-6 text-primary" />
+              <h2 className="text-xl font-semibold text-white">{t('contact')}</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <p className="text-sm text-slate-500 mb-1">{t('agency')}</p>
+                <p className="text-white font-medium">{data.contactInfo.investmentAgency}</p>
+              </div>
+              {data.contactInfo.website && (
+                <div>
+                  <p className="text-sm text-slate-500 mb-1">{t('website')}</p>
+                  <a href={data.contactInfo.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80 flex items-center gap-1">
+                    {t('visitWebsite')} <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
+              {data.contactInfo.email && (
+                <div>
+                  <p className="text-sm text-slate-500 mb-1">{t('email')}</p>
+                  <a href={\`mailto:\${data.contactInfo.email}\`} className="text-primary hover:text-primary/80 flex items-center gap-1">
+                    <Mail className="w-3 h-3" /> {data.contactInfo.email}
+                  </a>
+                </div>
+              )}
+              {data.contactInfo.phone && (
+                <div>
+                  <p className="text-sm text-slate-500 mb-1">{t('phone')}</p>
+                  <a href={\`tel:\${data.contactInfo.phone}\`} className="text-white flex items-center gap-1">
+                    <Phone className="w-3 h-3" /> {data.contactInfo.phone}
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.section>
+      )}
+
+      {/* Major Cities Section */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.75 }}
+        className="mt-8"
+      >
+        <h2 className="text-2xl font-semibold text-white mb-6">{t('majorCities')}</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {data.majorCities.map((city) => (
+            <Link
+              key={city.id}
+              href={\`/\${locale}/invest/\${encodeURIComponent(regionId)}/\${encodeURIComponent(city.id)}\`}
+              className="bg-slate-800/50 rounded-xl p-5 border border-slate-700 hover:border-primary/50 transition-all group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+                  <Building className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white group-hover:text-primary transition-colors">
+                    {city.name}
+                  </h3>
+                  <p className="text-sm text-slate-500">{city.population || 'Click to explore'}</p>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </motion.section>
+
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.8 }}
+        className="mt-8"
+      >
+        <CurrencyConverter />
+      </motion.section>
+
+      <RelatedRegions 
+        currentRegion={data} 
+        allRegions={targetCountry === 'CN' ? CHINA_REGIONS : RUSSIA_REGIONS} 
+      />
+    </div>
+  );
+}
+`;
+}
+
+function generateCityDetail(): string {
+  return `"use client";
+
+import { useTranslations } from 'next-intl';
+import { useParams } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { ArrowLeft, Clock, Users, DollarSign, Sparkles, Building2, Target, MapPin } from 'lucide-react';
+import Link from 'next/link';
+import Image from 'next/image';
+import { CityMap } from '@/components/map/CityMap';
+import { getRegionData, type MajorCity, type InvestmentOpportunity } from '@/data/regionData';
+import { getTargetCountry } from '@/lib/i18n/config';
+import type { Locale } from '@/lib/i18n/config';
+import { SocialShare } from '@/components/widgets/SocialShare';
+import { CurrencyConverter } from '@/components/widgets/CurrencyConverter';
+
+interface CityDetailProps {
+  regionId: string;
+  cityId: string;
+}
+
+export function CityDetail({ regionId, cityId }: CityDetailProps) {
+  const t = useTranslations('invest');
+  const params = useParams();
+  const locale = params.locale as string;
+  
+  const targetCountry = getTargetCountry(locale as Locale);
+  const regionData = getRegionData(regionId, targetCountry);
+  
+  // Find the city data
+  const cityData = regionData?.majorCities.find(
+    (c) => c.id === cityId || c.name.toLowerCase().replace(/\\s+/g, '-') === cityId.toLowerCase()
+  );
+
+  const statusColors = {
+    priority: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+    active: 'bg-green-500/20 text-green-400 border-green-500/30',
+    upcoming: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  };
+  
+  // Default fallback image
+  const defaultImage = 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1920&q=80';
+
+  return (
+    <div>
+      {/* Hero Image Section */}
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="relative h-[40vh] min-h-[300px] max-h-[500px] w-full overflow-hidden"
+      >
+        <Image
+          src={cityData?.image || defaultImage}
+          alt={cityData?.name || cityId}
+          fill
+          className="object-cover"
+          priority
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/60 to-transparent" />
+        
+        {/* Back button overlay */}
+        <div className="absolute top-6 left-6 z-10">
+          <Link
+            href={\`/\${locale}/invest/\${encodeURIComponent(regionId)}\`}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900/80 backdrop-blur-sm rounded-full text-white hover:bg-slate-800 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            {t('back')}
+          </Link>
+        </div>
+        
+        {/* City info overlay */}
+        <div className="absolute bottom-0 left-0 right-0 p-8">
+          <div className="max-w-7xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <div className="flex items-center gap-2 text-orange-400 mb-2">
+                <MapPin className="w-4 h-4" />
+                <span className="text-sm font-medium">{regionId}</span>
+              </div>
+              <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">{cityData?.name || cityId}</h1>
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                {cityData?.population && (
+                  <div className="flex items-center gap-2 text-slate-300">
+                    <Users className="w-5 h-5" />
+                    <span className="text-lg">{t('population')}: {cityData.population}</span>
+                  </div>
+                )}
+                <SocialShare title={cityData?.name || cityId} />
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </motion.div>
+      
+      {/* Content Section */}
+      <div className="max-w-7xl mx-auto px-4 py-12">
+        {/* Description */}
+        {cityData?.description && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="mb-10 bg-gradient-to-r from-slate-800/80 to-slate-800/40 rounded-2xl p-8 border border-slate-700/50"
+          >
+            <p className="text-slate-300 text-lg leading-relaxed">{cityData.description}</p>
+          </motion.div>
+        )}
+
+        {/* Map Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="mb-10"
+        >
+          <CityMap cityName={cityData?.name || cityId} lat={cityData?.lat} lng={cityData?.lng} />
+        </motion.div>
+
+        {/* City Investment Opportunities */}
+        {cityData?.opportunities && cityData.opportunities.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="mb-10"
+          >
+            <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-gradient-to-r from-orange-500 to-amber-500 rounded-lg">
+              <Target className="w-5 h-5 text-white" />
+            </div>
+            <h2 className="text-2xl font-semibold text-white">{t('opportunities')}</h2>
+          </div>
+          
+          <div className="grid gap-4">
+            {cityData.opportunities.map((opp, index) => (
+              <motion.div
+                key={opp.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 + index * 0.1 }}
+                className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-slate-600 transition-colors"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-4 mb-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs px-2 py-1 rounded-full bg-slate-700 text-slate-300">{opp.sector}</span>
+                      <span className={\`text-xs px-2 py-1 rounded-full border \${statusColors[opp.status]}\`}>
+                        {t(opp.status)}
+                      </span>
+                    </div>
+                    <h3 className="text-lg font-semibold text-white">
+                      {locale === 'ru' && opp.titleRu ? opp.titleRu : locale === 'zh' && opp.titleZh ? opp.titleZh : opp.title}
+                    </h3>
+                  </div>
+                </div>
+                
+                <p className="text-slate-400 mb-4">
+                  {locale === 'ru' && opp.descriptionRu ? opp.descriptionRu : locale === 'zh' && opp.descriptionZh ? opp.descriptionZh : opp.description}
+                </p>
+                
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <div className="flex items-center gap-2 text-emerald-400">
+                    <DollarSign className="w-4 h-4" />
+                    <span>{opp.investmentRange}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-blue-400">
+                    <Clock className="w-4 h-4" />
+                    <span>{opp.timeline}</span>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+      
+      {(!cityData?.opportunities || cityData.opportunities.length === 0) && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-slate-800/30 rounded-xl p-8 border border-slate-700/50 text-center"
+        >
+          <Building2 className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+          <p className="text-slate-400">{t('cityOpportunitiesComingSoon')}</p>
+          <Link
+            href={\`/\${locale}/invest/\${encodeURIComponent(regionId)}\`}
+            className="inline-flex items-center gap-2 mt-4 text-primary hover:text-primary/80 transition-colors"
+          >
+            <Sparkles className="w-4 h-4" />
+            {t('viewRegionOpportunities')}
+          </Link>
+        </motion.div>
+      )}
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="mt-10"
+        >
+          <CurrencyConverter />
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+`;
+}
+
+function generateEconomicStats(): string {
+  return `"use client";
+
+import { useTranslations } from 'next-intl';
+import { motion } from 'framer-motion';
+import { TrendingUp, Users, Factory, Gift, Building } from 'lucide-react';
+
+const mockStats = {
+  gdp: '$1.2 Trillion',
+  population: '45.8 Million',
+  industries: ['Technology', 'Manufacturing', 'Finance', 'Agriculture'],
+  sezCount: 5,
+  taxBenefits: ['15% reduced corporate tax', 'VAT exemptions', 'Land use discounts'],
+};
+
+export function EconomicStats() {
+  const t = useTranslations('invest');
+
+  const stats = [
+    { key: 'gdp', value: mockStats.gdp, icon: TrendingUp, color: 'from-green-500 to-green-600' },
+    { key: 'population', value: mockStats.population, icon: Users, color: 'from-blue-500 to-blue-600' },
+    { key: 'sez', value: \`\${mockStats.sezCount} zones\`, icon: Building, color: 'from-purple-500 to-purple-600' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Key Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {stats.map((stat, index) => (
+          <motion.div
+            key={stat.key}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.1 }}
+            className="bg-slate-800/50 rounded-xl p-5 border border-slate-700"
+          >
+            <div className={\`inline-flex p-2 rounded-lg bg-gradient-to-r \${stat.color} mb-3\`}>
+              <stat.icon className="w-5 h-5 text-white" />
+            </div>
+            <p className="text-slate-400 text-sm">{t(stat.key)}</p>
+            <p className="text-2xl font-bold text-white">{stat.value}</p>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Industries */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="bg-slate-800/50 rounded-xl p-5 border border-slate-700"
+      >
+        <div className="flex items-center gap-2 mb-4">
+          <Factory className="w-5 h-5 text-orange-500" />
+          <h3 className="text-lg font-semibold text-white">{t('industries')}</h3>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {mockStats.industries.map((industry) => (
+            <span
+              key={industry}
+              className="px-3 py-1 bg-slate-700 rounded-full text-sm text-slate-300"
+            >
+              {industry}
+            </span>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* Tax Benefits */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="bg-gradient-to-r from-primary/20 to-secondary/20 rounded-xl p-5 border border-primary/30"
+      >
+        <div className="flex items-center gap-2 mb-4">
+          <Gift className="w-5 h-5 text-primary" />
+          <h3 className="text-lg font-semibold text-white">{t('taxBenefits')}</h3>
+        </div>
+        <ul className="space-y-2">
+          {mockStats.taxBenefits.map((benefit, index) => (
+            <li key={index} className="flex items-center gap-2 text-slate-300">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+              {benefit}
+            </li>
+          ))}
+        </ul>
+      </motion.div>
+    </div>
+  );
+}
+`;
+}
+
+function generateDbSchema(database: string): string {
+  const tableType =
+    database === "postgresql"
+      ? "pgTable"
+      : database === "mysql"
+        ? "mysqlTable"
+        : "sqliteTable";
+  const serialType = database === "postgresql" ? "serial" : "int";
+  const textType = database === "postgresql" ? "text" : "varchar";
+  const timestampType = database === "postgresql" ? "timestamp" : "datetime";
+
+  return `import {
+  ${tableType} as createTable,
+  ${serialType},
+  ${textType},
+  varchar,
+  ${timestampType},
+  integer,
+  decimal,
+  boolean,
+  json,
+  index,
+} from "drizzle-orm/${database === "postgresql" ? "pg" : database}-core";
+import { relations } from "drizzle-orm";
+${database !== "postgresql" ? 'import { sql } from "drizzle-orm";' : ""}
+
+export const regions = createTable("regions", {
+  id: ${serialType}("id").primaryKey()${database !== "postgresql" ? ".autoincrement()" : ""},
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  nameLocal: varchar("name_local", { length: 255 }),
+  country: varchar("country", { length: 10 }).notNull(),
+  level: varchar("level", { length: 20 }).notNull(),
+  parentId: integer("parent_id"),
+  description: ${textType}("description"),
+  population: integer("population"),
+  gdp: decimal("gdp", { precision: 15, scale: 2 }),
+  centerLat: decimal("center_lat", { precision: 10, scale: 6 }),
+  centerLng: decimal("center_lng", { precision: 10, scale: 6 }),
+  industries: json("industries").$type<string[]>().default([]),
+  sezCount: integer("sez_count").default(0),
+  taxBenefits: json("tax_benefits").$type<string[]>().default([]),
+  metadata: json("metadata").$type<Record<string, unknown>>(),
+  createdAt: ${timestampType}("created_at").${database === "postgresql" ? "defaultNow()" : "default(sql`CURRENT_TIMESTAMP`)"},
+});
+
+export const events = createTable("events", {
+  id: ${serialType}("id").primaryKey()${database !== "postgresql" ? ".autoincrement()" : ""},
+  title: varchar("title", { length: 255 }).notNull(),
+  titleLocal: varchar("title_local", { length: 255 }),
+  description: ${textType}("description"),
+  descriptionLocal: ${textType}("description_local"),
+  date: ${timestampType}("date").notNull(),
+  endDate: ${timestampType}("end_date"),
+  location: varchar("location", { length: 255 }),
+  country: varchar("country", { length: 10 }),
+  url: varchar("url", { length: 500 }),
+  category: varchar("category", { length: 50 }),
+  featured: boolean("featured").default(false),
+  createdAt: ${timestampType}("created_at").${database === "postgresql" ? "defaultNow()" : "default(sql`CURRENT_TIMESTAMP`)"},
+});
+
+export const organizations = createTable("organizations", {
+  id: ${serialType}("id").primaryKey()${database !== "postgresql" ? ".autoincrement()" : ""},
+  name: varchar("name", { length: 255 }).notNull(),
+  nameLocal: varchar("name_local", { length: 255 }),
+  description: ${textType}("description"),
+  descriptionLocal: ${textType}("description_local"),
+  country: varchar("country", { length: 10 }).notNull(),
+  level: varchar("level", { length: 20 }).notNull(),
+  website: varchar("website", { length: 500 }),
+  email: varchar("email", { length: 255 }),
+  phone: varchar("phone", { length: 50 }),
+  address: ${textType}("address"),
+  regionId: integer("region_id"),
+  createdAt: ${timestampType}("created_at").${database === "postgresql" ? "defaultNow()" : "default(sql`CURRENT_TIMESTAMP`)"},
+});
+
+export const newsItems = createTable("news_items", {
+  id: ${serialType}("id").primaryKey()${database !== "postgresql" ? ".autoincrement()" : ""},
+  externalId: varchar("external_id", { length: 255 }).notNull().unique(),
+  title: varchar("title", { length: 500 }).notNull(),
+  description: ${textType}("description"),
+  link: varchar("link", { length: 500 }).notNull(),
+  source: varchar("source", { length: 100 }).notNull(),
+  language: varchar("language", { length: 10 }),
+  category: varchar("category", { length: 50 }),
+  pubDate: ${timestampType}("pub_date").notNull(),
+  fetchedAt: ${timestampType}("fetched_at").${database === "postgresql" ? "defaultNow()" : "default(sql`CURRENT_TIMESTAMP`)"},
+});
+
+export const laws = createTable("laws", {
+  id: ${serialType}("id").primaryKey()${database !== "postgresql" ? ".autoincrement()" : ""},
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  title: varchar("title", { length: 255 }).notNull(),
+  titleLocal: varchar("title_local", { length: 255 }),
+  content: ${textType}("content"),
+  contentLocal: ${textType}("content_local"),
+  category: varchar("category", { length: 50 }).notNull(),
+  targetCountry: varchar("target_country", { length: 10 }),
+  effectiveDate: ${timestampType}("effective_date"),
+  sourceUrl: varchar("source_url", { length: 500 }),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: ${timestampType}("created_at").${database === "postgresql" ? "defaultNow()" : "default(sql`CURRENT_TIMESTAMP`)"},
+});
+
+export type Region = typeof regions.$inferSelect;
+export type Event = typeof events.$inferSelect;
+export type Organization = typeof organizations.$inferSelect;
+export type NewsItem = typeof newsItems.$inferSelect;
+export type Law = typeof laws.$inferSelect;
+`;
+}
+
+function generateDbClient(database: string): string {
+  if (database === "postgresql") {
+    return `import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import * as schema from "./schema";
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+export const db = drizzle(pool, { schema });
+`;
+  }
+  return `import { drizzle } from "drizzle-orm/${database}2";
+import * as schema from "./schema";
+
+export const db = drizzle(process.env.DATABASE_URL!, { schema });
+`;
+}
+
+function generateDrizzleConfig(database: string): string {
+  return `import { defineConfig } from "drizzle-kit";
+
+export default defineConfig({
+  schema: "./src/lib/db/schema.ts",
+  out: "./drizzle",
+  dialect: "${database}",
+  dbCredentials: {
+    url: process.env.DATABASE_URL!,
+  },
+});
+`;
+}
+
+function generateSeedScript(
+  countryPair: PortalScaffoldConfig["countryPair"]
+): string {
+  return `import { db } from "../src/lib/db/client";
+import { regions, events, organizations, laws } from "../src/lib/db/schema";
+
+async function seed() {
+  console.log("Seeding database...");
+
+  // Seed regions
+  const chinaRegions = [
+    { slug: "beijing", name: "Beijing", nameLocal: "北京", country: "CN", level: "region", population: 21540000, gdp: "610000000000", centerLat: "39.9", centerLng: "116.4", industries: ["Technology", "Finance", "Government"], sezCount: 2 },
+    { slug: "shanghai", name: "Shanghai", nameLocal: "上海", country: "CN", level: "region", population: 24280000, gdp: "670000000000", centerLat: "31.2", centerLng: "121.5", industries: ["Finance", "Trade", "Manufacturing"], sezCount: 3 },
+    { slug: "guangdong", name: "Guangdong", nameLocal: "广东", country: "CN", level: "region", population: 126010000, gdp: "1960000000000", centerLat: "23.1", centerLng: "113.3", industries: ["Electronics", "Manufacturing", "Export"], sezCount: 5 },
+  ];
+
+  const russiaRegions = [
+    { slug: "moscow", name: "Moscow", nameLocal: "Москва", country: "RU", level: "region", population: 12655000, gdp: "450000000000", centerLat: "55.8", centerLng: "37.6", industries: ["Finance", "Technology", "Services"], sezCount: 4 },
+    { slug: "spb", name: "Saint Petersburg", nameLocal: "Санкт-Петербург", country: "RU", level: "region", population: 5384000, gdp: "120000000000", centerLat: "59.9", centerLng: "30.3", industries: ["Shipbuilding", "Technology", "Tourism"], sezCount: 2 },
+    { slug: "primorsky", name: "Primorsky Krai", nameLocal: "Приморский край", country: "RU", level: "region", population: 1895000, gdp: "25000000000", centerLat: "44.0", centerLng: "133.0", industries: ["Shipping", "Fishing", "Trade"], sezCount: 3 },
+  ];
+
+  await db.insert(regions).values([...chinaRegions, ...russiaRegions]);
+  console.log("Regions seeded");
+
+  // Seed events
+  await db.insert(events).values([
+    { title: "China International Import Expo", titleLocal: "中国国际进口博览会", date: new Date("2026-03-05"), location: "Shanghai, China", country: "CN", url: "https://www.ciie.org", category: "trade", featured: true },
+    { title: "St. Petersburg International Economic Forum", titleLocal: "ПМЭФ", date: new Date("2026-06-15"), location: "Saint Petersburg, Russia", country: "RU", url: "https://forumspb.com", category: "investment", featured: true },
+  ]);
+  console.log("Events seeded");
+
+  // Seed organizations
+  await db.insert(organizations).values([
+    { name: "Ministry of Commerce", nameLocal: "商务部", country: "CN", level: "national", website: "http://www.mofcom.gov.cn" },
+    { name: "Ministry of Economic Development", nameLocal: "Минэкономразвития", country: "RU", level: "national", website: "https://economy.gov.ru" },
+  ]);
+  console.log("Organizations seeded");
+
+  // Seed laws
+  await db.insert(laws).values([
+    { slug: "bilateral-trade-agreement", title: "China-Russia Bilateral Trade Agreement", category: "agreements", targetCountry: "CN" },
+    { slug: "company-registration", title: "Foreign Company Registration Guide", category: "entities", targetCountry: "CN" },
+  ]);
+  console.log("Laws seeded");
+
+  console.log("Seeding complete!");
+}
+
+seed().catch(console.error);
+`;
+}
+
+function generateGlobeTypes(): string {
+  return `declare module 'globe.gl' {
+  interface GlobeInstance {
+    (element: HTMLElement): GlobeInstance;
+    width(width?: number): GlobeInstance | number;
+    height(height?: number): GlobeInstance | number;
+    globeImageUrl(url?: string): GlobeInstance | string;
+    bumpImageUrl(url?: string): GlobeInstance | string;
+    backgroundImageUrl(url?: string): GlobeInstance | string;
+    showAtmosphere(show?: boolean): GlobeInstance | boolean;
+    atmosphereColor(color?: string): GlobeInstance | string;
+    atmosphereAltitude(altitude?: number): GlobeInstance | number;
+    pointOfView(pov?: { lat?: number; lng?: number; altitude?: number }, transitionMs?: number): GlobeInstance;
+    polygonsData(data?: object[]): GlobeInstance | object[];
+    polygonCapColor(fn?: (d: object) => string): GlobeInstance;
+    polygonSideColor(fn?: (d: object) => string): GlobeInstance;
+    polygonStrokeColor(fn?: (d: object) => string): GlobeInstance;
+    polygonAltitude(alt?: number | ((d: object) => number)): GlobeInstance;
+    polygonLabel(fn?: (d: object) => string): GlobeInstance;
+    onPolygonClick(fn?: (polygon: object, event: MouseEvent) => void): GlobeInstance;
+    onPolygonHover(fn?: (polygon: object | null, prevPolygon: object | null) => void): GlobeInstance;
+    _destructor?(): void;
+  }
+
+  function Globe(): GlobeInstance;
+  export default Globe;
+}
+`;
+}
+
+function generateReactSimpleMapsTypes(): string {
+  return `declare module "react-simple-maps" {
+  import { ComponentType, ReactNode, CSSProperties } from "react";
+
+  export interface ComposableMapProps {
+    projection?: string;
+    projectionConfig?: {
+      rotate?: [number, number, number];
+      scale?: number;
+      center?: [number, number];
+    };
+    width?: number;
+    height?: number;
+    className?: string;
+    children?: ReactNode;
+  }
+
+  export interface GeographiesProps {
+    geography: string | object;
+    children: (props: { geographies: Geography[] }) => ReactNode;
+  }
+
+  export interface Geography {
+    rsmKey: string;
+    properties: Record<string, unknown> & {
+      name?: string;
+      NAME?: string;
+      ADMIN?: string;
+      adcode?: string;
+    };
+  }
+
+  export interface GeographyProps {
+    geography: Geography;
+    style?: {
+      default?: CSSProperties;
+      hover?: CSSProperties;
+      pressed?: CSSProperties;
+    };
+    onClick?: () => void;
+    onMouseEnter?: () => void;
+    onMouseLeave?: () => void;
+  }
+
+  export interface ZoomableGroupProps {
+    center?: [number, number];
+    zoom?: number;
+    minZoom?: number;
+    maxZoom?: number;
+    onMoveEnd?: (position: { coordinates: [number, number]; zoom: number }) => void;
+    children?: ReactNode;
+  }
+
+  export interface MarkerProps {
+    coordinates: [number, number];
+    children?: ReactNode;
+  }
+
+  export const ComposableMap: ComponentType<ComposableMapProps>;
+  export const Geographies: ComponentType<GeographiesProps>;
+  export const Geography: ComponentType<GeographyProps>;
+  export const ZoomableGroup: ComponentType<ZoomableGroupProps>;
+  export const Marker: ComponentType<MarkerProps>;
+}
+`;
+}
+
+function generateGlobalCss(branding: PortalScaffoldConfig["branding"]): string {
+  return `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: ${branding.primaryColor};
+  --secondary: ${branding.secondaryColor};
+  --accent: ${branding.accentColor};
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply antialiased;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-slate-900;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-700 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-600;
+}
+
+/* Globe container */
+.globe-container canvas {
+  outline: none !important;
+}
+
+/* Animation utilities */
+@layer utilities {
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+  .animation-delay-400 {
+    animation-delay: 400ms;
+  }
+}
+`;
+}
+
+function generateRegionData(): string {
+  return `export interface MajorCity {
+  id: string;
+  name: string;
+  population?: string;
+  description?: string;
+  image?: string;
+  lat?: number;
+  lng?: number;
+  opportunities?: InvestmentOpportunity[];
+}
+
+export interface InvestmentOpportunity {
+  id: string;
+  title: string;
+  titleRu?: string;
+  titleZh?: string;
+  sector: string;
+  description: string;
+  descriptionRu?: string;
+  descriptionZh?: string;
+  investmentRange: string;
+  timeline: string;
+  status: 'active' | 'upcoming' | 'priority';
+}
+
+export interface KeyProject {
+  id: string;
+  name: string;
+  value: string;
+  sector: string;
+  description: string;
+  partners?: string[];
+  completionYear?: string;
+}
+
+export interface CompetitiveAdvantage {
+  icon: 'location' | 'infrastructure' | 'talent' | 'policy' | 'market' | 'resources' | 'logistics' | 'tech';
+  title: string;
+  description: string;
+}
+
+export interface NotableEntrepreneur {
+  name: string;
+  nameZh?: string;
+  nameRu?: string;
+  company: string;
+  industry: string;
+  netWorth?: string;
+  image?: string;
+  description?: string;
+}
+
+export interface RegionData {
+  name: string;
+  nameRu?: string;
+  nameZh?: string;
+  gdp: string;
+  population: string;
+  industries: string[];
+  industriesRu?: string[];
+  industriesZh?: string[];
+  sezCount: number;
+  taxBenefits: string[];
+  taxBenefitsRu?: string[];
+  taxBenefitsZh?: string[];
+  majorCities: MajorCity[];
+  description?: string;
+  descriptionRu?: string;
+  descriptionZh?: string;
+  overview: string;
+  overviewRu?: string;
+  overviewZh?: string;
+  opportunities: InvestmentOpportunity[];
+  keyProjects: KeyProject[];
+  advantages: CompetitiveAdvantage[];
+  targetSectors: string[];
+  targetSectorsRu?: string[];
+  targetSectorsZh?: string[];
+  notableEntrepreneurs?: NotableEntrepreneur[];
+  contactInfo?: {
+    investmentAgency: string;
+    website: string;
+    email?: string;
+    phone?: string;
+  };
+}
+
+export const CHINA_REGIONS: Record<string, RegionData> = {
+  "Beijing": {
+    name: "Beijing",
+    nameRu: "Пекин",
+    nameZh: "北京",
+    gdp: "$610 Billion",
+    population: "21.5 Million",
+    industries: ["Technology", "Finance", "Government Services", "Healthcare"],
+    industriesRu: ["Технологии", "Финансы", "Государственные услуги", "Здравоохранение"],
+    industriesZh: ["科技", "金融", "政府服务", "医疗"],
+    sezCount: 2,
+    taxBenefits: ["15% CIT for high-tech enterprises", "R&D expense super-deduction", "Talent incentives"],
+    taxBenefitsRu: ["15% налог на прибыль для высокотехнологичных предприятий", "Сверхвычет расходов на НИОКР", "Льготы для талантов"],
+    taxBenefitsZh: ["高新技术企业15%企业所得税", "研发费用加计扣除", "人才激励政策"],
+    majorCities: [
+      { id: "haidian", name: "Haidian District", population: "3.5M", lat: 39.9593, lng: 116.2986, image: "https://images.unsplash.com/photo-1584464491033-06628f3a6b7b?w=1920&q=80", description: "China's Silicon Valley - home to Zhongguancun tech hub, Tsinghua University, Peking University, and 20,000+ high-tech companies. The epicenter of AI, software, and deeptech in China.", opportunities: [
+        { id: "hd-1", title: "Zhongguancun Software Park JV", sector: "Software", description: "Joint ventures with China's top software companies. Access to 30,000+ developers and government contracts.", investmentRange: "$2M - $30M", timeline: "1-2 years", status: "active" },
+        { id: "hd-2", title: "University Technology Transfer", sector: "DeepTech", description: "Commercialize patents from Tsinghua and Peking University. AI, quantum computing, new materials focus.", investmentRange: "$1M - $20M", timeline: "2-3 years", status: "priority" },
+        { id: "hd-3", title: "AI Research Lab Partnerships", sector: "AI", description: "Co-develop AI solutions with Baidu, ByteDance, and state research institutes located in Haidian.", investmentRange: "$5M - $50M", timeline: "1-3 years", status: "active" }
+      ]},
+      { id: "chaoyang", name: "Chaoyang District", population: "3.9M", lat: 39.9219, lng: 116.4435, image: "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?w=1920&q=80", description: "Beijing's CBD and diplomatic center. Home to 170+ foreign embassies, Fortune 500 regional HQs, and luxury retail. The gateway for international business in China.", opportunities: [
+        { id: "cy-1", title: "CBD Grade A Office Development", sector: "Real Estate", description: "Premium office towers in Beijing's financial district. Strong demand from Russian and Central Asian firms.", investmentRange: "$50M - $300M", timeline: "3-5 years", status: "active" },
+        { id: "cy-2", title: "Russia-China Trade Service Center", titleRu: "Российско-китайский торговый сервисный центр", titleZh: "俄中贸易服务中心", sector: "Professional Services", description: "One-stop shop for bilateral trade: legal, accounting, consulting, and logistics coordination.", descriptionRu: "Универсальный центр для двусторонней торговли: юридические, бухгалтерские, консалтинговые и логистические услуги.", descriptionZh: "双边贸易一站式服务：法律、会计、咨询和物流协调。", investmentRange: "$2M - $10M", timeline: "1 year", status: "priority" },
+        { id: "cy-3", title: "798 Art District Cultural Exchange", sector: "Culture & Tourism", description: "Russia-China cultural center, gallery spaces, and creative industry incubator in famous art zone.", investmentRange: "$5M - $30M", timeline: "2-3 years", status: "upcoming" }
+      ]},
+      { id: "dongcheng", name: "Dongcheng District", population: "0.8M", lat: 39.9282, lng: 116.4160, image: "https://images.unsplash.com/photo-1537002295-36f0c5c56c97?w=1920&q=80", description: "Historic heart of Beijing with the Forbidden City, government ministries, and cultural heritage. Premium location for tourism, hospitality, and government relations.", opportunities: [
+        { id: "dc-1", title: "Heritage Hotel & Tourism", sector: "Hospitality", description: "Boutique hotels in historic hutong areas. Growing Russian tourist segment seeking cultural experiences.", investmentRange: "$10M - $50M", timeline: "2-3 years", status: "active" },
+        { id: "dc-2", title: "Government Affairs Advisory", sector: "Consulting", description: "Strategic advisory services for navigating China's regulatory landscape. Located near key ministries.", investmentRange: "$1M - $5M", timeline: "6-12 months", status: "active" }
+      ]}
+    ],
+    overview: "China's political and cultural capital, Beijing is a global hub for technology innovation, featuring Zhongguancun - Asia's Silicon Valley. The city leads in AI research, fintech, and biotech with unparalleled access to government resources and top universities.",
+    overviewRu: "Политическая и культурная столица Китая, Пекин является мировым центром технологических инноваций с районом Чжунгуаньцунь — азиатской Кремниевой долиной. Город лидирует в исследованиях ИИ, финтехе и биотехнологиях с беспрецедентным доступом к государственным ресурсам и ведущим университетам.",
+    overviewZh: "中国的政治和文化中心，北京是全球科技创新中心，拥有亚洲硅谷——中关村。该城市在人工智能研究、金融科技和生物技术方面处于领先地位，拥有无与伦比的政府资源和顶尖大学。",
+    targetSectors: ["Artificial Intelligence", "Fintech", "Biotech & Pharmaceuticals", "New Energy Vehicles", "Digital Economy"],
+    opportunities: [
+      { id: "bj-1", title: "Zhongguancun AI Innovation Hub", sector: "AI & Technology", description: "Joint venture opportunities in China's premier tech district. Access to 20,000+ high-tech companies, Tsinghua and Peking University talent pipeline, and government AI development fund.", investmentRange: "$5M - $100M", timeline: "2-3 years", status: "active" },
+      { id: "bj-2", title: "Beijing Daxing International Airport Economic Zone", sector: "Logistics & Aviation", description: "Duty-free retail, aircraft maintenance, and logistics hub development around the world's largest airport. Direct Russia cargo routes planned.", investmentRange: "$10M - $500M", timeline: "3-5 years", status: "priority" },
+      { id: "bj-3", title: "China-Russia Healthcare Innovation Center", titleRu: "Российско-китайский инновационный центр здравоохранения", titleZh: "中俄医疗创新中心", sector: "Biotech", description: "Bilateral medical technology development focusing on pharmaceuticals, medical devices, and telemedicine. Fast-track NMPA approval for Russian products.", descriptionRu: "Совместная разработка медицинских технологий: фармацевтика, медицинские изделия, телемедицина. Ускоренная регистрация российских продуктов в NMPA.", descriptionZh: "双边医疗技术开发，专注于制药、医疗器械和远程医疗。俄罗斯产品快速通过NMPA审批。", investmentRange: "$2M - $50M", timeline: "2-4 years", status: "active" },
+      { id: "bj-4", title: "Smart City Infrastructure Program", sector: "Smart City", description: "IoT sensors, 5G infrastructure, and urban AI management systems deployment across Beijing's new districts.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "upcoming" }
+    ],
+    keyProjects: [
+      { id: "bj-p1", name: "Beijing Universal Studios Phase 2", value: "$3.2 Billion", sector: "Tourism & Entertainment", description: "Expansion of the theme park with new attractions and hotels, seeking technology and content partners.", partners: ["Comcast NBCUniversal", "Beijing Tourism Group"], completionYear: "2028" },
+      { id: "bj-p2", name: "Beijing-Moscow High-Speed Rail Link", value: "$242 Billion", sector: "Infrastructure", description: "7,000km high-speed rail connecting capitals through Kazakhstan. Equipment supply and construction partnerships available.", partners: ["China Railway", "Russian Railways"], completionYear: "2035" },
+      { id: "bj-p3", name: "Zhongguancun Forum Tech Transfer", value: "$500 Million", sector: "Technology", description: "Annual funding for international tech commercialization projects, priority given to Russia-China joint ventures.", completionYear: "Ongoing" }
+    ],
+    advantages: [
+      { icon: "policy", title: "Political Hub", description: "Direct access to central government ministries and policy-making bodies. First city to implement new national policies." },
+      { icon: "talent", title: "Top Talent Pool", description: "Home to 92 universities including Tsinghua and Peking. 40% of China's AI researchers based here." },
+      { icon: "tech", title: "R&D Capital", description: "Highest R&D spending in China at 6.5% of GDP. 30,000+ high-tech enterprises in Zhongguancun alone." },
+      { icon: "infrastructure", title: "Global Connectivity", description: "Two international airports with direct flights to all Russian major cities. High-speed rail hub." }
+    ],
+    notableEntrepreneurs: [
+      { name: "Lei Jun", nameZh: "雷军", nameRu: "Лэй Цзюнь", company: "Xiaomi", industry: "Consumer Electronics", netWorth: "$13.5B", description: "Founder of Xiaomi, one of world's largest smartphone makers. Pioneer of internet-based hardware business model." },
+      { name: "Robin Li", nameZh: "李彦宏", nameRu: "Робин Ли", company: "Baidu", industry: "AI & Search", netWorth: "$6.5B", description: "Co-founder of Baidu, China's dominant search engine. Leading investor in autonomous driving and AI research." },
+      { name: "Zhang Yiming", nameZh: "张一鸣", nameRu: "Чжан Имин", company: "ByteDance", industry: "Social Media", netWorth: "$49.5B", description: "Founder of ByteDance (TikTok, Douyin). Created the world's most valuable startup and revolutionized short-form video." },
+      { name: "Wang Xing", nameZh: "王兴", nameRu: "Ван Син", company: "Meituan", industry: "E-commerce", netWorth: "$10.2B", description: "Founder of Meituan, China's largest local services platform. Dominates food delivery, hotel booking, and ride-hailing." }
+    ],
+    contactInfo: { investmentAgency: "Beijing Investment Promotion Bureau", website: "http://www.investbeijing.gov.cn", email: "invest@beijing.gov.cn", phone: "+86-10-55568888" }
+  },
+  "Shanghai": {
+    name: "Shanghai",
+    nameRu: "Шанхай",
+    nameZh: "上海",
+    gdp: "$670 Billion",
+    population: "24.3 Million",
+    industries: ["Finance", "International Trade", "Manufacturing", "Shipping"],
+    industriesRu: ["Финансы", "Международная торговля", "Производство", "Судоходство"],
+    industriesZh: ["金融", "国际贸易", "制造业", "航运"],
+    sezCount: 4,
+    taxBenefits: ["Free Trade Zone benefits", "15% CIT for qualified enterprises", "Import duty exemptions"],
+    taxBenefitsRu: ["Льготы зоны свободной торговли", "15% налог на прибыль для квалифицированных предприятий", "Освобождение от импортных пошлин"],
+    taxBenefitsZh: ["自贸区优惠政策", "合格企业15%企业所得税", "进口关税减免"],
+    majorCities: [
+      { id: "pudong", name: "Pudong New Area", population: "5.5M", lat: 31.2231, lng: 121.5440, image: "https://images.unsplash.com/photo-1538428494232-9c0d8a3ab403?w=1920&q=80", description: "China's financial powerhouse - home to Lujiazui financial district, Shanghai Stock Exchange, and Zhangjiang Hi-Tech Park. The Lingang Free Trade Zone offers unprecedented foreign investment openness.", opportunities: [
+        { id: "pd-1", title: "Lujiazui Financial Services", sector: "Finance", description: "Establish securities, asset management, or insurance operations in China's Wall Street. Full foreign ownership now permitted.", investmentRange: "$30M - $200M", timeline: "1-2 years", status: "priority" },
+        { id: "pd-2", title: "Zhangjiang Semiconductor Hub", sector: "Semiconductor", description: "IC design and manufacturing facilities with talent from SMIC, Huawei HiSilicon. Equipment import duty-free.", investmentRange: "$50M - $500M", timeline: "2-4 years", status: "priority" },
+        { id: "pd-3", title: "Lingang New Energy Vehicle Park", sector: "EV", description: "EV component manufacturing near Tesla Gigafactory. Supplier qualification assistance available.", investmentRange: "$20M - $100M", timeline: "1-3 years", status: "active" }
+      ]},
+      { id: "huangpu", name: "Huangpu District", population: "0.7M", lat: 31.2304, lng: 121.4737, image: "https://images.unsplash.com/photo-1474181487882-5abf3f0ba6c2?w=1920&q=80", description: "The historic Bund and Nanjing Road - Shanghai's most prestigious address. Premium retail, hospitality, and luxury brands. Shanghai's original commercial center.", opportunities: [
+        { id: "hp-1", title: "The Bund Luxury Retail", sector: "Retail", description: "Flagship stores on China's most famous shopping street. Russian luxury brands seeking China entry.", investmentRange: "$10M - $50M", timeline: "1-2 years", status: "active" },
+        { id: "hp-2", title: "Historic Building Hospitality", sector: "Hospitality", description: "Boutique hotels and restaurants in protected heritage buildings. Premium tourism segment.", investmentRange: "$20M - $80M", timeline: "2-3 years", status: "active" }
+      ]},
+      { id: "jing-an", name: "Jing'an District", population: "1.1M", image: "https://images.unsplash.com/photo-1545893835-abaa50cbe628?w=1920&q=80", description: "Shanghai's tech and creative hub - headquarters of many internet companies, creative agencies, and innovation centers. Excellent transport and lifestyle amenities.", opportunities: [
+        { id: "ja-1", title: "Tech Company Regional HQ", sector: "Technology", description: "Establish Asia-Pacific headquarters for Russian tech companies. Access to China's digital ecosystem.", investmentRange: "$5M - $30M", timeline: "1 year", status: "active" },
+        { id: "ja-2", title: "Creative Industry Incubator", sector: "Creative", description: "Design, gaming, and digital content studios. Strong local talent pool and government subsidies.", investmentRange: "$2M - $15M", timeline: "1-2 years", status: "upcoming" }
+      ]}
+    ],
+    overview: "China's financial capital and largest port city. Shanghai leads in international trade, financial services, and advanced manufacturing. The Lingang Free Trade Zone offers unprecedented openness for foreign investment with relaxed foreign ownership restrictions.",
+    overviewRu: "Финансовая столица Китая и крупнейший портовый город. Шанхай лидирует в международной торговле, финансовых услугах и передовом производстве. Зона свободной торговли Линьган предлагает беспрецедентную открытость для иностранных инвестиций со смягчёнными ограничениями на иностранное владение.",
+    overviewZh: "中国的金融中心和最大的港口城市。上海在国际贸易、金融服务和先进制造业方面处于领先地位。临港自贸区为外国投资提供了前所未有的开放政策，放宽了外资所有权限制。",
+    targetSectors: ["Financial Services", "Semiconductor & IC", "Biomedicine", "Smart Manufacturing", "International Trade"],
+    opportunities: [
+      { id: "sh-1", title: "Lingang New Area Semiconductor Cluster", sector: "Semiconductor", description: "Build fabs and IC design centers in China's most open semiconductor zone. Full foreign ownership allowed, 15% CIT for 5 years, equipment import duty-free.", investmentRange: "$100M - $2B", timeline: "3-5 years", status: "priority" },
+      { id: "sh-2", title: "Shanghai International Financial Center", sector: "Finance", description: "Establish wholly foreign-owned securities, insurance, or asset management firms. Access to STAR Market listing, Cross-border RMB settlement, and Shanghai-London Stock Connect.", investmentRange: "$50M - $500M", timeline: "1-2 years", status: "active" },
+      { id: "sh-3", title: "Zhangjiang Biomedical Innovation Park", sector: "Biotech", description: "R&D facilities for drug development with accelerated clinical trial approvals. 400+ biotech companies, CRO services, and hospital partnerships.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "active" },
+      { id: "sh-4", title: "Yangshan Deep-Water Port Logistics", sector: "Logistics", description: "Automated container terminal operations and cold chain logistics for Russia-China trade. Direct shipping lanes to Vladivostok and St. Petersburg.", investmentRange: "$20M - $300M", timeline: "2-4 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "sh-p1", name: "Tesla Gigafactory Shanghai Expansion", value: "$1.2 Billion", sector: "EV Manufacturing", description: "Supplier opportunities for battery components, motors, and software systems.", partners: ["Tesla", "CATL"], completionYear: "2026" },
+      { id: "sh-p2", name: "Shanghai STAR Market Technology Fund", value: "$15 Billion", sector: "Venture Capital", description: "Government-backed fund for tech IPOs. Co-investment opportunities for qualified foreign investors.", completionYear: "Ongoing" },
+      { id: "sh-p3", name: "China International Import Expo (CIIE) Permanent Platform", value: "$2 Billion", sector: "Trade", description: "Year-round exhibition and trading platform for Russian exporters. Preferential customs and certification for CIIE participants.", completionYear: "2027" }
+    ],
+    advantages: [
+      { icon: "market", title: "Financial Hub", description: "China's Wall Street with Shanghai Stock Exchange, 1,600+ financial institutions, and RMB internationalization center." },
+      { icon: "logistics", title: "World's Busiest Port", description: "Shanghai Port handles 47 million TEU annually. Direct shipping to all Russian ports." },
+      { icon: "policy", title: "Most Open FTZ", description: "Lingang allows full foreign ownership in more sectors than anywhere else in China." },
+      { icon: "infrastructure", title: "Premium Infrastructure", description: "Maglev train, two airports, extensive metro, and 5G coverage throughout the city." }
+    ],
+    notableEntrepreneurs: [
+      { name: "Colin Huang", nameZh: "黄峥", nameRu: "Колин Хуан", company: "Pinduoduo", industry: "E-commerce", netWorth: "$38.9B", description: "Founder of Pinduoduo, revolutionized social e-commerce. China's third-largest online marketplace." },
+      { name: "Jiang Bin", nameZh: "蒋滨", nameRu: "Цзян Бинь", company: "QuantumScape", industry: "Battery Technology", netWorth: "$2.1B", description: "Pioneering solid-state battery technology for next-generation electric vehicles." },
+      { name: "Richard Liu", nameZh: "刘强东", nameRu: "Ричард Лю", company: "JD.com", industry: "E-commerce & Logistics", netWorth: "$12.8B", description: "Founder of JD.com, China's largest direct-sales retailer. Built world-class logistics infrastructure." }
+    ],
+    contactInfo: { investmentAgency: "Shanghai Municipal Commission of Commerce", website: "http://www.investment.gov.cn", email: "invest@shanghai.gov.cn", phone: "+86-21-62752200" }
+  },
+  "Guangdong": {
+    name: "Guangdong",
+    nameRu: "Гуандун",
+    nameZh: "广东",
+    gdp: "$1.96 Trillion",
+    population: "126 Million",
+    industries: ["Electronics", "Manufacturing", "Export Trade", "Technology"],
+    sezCount: 6,
+    taxBenefits: ["Shenzhen SEZ incentives", "15% CIT for high-tech", "Greater Bay Area benefits"],
+    majorCities: [
+      { id: "guangzhou", name: "Guangzhou", population: "18.7M", image: "https://images.unsplash.com/photo-1583394838336-acd977736f90?w=1920&q=80", description: "South China's commercial capital and Canton Fair host city. Major hub for automotive, trade, and logistics. Gateway to the Greater Bay Area with excellent connectivity.", opportunities: [
+        { id: "gz-1", title: "Canton Fair Permanent Exhibition", sector: "Trade", description: "Year-round exhibition space at world's largest trade fair. Priority access for Russian exporters.", investmentRange: "$5M - $30M", timeline: "1-2 years", status: "priority" },
+        { id: "gz-2", title: "Guangzhou Auto Parts Cluster", sector: "Automotive", description: "Tier 1/2 supplier facilities near GAC, Honda, Toyota, and Nissan assembly plants.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" },
+        { id: "gz-3", title: "Nansha International Logistics Hub", sector: "Logistics", description: "Bonded warehousing and distribution center for Russia-China trade. Cold chain facilities available.", investmentRange: "$15M - $100M", timeline: "1-2 years", status: "active" }
+      ]},
+      { id: "shenzhen", name: "Shenzhen", population: "17.6M", image: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1920&q=80", description: "Global hardware capital and home to Huawei, Tencent, BYD, and DJI. World-leading electronics manufacturing ecosystem with same-day prototyping capabilities. China's most innovative city.", opportunities: [
+        { id: "sz-1", title: "Huaqiangbei Electronics Hub", sector: "Electronics", description: "World's largest electronics market - source components or establish trading operations. Instant access to any electronic part.", investmentRange: "$1M - $20M", timeline: "6-12 months", status: "active" },
+        { id: "sz-2", title: "Shenzhen Hardware Accelerator", sector: "Hardware", description: "Bring hardware products from prototype to mass production. Access to 10,000+ component suppliers within 1 hour.", investmentRange: "$500K - $10M", timeline: "6-18 months", status: "priority" },
+        { id: "sz-3", title: "Qianhai Fintech Zone", sector: "Fintech", description: "Cross-border fintech operations with RMB settlement capabilities. Blockchain and digital currency pilots.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" },
+        { id: "sz-4", title: "BYD EV Supply Partnership", sector: "EV", description: "Direct supplier partnerships with world's largest EV company. Battery, motors, and software components.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "priority" }
+      ]},
+      { id: "dongguan", name: "Dongguan", population: "10.5M", image: "https://images.unsplash.com/photo-1553697388-94e804e2f0f6?w=1920&q=80", description: "World's factory floor - the manufacturing powerhouse producing everything from electronics to furniture. Undergoing Industry 4.0 transformation with government subsidies for automation.", opportunities: [
+        { id: "dg-1", title: "Smart Factory Transformation", sector: "Manufacturing", description: "Upgrade 10,000+ factories with robotics and IoT. Government subsidizes 30% of automation costs.", investmentRange: "$2M - $30M", timeline: "1-2 years", status: "priority" },
+        { id: "dg-2", title: "Contract Manufacturing Partnership", sector: "Manufacturing", description: "OEM/ODM partnerships for consumer products. Furniture, toys, electronics, textiles expertise.", investmentRange: "$1M - $20M", timeline: "6-12 months", status: "active" },
+        { id: "dg-3", title: "Huawei Songshan Lake Campus", sector: "Technology", description: "R&D facilities near Huawei's spectacular European-style headquarters. Tech supplier opportunities.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" }
+      ]}
+    ],
+    overview: "China's richest province and the heart of the Greater Bay Area - a megalopolis rivaling Tokyo and New York. Shenzhen is the global hardware capital; Guangzhou is a trade hub; Dongguan is the world's factory floor. Combined, they form an unmatched manufacturing and innovation ecosystem.",
+    overviewRu: "Богатейшая провинция Китая и сердце района Большого залива — мегаполиса, соперничающего с Токио и Нью-Йорком. Шэньчжэнь — мировая столица электроники; Гуанчжоу — торговый хаб; Дунгуань — мировая фабрика. Вместе они образуют непревзойдённую производственную и инновационную экосистему.",
+    overviewZh: "中国最富裕的省份，也是粤港澳大湾区的核心——这个超级都市群可与东京和纽约媲美。深圳是全球硬件之都；广州是贸易中心；东莞是世界工厂。它们共同构成了无与伦比的制造和创新生态系统。",
+    targetSectors: ["Consumer Electronics", "5G & Telecom", "Electric Vehicles", "Smart Manufacturing", "Cross-border E-commerce"],
+    opportunities: [
+      { id: "gd-1", title: "Greater Bay Area Tech Corridor", sector: "Technology", description: "R&D centers with access to Huawei, Tencent, BYD, and DJI ecosystems. Shenzhen-Hong Kong-Macau innovation triangle participation.", investmentRange: "$5M - $200M", timeline: "1-3 years", status: "priority" },
+      { id: "gd-2", title: "Dongguan Smart Factory Transformation", sector: "Manufacturing", description: "Industry 4.0 upgrades for 10,000+ factories. Robotics, IoT, and AI integration opportunities. Government subsidizes 30% of upgrade costs.", investmentRange: "$2M - $50M", timeline: "1-2 years", status: "active" },
+      { id: "gd-3", title: "Qianhai Shenzhen-Hong Kong Cooperation Zone", sector: "Finance & Services", description: "Professional services, fintech, and cross-border business zone. HK-style tax regime (15% CIT), RMB cross-border lending.", investmentRange: "$10M - $100M", timeline: "1-2 years", status: "active" },
+      { id: "gd-4", title: "BYD EV Supply Chain Cluster", sector: "Electric Vehicles", description: "Tier 1/2 supplier opportunities for world's largest EV manufacturer. Battery materials, motors, electronics, and software.", investmentRange: "$20M - $500M", timeline: "2-4 years", status: "priority" }
+    ],
+    keyProjects: [
+      { id: "gd-p1", name: "Hong Kong-Zhuhai-Macau Bridge Economic Zone", value: "$20 Billion", sector: "Infrastructure", description: "Development zones around the 55km sea bridge. Logistics, tourism, and tech park opportunities.", partners: ["HKSAR Government", "Macau SAR"], completionYear: "2030" },
+      { id: "gd-p2", name: "Huawei Dongguan Campus Expansion", value: "$1.5 Billion", sector: "Technology", description: "Supply chain and R&D partnership opportunities with Huawei's European-style headquarters.", partners: ["Huawei"], completionYear: "2026" },
+      { id: "gd-p3", name: "Guangzhou Nansha International AI Island", value: "$3 Billion", sector: "AI", description: "1,000-company AI cluster with compute infrastructure and talent programs.", completionYear: "2028" }
+    ],
+    advantages: [
+      { icon: "market", title: "China's Richest Province", description: "GDP exceeds South Korea. 126 million consumers with highest disposable income in China." },
+      { icon: "infrastructure", title: "Manufacturing Paradise", description: "Complete supply chain for electronics within 100km. Same-day prototyping in Shenzhen." },
+      { icon: "logistics", title: "Export Gateway", description: "Guangzhou Port, Shenzhen Port, and Hong Kong Port handle 25% of China's trade." },
+      { icon: "tech", title: "Innovation Powerhouse", description: "Home to Huawei, Tencent, BYD, DJI, OPPO, Vivo. More PCT patents than most countries." }
+    ],
+    notableEntrepreneurs: [
+      { name: "Ma Huateng (Pony Ma)", nameZh: "马化腾", nameRu: "Ма Хуатэн", company: "Tencent", industry: "Technology & Gaming", netWorth: "$39.5B", description: "Co-founder of Tencent, operator of WeChat and world's largest gaming company. Pioneer of China's internet ecosystem." },
+      { name: "Ren Zhengfei", nameZh: "任正非", nameRu: "Жэнь Чжэнфэй", company: "Huawei", industry: "Telecommunications", netWorth: "$1.9B", description: "Founder of Huawei, world's largest telecom equipment maker. Built from military background to global tech giant." },
+      { name: "Wang Chuanfu", nameZh: "王传福", nameRu: "Ван Чуаньфу", company: "BYD", industry: "Electric Vehicles", netWorth: "$18.7B", description: "Founder of BYD, world's largest EV manufacturer. Warren Buffett-backed battery and automotive pioneer." },
+      { name: "Frank Wang", nameZh: "汪滔", nameRu: "Ван Тао", company: "DJI", industry: "Drones", netWorth: "$4.8B", description: "Founder of DJI, controls 70% of global consumer drone market. Started in Hong Kong dorm room." },
+      { name: "He Xiaopeng", nameZh: "何小鹏", nameRu: "Хэ Сяопэн", company: "XPeng", industry: "Electric Vehicles", netWorth: "$3.2B", description: "Co-founder of XPeng Motors, leading Chinese EV and autonomous driving startup." }
+    ],
+    contactInfo: { investmentAgency: "Guangdong Provincial Department of Commerce", website: "http://com.gd.gov.cn", email: "invest@gd.gov.cn", phone: "+86-20-38819912" }
+  },
+  "Jiangsu": {
+    name: "Jiangsu",
+    nameRu: "Цзянсу",
+    nameZh: "江苏",
+    gdp: "$1.88 Trillion",
+    population: "85 Million",
+    industries: ["Manufacturing", "Chemicals", "Textiles", "Electronics"],
+    sezCount: 5,
+    taxBenefits: ["Suzhou Industrial Park benefits", "Export processing zones", "High-tech park incentives"],
+    majorCities: [
+      { id: "nanjing", name: "Nanjing", population: "9.3M", image: "https://images.unsplash.com/photo-1599571234909-29ed5d1321d6?w=1920&q=80", description: "Historic capital of six dynasties and Jiangsu's provincial capital. Major center for education, research, and software development with 80+ universities and strong aerospace and automotive industries.", opportunities: [
+        { id: "nj-1", title: "Nanjing Software Valley Expansion", sector: "Software", description: "China's second-largest software park. AI, cloud computing, and enterprise software development. 200,000+ IT professionals.", investmentRange: "$3M - $50M", timeline: "1-2 years", status: "active" },
+        { id: "nj-2", title: "Jiangbei New Area Innovation Hub", sector: "Technology", description: "National-level new area focusing on integrated circuits, life sciences, and new finance. Generous tax incentives.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "priority" },
+        { id: "nj-3", title: "Aerospace & Defense Industrial Park", sector: "Aerospace", description: "Partnerships with AVIC and COMAC supply chain. Avionics, materials, and precision components.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "active" }
+      ]},
+      { id: "suzhou", name: "Suzhou", population: "12.7M", image: "https://images.unsplash.com/photo-1567253508485-0e0a4e3c4024?w=1920&q=80", description: "The Venice of the East - ancient gardens meet cutting-edge industry. Suzhou Industrial Park is China's most successful foreign investment zone with 5,000+ foreign enterprises and a 30-year track record.", opportunities: [
+        { id: "sz-sip-1", title: "Suzhou Industrial Park Biotech Bay", sector: "Biotech", description: "Asia's premier biotech cluster with 500+ companies. Direct NMPA engagement, Cold Spring Harbor partnership.", investmentRange: "$10M - $200M", timeline: "2-4 years", status: "priority" },
+        { id: "sz-sip-2", title: "Suzhou Nanotechnology Hub", sector: "Advanced Materials", description: "China's national nanotechnology center. Research partnerships and commercialization support.", investmentRange: "$5M - $80M", timeline: "2-3 years", status: "active" },
+        { id: "sz-sip-3", title: "Precision Manufacturing Cluster", sector: "Manufacturing", description: "World-class precision machining and automation. Supply chain for semiconductor equipment, medical devices.", investmentRange: "$3M - $50M", timeline: "1-2 years", status: "active" }
+      ]},
+      { id: "wuxi", name: "Wuxi", population: "7.5M", image: "https://images.unsplash.com/photo-1598887142487-3c854d51d678?w=1920&q=80", description: "China's national IoT demonstration city and semiconductor base. Beautiful lakeside location with strong manufacturing tradition now transforming into high-tech hub.", opportunities: [
+        { id: "wx-1", title: "Wuxi IoT Valley", sector: "IoT", description: "China's largest IoT industrial base. Sensors, connectivity, and smart city applications. National demonstration zone.", investmentRange: "$5M - $100M", timeline: "1-3 years", status: "priority" },
+        { id: "wx-2", title: "Integrated Circuit Design Center", sector: "Semiconductor", description: "IC design services and fabless semiconductor companies. Partnership with local foundries.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" },
+        { id: "wx-3", title: "New Energy Equipment Manufacturing", sector: "Clean Energy", description: "Solar panel components, wind turbine parts, and energy storage systems manufacturing.", investmentRange: "$15M - $120M", timeline: "2-4 years", status: "active" }
+      ]}
+    ],
+    overview: "China's second-richest province and manufacturing powerhouse. Suzhou Industrial Park is the gold standard for foreign investment zones, home to 5,000+ foreign enterprises. Strong in precision manufacturing, chemicals, and increasingly in biotech and IC design.",
+    targetSectors: ["Precision Manufacturing", "Biotech", "IC Design", "New Materials", "Advanced Chemicals"],
+    opportunities: [
+      { id: "js-1", title: "Suzhou Industrial Park Biotech Valley", sector: "Biotech", description: "500+ biotech companies, world-class CRO/CDMO services, and direct NMPA engagement. Partnership with Cold Spring Harbor Laboratory.", investmentRange: "$10M - $200M", timeline: "2-4 years", status: "active" },
+      { id: "js-2", title: "Wuxi IoT Innovation Center", sector: "IoT", description: "China's national IoT demonstration zone. Sensor manufacturing, smart city applications, and industrial IoT platforms.", investmentRange: "$5M - $100M", timeline: "1-3 years", status: "active" },
+      { id: "js-3", title: "Nanjing Software Valley", sector: "Software", description: "70,000+ software engineers, AI and cloud computing focus. Partnerships with Alibaba Cloud, Huawei Cloud available.", investmentRange: "$3M - $50M", timeline: "1-2 years", status: "active" },
+      { id: "js-4", title: "Yangtze River Chemical Industry Transformation", sector: "Chemicals", description: "Green chemistry and specialty chemicals investment. Government relocating polluting plants, opening space for advanced chemical manufacturing.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" }
+    ],
+    keyProjects: [
+      { id: "js-p1", name: "Samsung Suzhou Semiconductor Expansion", value: "$8 Billion", sector: "Semiconductor", description: "NAND flash expansion creating massive supply chain opportunities.", partners: ["Samsung Electronics"], completionYear: "2027" },
+      { id: "js-p2", name: "Jiangsu-Russia Science Park", value: "$200 Million", sector: "Technology", description: "Dedicated park for Russia-China tech transfer and joint ventures.", completionYear: "2026" }
+    ],
+    advantages: [
+      { icon: "infrastructure", title: "Premium Industrial Parks", description: "Suzhou Industrial Park is China's most successful FDI zone with 30-year track record." },
+      { icon: "talent", title: "Engineering Talent", description: "167 universities, strong vocational training. Reliable skilled labor supply." },
+      { icon: "logistics", title: "Yangtze Delta Location", description: "2 hours to Shanghai by high-speed rail. Excellent river and sea port access." },
+      { icon: "policy", title: "Pro-Business Government", description: "Efficient bureaucracy, English-speaking investment services, 30+ years FDI experience." }
+    ],
+    contactInfo: { investmentAgency: "Jiangsu Provincial Department of Commerce", website: "http://swt.jiangsu.gov.cn", email: "invest@jiangsu.gov.cn", phone: "+86-25-57710228" }
+  },
+  "Shandong": {
+    name: "Shandong",
+    nameRu: "Шаньдун",
+    nameZh: "山东",
+    gdp: "$1.34 Trillion",
+    population: "101 Million",
+    industries: ["Petrochemicals", "Agriculture", "Heavy Industry", "Mining"],
+    sezCount: 4,
+    taxBenefits: ["Qingdao FTZ benefits", "Agricultural tax incentives", "Industrial zone benefits"],
+    majorCities: [
+      { id: "jinan", name: "Jinan", population: "9.2M", image: "https://images.unsplash.com/photo-1584464491033-06628f3a6b7b?w=1920&q=80", description: "The City of Springs - Shandong's capital with 72 famous springs. Major center for heavy industry, software, and government services. Growing focus on quantum computing and AI.", opportunities: [
+        { id: "jn-1", title: "Jinan Quantum Valley", sector: "Quantum Technology", description: "China's quantum computing and communication research center. Partnership with University of Science and Technology of China.", investmentRange: "$10M - $100M", timeline: "3-5 years", status: "priority" },
+        { id: "jn-2", title: "Heavy Equipment Modernization", sector: "Manufacturing", description: "Upgrade traditional machinery manufacturing with smart factory solutions. Local government subsidies available.", investmentRange: "$5M - $80M", timeline: "2-3 years", status: "active" }
+      ]},
+      { id: "qingdao", name: "Qingdao", population: "10.1M", image: "https://images.unsplash.com/photo-1569155235789-b0d2e6ea6cb7?w=1920&q=80", description: "Beautiful coastal city with German heritage, home to Tsingtao Beer, Haier, and Hisense. Major port and SCO cooperation hub. Excellent quality of life with beaches and mountains.", opportunities: [
+        { id: "qd-1", title: "SCO Local Cooperation Demonstration Zone", sector: "Trade", description: "Dedicated zone for SCO member trade. Fast customs, RMB settlement, preferential policies for Russian goods.", investmentRange: "$5M - $100M", timeline: "1-2 years", status: "priority" },
+        { id: "qd-2", title: "Haier Smart Manufacturing Partnership", sector: "Manufacturing", description: "Supply chain and technology partnerships with world's largest appliance maker. Industry 4.0 showcase.", investmentRange: "$10M - $150M", timeline: "2-3 years", status: "active" },
+        { id: "qd-3", title: "Marine Technology & Blue Economy", sector: "Marine", description: "Ocean observation equipment, marine biotech, and offshore engineering. Partnership with Ocean University of China.", investmentRange: "$5M - $80M", timeline: "2-4 years", status: "active" },
+        { id: "qd-4", title: "Craft Brewing & Food Processing", sector: "Food & Beverage", description: "Premium food and beverage manufacturing. Leverage Tsingtao Beer heritage and local agriculture.", investmentRange: "$2M - $30M", timeline: "1-2 years", status: "active" }
+      ]},
+      { id: "yantai", name: "Yantai", population: "7.1M", image: "https://images.unsplash.com/photo-1569947609091-b29675c88880?w=1920&q=80", description: "China's wine capital and major seafood producer. Beautiful coastal city with strong ties to South Korea. Growing in automotive components and precision manufacturing.", opportunities: [
+        { id: "yt-1", title: "Yantai Wine Industry Development", sector: "Wine & Agriculture", description: "China's premier wine region. Vineyard acquisition, winery partnerships, and wine tourism development.", investmentRange: "$5M - $50M", timeline: "2-3 years", status: "active" },
+        { id: "yt-2", title: "Seafood Processing & Cold Chain", sector: "Food Processing", description: "Modern seafood processing facilities for Russia-sourced products. Cold chain infrastructure for export.", investmentRange: "$10M - $80M", timeline: "1-3 years", status: "priority" },
+        { id: "yt-3", title: "Automotive Components Hub", sector: "Automotive", description: "Tier 1/2 supplier facilities near Hyundai, GM, and BYD plants. Growing EV component demand.", investmentRange: "$8M - $60M", timeline: "2-3 years", status: "active" }
+      ]}
+    ],
+    overview: "China's third-largest economy and agricultural heartland. Shandong bridges North and East China with strong heavy industry, petrochemicals, and food processing. Qingdao is a major port city with German heritage and brewing tradition; Yantai excels in wine and seafood.",
+    targetSectors: ["Petrochemicals", "Marine Economy", "High-end Equipment", "Food Processing", "New Energy"],
+    opportunities: [
+      { id: "sd-1", title: "Qingdao SCO Demonstration Zone", sector: "Trade & Logistics", description: "Dedicated zone for Shanghai Cooperation Organization trade. Fast customs clearance for Russia-origin goods, RMB settlement, and logistics hub.", investmentRange: "$10M - $200M", timeline: "1-3 years", status: "priority" },
+      { id: "sd-2", title: "Yantai LNG Terminal & Petrochemical Complex", sector: "Energy", description: "Russia-sourced LNG receiving and processing. Integrate with Siberia-China pipeline network.", investmentRange: "$100M - $1B", timeline: "3-5 years", status: "active" },
+      { id: "sd-3", title: "Shandong Marine Ranching Program", sector: "Fisheries", description: "Modern aquaculture, offshore platforms, and seafood processing. Technical partnerships with Russian Far East fisheries.", investmentRange: "$5M - $100M", timeline: "2-4 years", status: "active" },
+      { id: "sd-4", title: "Weifang Hydrogen Economy Pilot", sector: "New Energy", description: "Green hydrogen production, fuel cell manufacturing, and hydrogen vehicle deployment.", investmentRange: "$20M - $300M", timeline: "3-5 years", status: "upcoming" }
+    ],
+    keyProjects: [
+      { id: "sd-p1", name: "Qingdao Sino-Russian Local Cooperation Park", value: "$500 Million", sector: "Manufacturing", description: "Dedicated industrial park for Russian manufacturing enterprises in China.", completionYear: "2027" },
+      { id: "sd-p2", name: "Rizhao Steel Green Transformation", value: "$3 Billion", sector: "Steel", description: "Carbon-neutral steel production using Russian iron ore and hydrogen technology.", partners: ["Rizhao Steel"], completionYear: "2030" }
+    ],
+    advantages: [
+      { icon: "resources", title: "Agricultural Base", description: "China's top producer of vegetables, fruits, and seafood. 100 million consumer market." },
+      { icon: "logistics", title: "Strategic Ports", description: "Qingdao Port ranks 5th globally. Direct routes to Russian Pacific ports." },
+      { icon: "market", title: "SCO Hub", description: "Only SCO local economic cooperation demonstration zone. Preferential Russia-China trade policies." },
+      { icon: "infrastructure", title: "Industrial Foundation", description: "Mature heavy industry base with skilled workforce and supplier ecosystem." }
+    ],
+    contactInfo: { investmentAgency: "Shandong Provincial Department of Commerce", website: "http://commerce.shandong.gov.cn", email: "invest@shandong.gov.cn", phone: "+86-531-89013333" }
+  },
+  "Zhejiang": {
+    name: "Zhejiang",
+    nameRu: "Чжэцзян",
+    nameZh: "浙江",
+    gdp: "$1.23 Trillion",
+    population: "65.4 Million",
+    industries: ["E-commerce", "Manufacturing", "Textiles", "Digital Economy"],
+    sezCount: 4,
+    taxBenefits: ["Hangzhou digital economy incentives", "Cross-border e-commerce benefits", "Small business tax breaks"],
+    majorCities: [
+      { id: "hangzhou", name: "Hangzhou", population: "12.2M", image: "https://images.unsplash.com/photo-1599571234909-29ed5d1321d6?w=1920&q=80", description: "China's digital capital and home to Alibaba, Ant Group, and NetEase. Historic city with UNESCO World Heritage West Lake. 2022 Asian Games host with world-class infrastructure.", opportunities: [
+        { id: "hz-1", title: "Alibaba Ecosystem Partnership", sector: "E-commerce", description: "Launch on Tmall Global, access Alibaba Cloud, and leverage Cainiao logistics. Direct partnership support.", investmentRange: "$1M - $50M", timeline: "6-18 months", status: "priority" },
+        { id: "hz-2", title: "Hangzhou AI Town", sector: "AI", description: "1,000-hectare AI innovation zone with DAMO Academy. Computing infrastructure, talent programs, and funding.", investmentRange: "$5M - $100M", timeline: "2-4 years", status: "active" },
+        { id: "hz-3", title: "Digital Healthcare Hub", sector: "HealthTech", description: "Internet hospital platforms, medical AI, and digital therapeutics. Partnership with top hospitals.", investmentRange: "$3M - $60M", timeline: "1-3 years", status: "active" },
+        { id: "hz-4", title: "Fintech & Digital Payments", sector: "Fintech", description: "Payment solutions, blockchain applications, and digital banking. Ant Group ecosystem access.", investmentRange: "$5M - $80M", timeline: "1-2 years", status: "active" }
+      ]},
+      { id: "ningbo", name: "Ningbo", population: "9.4M", image: "https://images.unsplash.com/photo-1544550581-5f7ceaf7f992?w=1920&q=80", description: "World's largest port by cargo tonnage and China's private enterprise capital. Strong manufacturing base with excellent logistics. Gateway for Russia-China maritime trade.", opportunities: [
+        { id: "nb-1", title: "Ningbo Port Russia Trade Hub", sector: "Logistics", description: "Bonded warehousing and distribution for Russia-China trade. Connect Trans-Siberian Railway to maritime routes.", investmentRange: "$10M - $150M", timeline: "2-3 years", status: "priority" },
+        { id: "nb-2", title: "Auto Parts & Mold Manufacturing", sector: "Manufacturing", description: "China's mold-making capital with precision manufacturing. Automotive and appliance component clusters.", investmentRange: "$5M - $80M", timeline: "1-3 years", status: "active" },
+        { id: "nb-3", title: "Petrochemical & New Materials", sector: "Chemicals", description: "Integration with Zhenhai Refinery complex. Specialty chemicals and advanced polymers.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "active" }
+      ]},
+      { id: "wenzhou", name: "Wenzhou", population: "9.6M", image: "https://images.unsplash.com/photo-1516483638261-f4dbaf036963?w=1920&q=80", description: "China's entrepreneurship capital - birthplace of private enterprise. Famous for shoes, leather goods, and eyewear. Strong overseas Chinese network with global trade connections.", opportunities: [
+        { id: "wz-1", title: "Fashion & Footwear Innovation", sector: "Fashion", description: "Partner with China's largest shoe manufacturing cluster. Smart manufacturing and sustainable materials.", investmentRange: "$2M - $40M", timeline: "1-2 years", status: "active" },
+        { id: "wz-2", title: "Eyewear Manufacturing Hub", sector: "Manufacturing", description: "World's largest eyewear production base. OEM/ODM for global brands and own-brand development.", investmentRange: "$3M - $50M", timeline: "1-2 years", status: "active" },
+        { id: "wz-3", title: "Cross-border E-commerce Pilot", sector: "E-commerce", description: "Leverage Wenzhou merchant networks for Russia market entry. Established trade channels to CIS countries.", investmentRange: "$1M - $20M", timeline: "6-12 months", status: "priority" }
+      ]}
+    ],
+    overview: "Home to Alibaba and China's most dynamic private sector. Zhejiang leads in e-commerce, digital payments, and private entrepreneurship. Hangzhou hosts Alibaba, Ant Group, and NetEase; Ningbo is a major port; Wenzhou is famous for private enterprise.",
+    targetSectors: ["Digital Economy", "E-commerce", "Fashion & Textiles", "Smart Manufacturing", "Cross-border Trade"],
+    opportunities: [
+      { id: "zj-1", title: "Alibaba Cross-border E-commerce Ecosystem", sector: "E-commerce", description: "Launch on Tmall Global, AliExpress, and Lazada. Warehouse and fulfillment services in Hangzhou Cross-border E-commerce Comprehensive Zone.", investmentRange: "$1M - $50M", timeline: "6-18 months", status: "active" },
+      { id: "zj-2", title: "Ningbo Russia Trade Logistics Center", sector: "Logistics", description: "Bonded warehouse and distribution center for Russia-China trade. Connect Trans-Siberian Railway to Ningbo Port.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "priority" },
+      { id: "zj-3", title: "Hangzhou AI Town", sector: "AI", description: "1,000-hectare AI innovation zone with Alibaba DAMO Academy partnership. Computing infrastructure and talent programs.", investmentRange: "$5M - $100M", timeline: "2-4 years", status: "active" },
+      { id: "zj-4", title: "Zhejiang Fashion Industry Upgrade", sector: "Textiles", description: "Smart garment manufacturing, sustainable textiles, and fashion tech. Partnerships with 50,000+ textile factories.", investmentRange: "$3M - $50M", timeline: "1-3 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "zj-p1", name: "Ant Group Digital Finance Platform", value: "$2 Billion", sector: "Fintech", description: "Cross-border payment and digital banking partnerships for Russia-China trade.", partners: ["Ant Group"], completionYear: "Ongoing" },
+      { id: "zj-p2", name: "Geely-Volvo New Energy Vehicle Hub", value: "$1 Billion", sector: "Automotive", description: "EV manufacturing and supply chain opportunities.", partners: ["Geely", "Volvo"], completionYear: "2027" }
+    ],
+    advantages: [
+      { icon: "tech", title: "Digital Economy Leader", description: "Home to Alibaba, Ant Group, NetEase. Most advanced digital commerce ecosystem in China." },
+      { icon: "market", title: "Private Sector Engine", description: "65% of GDP from private enterprises. Entrepreneurial culture with strong SME ecosystem." },
+      { icon: "logistics", title: "Ningbo Port", description: "World's 3rd largest cargo port. Direct connections to Russia via sea and rail." },
+      { icon: "infrastructure", title: "E-commerce Infrastructure", description: "Most developed cross-border e-commerce zone. Streamlined customs for online retail." }
+    ],
+    notableEntrepreneurs: [
+      { name: "Jack Ma", nameZh: "马云", nameRu: "Джек Ма", company: "Alibaba Group", industry: "E-commerce & Fintech", netWorth: "$25.5B", description: "Founder of Alibaba, created world's largest e-commerce ecosystem. Former English teacher who built China's tech empire." },
+      { name: "Zhong Shanshan", nameZh: "钟睒睒", nameRu: "Чжун Шаньшань", company: "Nongfu Spring", industry: "Beverages & Pharma", netWorth: "$62.3B", description: "China's richest person. Founded Nongfu Spring bottled water and major pharma stake. Famously private 'Lone Wolf'." },
+      { name: "Ding Lei (William Ding)", nameZh: "丁磊", nameRu: "Дин Лэй", company: "NetEase", industry: "Gaming & Music", netWorth: "$25.8B", description: "Founder of NetEase, one of China's largest gaming and music streaming companies." },
+      { name: "Li Shufu", nameZh: "李书福", nameRu: "Ли Шуфу", company: "Geely", industry: "Automotive", netWorth: "$16.2B", description: "Founder of Geely, owns Volvo, Lotus, and Polestar. China's most acquisitive auto entrepreneur." }
+    ],
+    contactInfo: { investmentAgency: "Zhejiang Provincial Department of Commerce", website: "http://zcom.zj.gov.cn", email: "invest@zj.gov.cn", phone: "+86-571-87057626" }
+  },
+  "Henan": {
+    name: "Henan",
+    nameRu: "Хэнань",
+    nameZh: "河南",
+    gdp: "$870 Billion",
+    population: "99 Million",
+    industries: ["Agriculture", "Food Processing", "Logistics", "Manufacturing"],
+    sezCount: 3,
+    taxBenefits: ["Zhengzhou Airport Economy Zone", "Central China incentives", "Agricultural processing benefits"],
+    majorCities: [
+      { id: "zhengzhou", name: "Zhengzhou", population: "12.6M", image: "https://images.unsplash.com/photo-1569078449082-93b5a5127c78?w=1920&q=80", description: "China's logistics crossroads where all major rail lines intersect. Home to Foxconn's largest iPhone factory and China-Europe Railway terminus. Gateway to 100 million Central China consumers.", opportunities: [
+        { id: "zz-1", title: "Zhengzhou Airport Economy Zone", sector: "Logistics", description: "China's fastest-growing air cargo hub. Direct freight to Moscow. Bonded logistics for electronics and e-commerce.", investmentRange: "$20M - $200M", timeline: "2-3 years", status: "priority" },
+        { id: "zz-2", title: "Foxconn iPhone City Supply Chain", sector: "Electronics", description: "Supply chain opportunities for world's largest smartphone factory. 300,000 workers and massive component demand.", investmentRange: "$5M - $100M", timeline: "1-2 years", status: "active" },
+        { id: "zz-3", title: "China-Europe Railway Terminal", sector: "Trade", description: "Largest China-Europe rail hub. Direct trains to Moscow, Hamburg, Duisburg. Trade processing and logistics.", investmentRange: "$10M - $150M", timeline: "2-3 years", status: "active" }
+      ]},
+      { id: "luoyang", name: "Luoyang", population: "7.1M", image: "https://images.unsplash.com/photo-1600077106724-946750eeaf3c?w=1920&q=80", description: "Ancient capital with 13 dynasties of history. Now a heavy machinery and agricultural equipment center. Famous for peonies and Longmen Grottoes UNESCO site.", opportunities: [
+        { id: "ly-1", title: "Luoyang Heavy Machinery JV", sector: "Machinery", description: "Partnerships with CIMC, Yituo, and other major equipment manufacturers. Mining and agricultural machinery.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "active" },
+        { id: "ly-2", title: "Cultural Tourism Development", sector: "Tourism", description: "Longmen Grottoes UNESCO site area development. Hotels and cultural experiences.", investmentRange: "$5M - $80M", timeline: "2-4 years", status: "active" }
+      ]},
+      { id: "kaifeng", name: "Kaifeng", population: "4.8M", image: "https://images.unsplash.com/photo-1547981609-4b6bfe67ca0b?w=1920&q=80", description: "Song Dynasty capital with preserved ancient city. Food processing hub with strong agricultural connections. Growing cultural tourism destination.", opportunities: [
+        { id: "kf-1", title: "Kaifeng Food Processing Zone", sector: "Food", description: "Agricultural processing for Central China's wheat and produce. Cold chain and distribution development.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" }
+      ]}
+    ],
+    overview: "China's most populous province and transportation crossroads. Zhengzhou is a national logistics hub connecting all major cities by rail. Agricultural powerhouse leading in wheat, pork, and food processing. Emerging smartphone manufacturing center (Foxconn).",
+    targetSectors: ["Logistics", "Food Processing", "Electronics Assembly", "Agriculture", "Cold Chain"],
+    opportunities: [
+      { id: "hn-1", title: "Zhengzhou Air Cargo Hub", sector: "Logistics", description: "China's largest air cargo hub by growth rate. Direct freight to Moscow, Novosibirsk. Bonded logistics for high-value goods.", investmentRange: "$20M - $200M", timeline: "2-3 years", status: "priority" },
+      { id: "hn-2", title: "Central China Cold Chain Network", sector: "Cold Chain", description: "Connect Russian food exports to 100 million Central China consumers. Cold storage, distribution, and retail partnerships.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" },
+      { id: "hn-3", title: "Foxconn Zhengzhou Supplier Park", sector: "Electronics", description: "Supply chain opportunities for world's largest iPhone factory. 300,000 workers, massive component demand.", investmentRange: "$5M - $100M", timeline: "1-2 years", status: "active" },
+      { id: "hn-4", title: "Henan Agricultural Technology Zone", sector: "AgTech", description: "Precision farming, seed technology, and agricultural machinery. Partnerships with China's wheat research institutes.", investmentRange: "$3M - $50M", timeline: "2-3 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "hn-p1", name: "China-Europe Railway (Zhengzhou) Hub", value: "$1 Billion", sector: "Logistics", description: "Expanding rail freight terminal for Belt and Road. Direct trains to Moscow, Hamburg, Duisburg.", completionYear: "2027" },
+      { id: "hn-p2", name: "Shuanghui-Smithfield Meat Processing Expansion", value: "$500 Million", sector: "Food", description: "World's largest pork producer expanding cold chain and processing capacity.", partners: ["WH Group"], completionYear: "2026" }
+    ],
+    advantages: [
+      { icon: "logistics", title: "National Crossroads", description: "All major rail lines intersect in Zhengzhou. 2-hour flight to 90% of China's population." },
+      { icon: "market", title: "100 Million Consumers", description: "Massive local market with rapidly growing middle class." },
+      { icon: "resources", title: "Agricultural Powerhouse", description: "25% of China's wheat, 10% of pork. World-class food processing industry." },
+      { icon: "talent", title: "Labor Abundance", description: "Large skilled workforce at competitive costs. Strong vocational training system." }
+    ],
+    contactInfo: { investmentAgency: "Henan Provincial Department of Commerce", website: "http://www.hncom.gov.cn", email: "invest@henan.gov.cn", phone: "+86-371-63576035" }
+  },
+  "Sichuan": {
+    name: "Sichuan",
+    nameRu: "Сычуань",
+    nameZh: "四川",
+    gdp: "$830 Billion",
+    population: "83.7 Million",
+    industries: ["Electronics", "Aerospace", "Agriculture", "Tourism"],
+    sezCount: 3,
+    taxBenefits: ["Western Development incentives", "15% CIT for encouraged industries", "Land use discounts"],
+    majorCities: [
+      { id: "chengdu", name: "Chengdu", population: "21.2M", image: "https://images.unsplash.com/photo-1590093441241-e00f1a9b3b84?w=1920&q=80", description: "Western China's tech capital and one of China's most livable cities. Home to giant pandas, spicy cuisine, and thriving startup scene. Dual airport city with direct Moscow flights.", opportunities: [
+        { id: "cd-1", title: "Tianfu Software Park Innovation Hub", sector: "Gaming & Tech", description: "China's gaming capital with 1,000+ studios. Game development, localization, and publishing partnerships.", investmentRange: "$2M - $50M", timeline: "1-2 years", status: "priority" },
+        { id: "cd-2", title: "Chengdu Aerospace Industrial Park", sector: "Aerospace", description: "Commercial aircraft components, satellites, and drones. COMAC and AVIC supply chain opportunities.", investmentRange: "$20M - $300M", timeline: "3-5 years", status: "active" },
+        { id: "cd-3", title: "China-Europe Railway Western Hub", sector: "Logistics", description: "Direct rail to Europe through Russia. Fastest route for Western China exports. Logistics development.", investmentRange: "$10M - $150M", timeline: "2-3 years", status: "active" },
+        { id: "cd-4", title: "Panda & Cultural Tourism", sector: "Tourism", description: "Giant Panda breeding center, Sichuan cuisine experiences, and cultural tourism. Growing Russian tourist interest.", investmentRange: "$5M - $100M", timeline: "2-4 years", status: "active" }
+      ]},
+      { id: "mianyang", name: "Mianyang", population: "4.9M", image: "https://images.unsplash.com/photo-1569254998317-8e794e1c5fb1?w=1920&q=80", description: "China's Science City - home to numerous defense research institutes. Strong in electronics, new materials, and high-tech manufacturing. Relatively lower costs than Chengdu.", opportunities: [
+        { id: "my-1", title: "Mianyang High-Tech Zone", sector: "Technology", description: "Electronics, new materials, and precision manufacturing. Access to defense technology spinoffs.", investmentRange: "$5M - $80M", timeline: "2-3 years", status: "active" },
+        { id: "my-2", title: "Display Technology Manufacturing", sector: "Electronics", description: "BOE and other display manufacturers. Panel and component supply chain.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "active" }
+      ]},
+      { id: "leshan", name: "Leshan", population: "3.2M", image: "https://images.unsplash.com/photo-1591122947157-26bad3a117d2?w=1920&q=80", description: "UNESCO Giant Buddha heritage site and silicon materials production center. Beautiful confluence of three rivers. Growing tourism and clean energy industries.", opportunities: [
+        { id: "ls-1", title: "Leshan Silicon Materials Base", sector: "Materials", description: "Polysilicon and solar material production. Clean energy supply chain development.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "priority" },
+        { id: "ls-2", title: "Giant Buddha Tourism Development", sector: "Tourism", description: "UNESCO World Heritage site area. Hotels, cruise tourism, and cultural experiences.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" }
+      ]}
+    ],
+    overview: "Western China's economic powerhouse and gateway to Southwest Asia. Chengdu rivals coastal cities in livability and innovation. Strong aerospace, electronics, and gaming industries. Famous for pandas, cuisine, and rapidly growing tech scene.",
+    targetSectors: ["Aerospace & Aviation", "Gaming & Entertainment", "Electronics", "Biomedicine", "Tourism"],
+    opportunities: [
+      { id: "sc-1", title: "Chengdu Aerospace Industrial Park", sector: "Aerospace", description: "Commercial aircraft components, satellites, and drones. Partnership with COMAC and AVIC subsidiaries.", investmentRange: "$20M - $300M", timeline: "3-5 years", status: "priority" },
+      { id: "sc-2", title: "Tianfu Software Park Gaming Hub", sector: "Gaming", description: "China's gaming capital with 1,000+ studios. Localization, development, and publishing partnerships.", investmentRange: "$2M - $50M", timeline: "1-2 years", status: "active" },
+      { id: "sc-3", title: "Chengdu-Europe Railway Gateway", sector: "Logistics", description: "Direct rail link to Europe through Russia. Fastest route for Western China exports. Logistics and trade hub development.", investmentRange: "$10M - $150M", timeline: "2-3 years", status: "active" },
+      { id: "sc-4", title: "Sichuan Panda Cultural Tourism", sector: "Tourism", description: "Eco-tourism, theme parks, and cultural experiences. Growing Russian tourist interest in Sichuan.", investmentRange: "$5M - $100M", timeline: "2-4 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "sc-p1", name: "Chengdu Tianfu International Airport", value: "$11 Billion", sector: "Aviation", description: "China's 4th largest airport. Cargo and logistics zone development ongoing.", completionYear: "2025" },
+      { id: "sc-p2", name: "China-Russia Sichuan Technology Park", value: "$150 Million", sector: "Technology", description: "Joint R&D center for aerospace, new materials, and energy technology.", completionYear: "2027" }
+    ],
+    advantages: [
+      { icon: "talent", title: "Tech Talent Hub", description: "56 universities, strong in engineering and software. Lower costs than coastal cities." },
+      { icon: "infrastructure", title: "Dual Airport City", description: "Two international airports with direct Moscow flights. High-speed rail expanding rapidly." },
+      { icon: "policy", title: "Western Development Zone", description: "15% CIT rate, land discounts, and talent subsidies under national policy." },
+      { icon: "market", title: "Gateway to SW Asia", description: "Strategic location for accessing Southeast Asian markets via rail and road." }
+    ],
+    contactInfo: { investmentAgency: "Sichuan Provincial Department of Commerce", website: "http://swt.sc.gov.cn", email: "invest@sichuan.gov.cn", phone: "+86-28-83220039" }
+  },
+  "Hubei": {
+    name: "Hubei",
+    nameRu: "Хубэй",
+    nameZh: "湖北",
+    gdp: "$770 Billion",
+    population: "57.5 Million",
+    industries: ["Automotive", "Steel", "Optoelectronics", "Biomedicine"],
+    sezCount: 3,
+    taxBenefits: ["Wuhan Optics Valley incentives", "Central China development benefits", "High-tech enterprise benefits"],
+    majorCities: [
+      { id: "wuhan", name: "Wuhan", population: "13.6M", image: "https://images.unsplash.com/photo-1568485248685-019a98426c14?w=1920&q=80", description: "Central China's megapolis spanning three cities at the Yangtze confluence. China's optical fiber and laser capital (Optics Valley). Major automotive center with Dongfeng Motor headquarters.", opportunities: [
+        { id: "wh-1", title: "Optics Valley Innovation Hub", sector: "Optoelectronics", description: "China's laser and fiber optics capital. BOE, Huawei optical, and 100+ laser companies. Display technology R&D.", investmentRange: "$10M - $200M", timeline: "2-3 years", status: "priority" },
+        { id: "wh-2", title: "Dongfeng EV Partnership", sector: "Automotive", description: "Electric vehicle development with Dongfeng Motor Group. Component manufacturing and technology JVs.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" },
+        { id: "wh-3", title: "Wuhan Biotech Valley", sector: "Biotech", description: "Vaccine development, biomanufacturing, and medical devices. Post-pandemic public health investment focus.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" },
+        { id: "wh-4", title: "Yangtze River Port Logistics", sector: "Logistics", description: "China's largest inland port. River transport connecting Central China to Shanghai.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "active" }
+      ]},
+      { id: "yichang", name: "Yichang", population: "4.0M", image: "https://images.unsplash.com/photo-1547981609-4b6bfe67ca0b?w=1920&q=80", description: "Gateway to the Three Gorges Dam - world's largest hydropower station. Major chemicals and phosphate mining center. Beautiful Yangtze Gorges tourism.", opportunities: [
+        { id: "yc-1", title: "Clean Energy & Chemicals", sector: "Energy", description: "Leverage Three Gorges hydropower for energy-intensive industries. Green chemicals and hydrogen.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "active" },
+        { id: "yc-2", title: "Three Gorges Tourism", sector: "Tourism", description: "Dam visits, Yangtze cruises, and scenic area development. Growing international tourism.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
+      ]},
+      { id: "xiangyang", name: "Xiangyang", population: "5.3M", image: "https://images.unsplash.com/photo-1580844947206-7b2e1a3257c1?w=1920&q=80", description: "Ancient walled city and automotive manufacturing base. Dongfeng commercial vehicle headquarters. Strategic location on the Han River with growing aerospace industry.", opportunities: [
+        { id: "xy-1", title: "Commercial Vehicle Manufacturing", sector: "Automotive", description: "Dongfeng commercial trucks, buses, and special vehicles. Component supply chain opportunities.", investmentRange: "$10M - $150M", timeline: "2-4 years", status: "active" },
+        { id: "xy-2", title: "Aerospace Components", sector: "Aerospace", description: "Aviation component manufacturing for AVIC and COMAC. Growing aerospace cluster.", investmentRange: "$15M - $120M", timeline: "3-5 years", status: "upcoming" }
+      ]}
+    ],
+    overview: "Central China's industrial heart with Wuhan as a tri-city megapolis. Optics Valley is China's laser and fiber optics capital. Strong automotive sector (Dongfeng) and emerging biotech. Strategic Yangtze River location for logistics.",
+    targetSectors: ["Optoelectronics", "Automotive", "Biotech", "Steel & Materials", "Education"],
+    opportunities: [
+      { id: "hb-1", title: "Wuhan Optics Valley Expansion", sector: "Optoelectronics", description: "Laser equipment, fiber optics, and display technology. Home to BOE, Huawei optical, and 100+ laser companies.", investmentRange: "$10M - $200M", timeline: "2-3 years", status: "priority" },
+      { id: "hb-2", title: "Dongfeng Auto New Energy JV", sector: "Automotive", description: "Electric vehicle development with Dongfeng Motor Group. Component manufacturing and technology partnerships.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" },
+      { id: "hb-3", title: "Wuhan Biotech Innovation Center", sector: "Biotech", description: "Vaccine development, biomanufacturing, and medical devices. Leveraging post-pandemic investment in public health.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" },
+      { id: "hb-4", title: "Yangtze River Industrial Corridor", sector: "Logistics", description: "River port development connecting Central China to Shanghai. Steel, grain, and container logistics.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "hb-p1", name: "YMTC Memory Chip Expansion", value: "$24 Billion", sector: "Semiconductor", description: "China's leading NAND manufacturer expanding capacity. Supply chain opportunities.", partners: ["YMTC"], completionYear: "2027" },
+      { id: "hb-p2", name: "Wuhan High-Speed Rail Hub", value: "$3 Billion", sector: "Infrastructure", description: "Central China's largest rail hub expansion.", completionYear: "2028" }
+    ],
+    advantages: [
+      { icon: "tech", title: "Optics Valley", description: "China's fiber optics and laser capital. 30% of China's optical fiber produced here." },
+      { icon: "talent", title: "University City", description: "89 universities with 1.3 million students. Strongest engineering talent in Central China." },
+      { icon: "logistics", title: "Yangtze Gateway", description: "Wuhan Port is largest inland port. Direct water route to Shanghai." },
+      { icon: "infrastructure", title: "Transportation Hub", description: "High-speed rail connections to all major cities within 4 hours." }
+    ],
+    contactInfo: { investmentAgency: "Hubei Provincial Department of Commerce", website: "http://swt.hubei.gov.cn", email: "invest@hubei.gov.cn", phone: "+86-27-87235520" }
+  },
+  "Hunan": {
+    name: "Hunan",
+    nameRu: "Хунань",
+    nameZh: "湖南",
+    gdp: "$680 Billion",
+    population: "66.2 Million",
+    industries: ["Construction Machinery", "Electronics", "Agriculture", "Culture Media"],
+    sezCount: 2,
+    taxBenefits: ["Changsha Economic Zone benefits", "Central China incentives", "Cultural industry support"],
+    majorCities: [
+      { id: "changsha", name: "Changsha", population: "10.5M", image: "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=1920&q=80", description: "Capital of Hunan and emerging tech hub. Home to SANY and Zoomlion headquarters - world's largest construction machinery makers. Vibrant entertainment industry and famous for spicy cuisine.", opportunities: [
+        { id: "cs-1", title: "SANY-Russia Heavy Machinery JV", sector: "Construction Machinery", description: "Partner with world's largest concrete machinery maker. Mining and construction equipment for Russian market.", investmentRange: "$20M - $200M", timeline: "2-3 years", status: "priority" },
+        { id: "cs-2", title: "Changsha AI Manufacturing Hub", sector: "AI", description: "Industrial AI applications for smart factories. Autonomous construction equipment development.", investmentRange: "$5M - $80M", timeline: "2-4 years", status: "active" },
+        { id: "cs-3", title: "Mango TV Media Partnership", sector: "Entertainment", description: "Content co-production and streaming platform partnerships with China's top entertainment network.", investmentRange: "$3M - $50M", timeline: "1-2 years", status: "active" }
+      ]},
+      { id: "zhuzhou", name: "Zhuzhou", population: "3.9M", image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1920&q=80", description: "China's rail transport capital. Home to CRRC Zhuzhou producing electric locomotives, metro trains, and maglev systems. Key supplier for Belt and Road rail projects.", opportunities: [
+        { id: "zz-1", title: "CRRC Rail Equipment Partnership", sector: "Rail Transport", description: "Electric locomotives and metro systems for Russia modernization. Technology transfer and local production.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" },
+        { id: "zz-2", title: "Maglev Technology Cooperation", sector: "Transport", description: "Medium-speed maglev for urban transit. China's most advanced maglev technology.", investmentRange: "$100M - $800M", timeline: "5-7 years", status: "upcoming" },
+        { id: "zz-3", title: "Rail Components Manufacturing", sector: "Manufacturing", description: "Traction systems, signaling, and rolling stock components for rail industry.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "active" }
+      ]},
+      { id: "xiangtan", name: "Xiangtan", population: "2.7M", image: "https://images.unsplash.com/photo-1569336415962-a4bd9f69cd83?w=1920&q=80", description: "Birthplace of Chairman Mao and industrial city in the Changsha-Zhuzhou-Xiangtan city cluster. Strong in steel, machinery, and new energy vehicles.", opportunities: [
+        { id: "xt-1", title: "Xiangtan Steel Green Upgrade", sector: "Steel", description: "Low-carbon steel production technology. Hydrogen-based steelmaking pilot.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "active" },
+        { id: "xt-2", title: "Electric Bus Manufacturing", sector: "EV", description: "Electric bus production for urban transit. Strong domestic demand and export potential.", investmentRange: "$15M - $120M", timeline: "2-3 years", status: "active" }
+      ]}
+    ],
+    overview: "Home to construction machinery giants SANY and Zoomlion. Strong in rail transport equipment (CRRC Zhuzhou), entertainment media, and agriculture. Changsha is an emerging cultural and innovation hub.",
+    targetSectors: ["Construction Machinery", "Rail Transport", "Media & Entertainment", "Agriculture", "New Materials"],
+    opportunities: [
+      { id: "hun-1", title: "SANY Heavy Equipment JV", sector: "Machinery", description: "Partnership opportunities with world's largest concrete machinery manufacturer. Export and technology cooperation.", investmentRange: "$10M - $200M", timeline: "2-4 years", status: "active" },
+      { id: "hun-2", title: "Zhuzhou Rail Innovation Hub", sector: "Rail", description: "R&D for electric locomotives, metro systems, and maglev. CRRC partnership opportunities.", investmentRange: "$20M - $300M", timeline: "3-5 years", status: "priority" }
+    ],
+    keyProjects: [
+      { id: "hun-p1", name: "Changsha AI Industrial Park", value: "$500 Million", sector: "AI", description: "AI applications for manufacturing and autonomous vehicles.", completionYear: "2027" }
+    ],
+    advantages: [
+      { icon: "infrastructure", title: "Machinery Capital", description: "SANY, Zoomlion headquarters. Complete construction equipment supply chain." },
+      { icon: "talent", title: "Engineering Excellence", description: "Strong technical universities and vocational training." }
+    ],
+    contactInfo: { investmentAgency: "Hunan Provincial Department of Commerce", website: "http://swt.hunan.gov.cn", email: "invest@hunan.gov.cn" }
+  },
+  "Fujian": {
+    name: "Fujian",
+    nameRu: "Фуцзянь",
+    nameZh: "福建",
+    gdp: "$730 Billion",
+    population: "41.5 Million",
+    industries: ["Electronics", "Machinery", "Textiles", "Maritime Trade"],
+    sezCount: 4,
+    taxBenefits: ["Xiamen SEZ benefits", "Taiwan Strait incentives", "Free trade pilot zone"],
+    majorCities: [
+      { id: "fuzhou", name: "Fuzhou", population: "8.3M", image: "https://images.unsplash.com/photo-1545893835-abaa50cbe628?w=1920&q=80", description: "Provincial capital with rich history and growing tech sector. Headquarters of Ningde (CATL) nearby - world's largest EV battery maker. Strong textile and electronics industries.", opportunities: [
+        { id: "fz-1", title: "CATL Battery Supply Chain", sector: "Battery", description: "Component supplier partnerships with world's largest battery maker. Cathode, anode, and separator materials.", investmentRange: "$30M - $300M", timeline: "2-4 years", status: "priority" },
+        { id: "fz-2", title: "Fuzhou Software Park", sector: "Software", description: "Software development and BPO services. Strong talent from local universities.", investmentRange: "$3M - $40M", timeline: "1-2 years", status: "active" },
+        { id: "fz-3", title: "Fujian FTZ Headquarters", sector: "Trade", description: "Regional headquarters for Russia-China trade operations. Bonded logistics and trade finance.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" }
+      ]},
+      { id: "xiamen", name: "Xiamen", population: "5.3M", image: "https://images.unsplash.com/photo-1578632292335-df3abbb0d586?w=1920&q=80", description: "Beautiful coastal city and original SEZ. Known as China's garden city with excellent quality of life. Strong in electronics, software, and cross-strait trade.", opportunities: [
+        { id: "xm-1", title: "Xiamen Cross-Strait E-commerce", sector: "E-commerce", description: "E-commerce platform leveraging Taiwan and Southeast Asia trade networks.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" },
+        { id: "xm-2", title: "Xiamen Software Park II", sector: "IT", description: "Software development and IT services. Dell, IBM, and local firms present.", investmentRange: "$3M - $40M", timeline: "1-2 years", status: "active" },
+        { id: "xm-3", title: "Xiamen Port Logistics Hub", sector: "Logistics", description: "Container shipping and logistics for Southeast Asia trade. Direct Russia routes via Arctic.", investmentRange: "$15M - $150M", timeline: "2-3 years", status: "active" }
+      ]},
+      { id: "quanzhou", name: "Quanzhou", population: "8.8M", image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1920&q=80", description: "Ancient maritime Silk Road starting point. China's sportswear capital - home to Anta, 361°, and Peak. Strong in shoes, textiles, and stone materials.", opportunities: [
+        { id: "qz-1", title: "Sportswear Manufacturing JV", sector: "Apparel", description: "Partnership with Anta, 361°, Peak for Russian market sportswear. OEM and brand licensing.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "priority" },
+        { id: "qz-2", title: "Smart Textile Manufacturing", sector: "Textiles", description: "Industry 4.0 textile production. Automated garment manufacturing.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" },
+        { id: "qz-3", title: "Quanzhou Stone Materials", sector: "Materials", description: "Premium stone and ceramic tiles for construction. Export to Russia and Central Asia.", investmentRange: "$5M - $40M", timeline: "1-2 years", status: "active" }
+      ]}
+    ],
+    overview: "Taiwan-facing province with special cross-strait policies. Xiamen is a beautiful coastal city with strong trade ties. Strong in electronics, sportswear (Anta, Li-Ning), and tea. Gateway for Taiwan investment into mainland.",
+    targetSectors: ["Electronics", "Sportswear & Apparel", "Taiwan Trade", "Maritime", "New Energy"],
+    opportunities: [
+      { id: "fj-1", title: "Xiamen Cross-Strait E-commerce Zone", sector: "E-commerce", description: "Leverage Taiwan trade relationships and logistics infrastructure for regional e-commerce.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" },
+      { id: "fj-2", title: "Fuzhou New Energy Vehicle Cluster", sector: "EV", description: "CATL battery headquarters region. EV supply chain opportunities.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "priority" }
+    ],
+    keyProjects: [
+      { id: "fj-p1", name: "CATL Battery Expansion", value: "$5 Billion", sector: "Battery", description: "World's largest battery maker expanding in home province.", partners: ["CATL"], completionYear: "2027" }
+    ],
+    advantages: [
+      { icon: "policy", title: "Taiwan Gateway", description: "Special policies for Taiwan business. Unique cross-strait opportunities." },
+      { icon: "logistics", title: "Maritime Hub", description: "Major ports facing Taiwan and Southeast Asia." }
+    ],
+    contactInfo: { investmentAgency: "Fujian Provincial Department of Commerce", website: "http://swt.fujian.gov.cn", email: "invest@fujian.gov.cn" }
+  },
+  "Anhui": {
+    name: "Anhui",
+    nameRu: "Аньхой",
+    nameZh: "安徽",
+    gdp: "$680 Billion",
+    population: "61 Million",
+    industries: ["Automotive", "Home Appliances", "New Energy", "AI"],
+    sezCount: 2,
+    taxBenefits: ["Hefei high-tech zone benefits", "Yangtze Delta integration incentives", "New energy vehicle support"],
+    majorCities: [
+      { id: "hefei", name: "Hefei", population: "9.4M", image: "https://images.unsplash.com/photo-1617952739858-28043cecdae3?w=1920&q=80", description: "China's fastest-rising tech hub and new EV capital. Home to NIO HQ, VW EV plant, USTC (quantum computing leader), and iFlytek (voice AI). Aggressive government investment strategy attracting global firms.", opportunities: [
+        { id: "hf-1", title: "NIO EV Supply Partnership", sector: "EV", description: "Direct supplier relationships with premium EV maker. Battery, motors, electronics, and software.", investmentRange: "$20M - $200M", timeline: "2-3 years", status: "priority" },
+        { id: "hf-2", title: "Hefei Quantum Computing Hub", sector: "Quantum", description: "China's quantum technology center with USTC. Quantum communication and computing research.", investmentRange: "$10M - $100M", timeline: "3-5 years", status: "upcoming" },
+        { id: "hf-3", title: "iFlytek AI Ecosystem", sector: "AI", description: "Voice recognition and AI partnerships with China's leading AI company.", investmentRange: "$5M - $80M", timeline: "1-3 years", status: "active" },
+        { id: "hf-4", title: "BOE Display Technology Park", sector: "Display", description: "LCD and OLED display manufacturing. Supply chain for global electronics.", investmentRange: "$30M - $300M", timeline: "2-4 years", status: "active" }
+      ]},
+      { id: "wuhu", name: "Wuhu", population: "3.6M", image: "https://images.unsplash.com/photo-1569336415962-a4bd9f69cd83?w=1920&q=80", description: "Home to Chery Automobile - China's largest automotive exporter. Major robotics and new materials center on the Yangtze River.", opportunities: [
+        { id: "wh-1", title: "Chery Auto Export Partnership", sector: "Automotive", description: "Partnership with China's top car exporter. CKD assembly and distribution for Russia.", investmentRange: "$30M - $200M", timeline: "2-3 years", status: "priority" },
+        { id: "wh-2", title: "Wuhu Robotics Cluster", sector: "Robotics", description: "Industrial robotics manufacturing. EFORT and other leading robot makers.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
+      ]},
+      { id: "maanshan", name: "Ma'anshan", population: "2.2M", image: "https://images.unsplash.com/photo-1553877522-43269d4ea984?w=1920&q=80", description: "Major steel city transitioning to advanced manufacturing. Strategic location near Nanjing with excellent logistics connections.", opportunities: [
+        { id: "mas-1", title: "Green Steel Technology", sector: "Steel", description: "Low-carbon steel production. Hydrogen-based reduction technology.", investmentRange: "$50M - $400M", timeline: "3-5 years", status: "active" },
+        { id: "mas-2", title: "New Materials Industrial Park", sector: "Materials", description: "Advanced steel products and new materials for automotive and construction.", investmentRange: "$15M - $120M", timeline: "2-4 years", status: "active" }
+      ]}
+    ],
+    overview: "Fastest-growing provincial economy and EV powerhouse. Hefei attracted NIO, Volkswagen, and emerging as AI center. Home appliance giants (Midea factories), display technology (BOE), and quantum computing research.",
+    targetSectors: ["Electric Vehicles", "AI & Quantum Computing", "Home Appliances", "Display Technology", "New Materials"],
+    opportunities: [
+      { id: "ah-1", title: "Hefei EV Capital Investment", sector: "EV", description: "NIO headquarters, VW EV factory, and 200+ EV suppliers. Complete supply chain for electric vehicles.", investmentRange: "$20M - $500M", timeline: "2-4 years", status: "priority" },
+      { id: "ah-2", title: "Quantum Computing Research Park", sector: "Quantum", description: "China's quantum computing center with USTC partnership. Cutting-edge research opportunities.", investmentRange: "$10M - $100M", timeline: "3-5 years", status: "upcoming" }
+    ],
+    keyProjects: [
+      { id: "ah-p1", name: "NIO Hefei Advanced Manufacturing", value: "$1 Billion", sector: "EV", description: "Premium EV manufacturing expansion.", partners: ["NIO"], completionYear: "2026" }
+    ],
+    advantages: [
+      { icon: "tech", title: "EV Capital", description: "China's emerging electric vehicle center with full supply chain." },
+      { icon: "talent", title: "USTC Excellence", description: "Top science university with quantum computing breakthroughs." }
+    ],
+    contactInfo: { investmentAgency: "Anhui Provincial Department of Commerce", website: "http://swt.ah.gov.cn", email: "invest@anhui.gov.cn" }
+  },
+  "Liaoning": {
+    name: "Liaoning",
+    nameRu: "Ляонин",
+    nameZh: "辽宁",
+    gdp: "$400 Billion",
+    population: "42.5 Million",
+    industries: ["Heavy Industry", "Shipbuilding", "Petrochemicals", "Equipment Manufacturing"],
+    sezCount: 3,
+    taxBenefits: ["Northeast revitalization incentives", "Dalian FTZ benefits", "Equipment manufacturing support"],
+    majorCities: [
+      { id: "shenyang", name: "Shenyang", population: "9.1M", image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1920&q=80", description: "Northeast China's largest city and traditional heavy industry capital. Home to Shenyang Machine Tool, BMW Brilliance, and major aerospace facilities. Deep Russian influence in architecture and culture.", opportunities: [
+        { id: "sy-1", title: "Shenyang Heavy Machinery 4.0", sector: "Machinery", description: "Smart manufacturing upgrades for machine tools and industrial equipment. German-style precision engineering.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "priority" },
+        { id: "sy-2", title: "BMW Brilliance Supply Chain", sector: "Automotive", description: "Component supply for BMW's largest global production base. Premium auto parts.", investmentRange: "$15M - $150M", timeline: "2-3 years", status: "active" },
+        { id: "sy-3", title: "Shenyang Aerospace Industrial Park", sector: "Aerospace", description: "Aircraft components and UAV manufacturing. AVIC partnership opportunities.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "active" }
+      ]},
+      { id: "dalian", name: "Dalian", population: "7.5M", image: "https://images.unsplash.com/photo-1559682468-a6a29e7d9517?w=1920&q=80", description: "Beautiful coastal city dubbed 'Northern Hong Kong'. Major port with direct Russia routes, strong software industry, and shipbuilding. Popular Japanese and Korean business destination.", opportunities: [
+        { id: "dl-1", title: "Dalian Russia Trade Hub", sector: "Trade", description: "Comprehensive trade zone for Russia imports/exports. Direct shipping to Vladivostok (2 days).", investmentRange: "$10M - $100M", timeline: "1-2 years", status: "priority" },
+        { id: "dl-2", title: "Dalian Software Park", sector: "IT", description: "Japan/Korea outsourcing hub expanding to Russia. 100,000+ IT professionals.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" },
+        { id: "dl-3", title: "Dalian Shipbuilding Partnership", sector: "Shipbuilding", description: "LNG carriers, tankers, and container ships. Dalian Shipbuilding is among world's largest.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" },
+        { id: "dl-4", title: "Dalian Petrochemical Complex", sector: "Petrochemicals", description: "Downstream oil processing and specialty chemicals. Russian crude processing.", investmentRange: "$100M - $800M", timeline: "4-6 years", status: "upcoming" }
+      ]},
+      { id: "anshan", name: "Anshan", population: "3.3M", image: "https://images.unsplash.com/photo-1597473322203-2c4f0e36e1c3?w=1920&q=80", description: "Steel capital of China with Ansteel Group - one of world's largest steelmakers. Rich iron ore reserves and complete metallurgy supply chain.", opportunities: [
+        { id: "as-1", title: "Ansteel Green Steel Partnership", sector: "Steel", description: "Low-carbon steel production and technology. Electric arc furnace and hydrogen reduction.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" },
+        { id: "as-2", title: "Steel Products Processing", sector: "Manufacturing", description: "High-value steel products for automotive and construction. Specialized alloys.", investmentRange: "$20M - $150M", timeline: "2-4 years", status: "active" }
+      ]}
+    ],
+    overview: "Northeast China's industrial heartland with strong Russian ties. Dalian is a major port and tech hub; Shenyang leads in heavy machinery. Deep historical and economic connections with Russia.",
+    targetSectors: ["Heavy Machinery", "Shipbuilding", "Petrochemicals", "Russia Trade", "Software"],
+    opportunities: [
+      { id: "ln-1", title: "Dalian Russia Trade Gateway", sector: "Trade", description: "Direct shipping to Vladivostok, trade processing zone for Russian goods.", investmentRange: "$10M - $100M", timeline: "1-3 years", status: "priority" },
+      { id: "ln-2", title: "Shenyang Heavy Equipment Modernization", sector: "Machinery", description: "Industry 4.0 upgrades for China's machinery base. Robot integration and smart manufacturing.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "ln-p1", name: "Dalian Shipbuilding Expansion", value: "$2 Billion", sector: "Shipbuilding", description: "LNG carriers and container ships for Russia-China routes.", completionYear: "2028" }
+    ],
+    advantages: [
+      { icon: "location", title: "Russia Gateway", description: "Closest major port to Russian Far East. Direct connections to Vladivostok." },
+      { icon: "infrastructure", title: "Industrial Base", description: "China's traditional heavy industry center with skilled workforce." }
+    ],
+    contactInfo: { investmentAgency: "Liaoning Provincial Department of Commerce", website: "http://swt.ln.gov.cn", email: "invest@liaoning.gov.cn" }
+  },
+  "Shaanxi": {
+    name: "Shaanxi",
+    nameRu: "Шэньси",
+    nameZh: "陕西",
+    gdp: "$450 Billion",
+    population: "39.5 Million",
+    industries: ["Aerospace", "Energy", "Technology", "Tourism"],
+    sezCount: 2,
+    taxBenefits: ["Xi'an High-tech Zone incentives", "Western Development policy", "Belt and Road benefits"],
+    majorCities: [
+      { id: "xian", name: "Xi'an", population: "13M", image: "https://images.unsplash.com/photo-1529551739587-e242c564f727?w=1920&q=80", description: "Ancient capital of 13 dynasties and terminus of the Silk Road. Home to Terracotta Warriors, major aerospace center, and Samsung's largest semiconductor fab outside Korea. Starting point for China-Europe freight rail.", opportunities: [
+        { id: "xa-1", title: "Xi'an Aerospace Supply Chain", sector: "Aerospace", description: "Aircraft components, satellites, and UAVs for AVIC and COMAC. Avionics and materials.", investmentRange: "$20M - $300M", timeline: "3-5 years", status: "priority" },
+        { id: "xa-2", title: "Chang'an-Europe Rail Hub", sector: "Logistics", description: "Rail freight terminus for China-Europe routes. Bonded logistics and trade processing to Moscow.", investmentRange: "$15M - $150M", timeline: "2-3 years", status: "priority" },
+        { id: "xa-3", title: "Xi'an Samsung Semiconductor Ecosystem", sector: "Semiconductor", description: "Supply chain for Samsung's $17B NAND fab. Equipment, materials, and services.", investmentRange: "$30M - $250M", timeline: "2-4 years", status: "active" },
+        { id: "xa-4", title: "Silk Road Cultural Tourism", sector: "Tourism", description: "Terracotta Warriors, ancient city walls, and Silk Road heritage. Premium cultural experiences.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
+      ]},
+      { id: "baoji", name: "Baoji", population: "3.3M", image: "https://images.unsplash.com/photo-1569336415962-a4bd9f69cd83?w=1920&q=80", description: "Titanium capital of China and major defense manufacturing center. Produces 90% of China's titanium. Strategic location on ancient Silk Road.", opportunities: [
+        { id: "bj-1", title: "Baoji Titanium Partnership", sector: "Materials", description: "Titanium production and processing for aerospace and medical. 90% of China's titanium.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "priority" },
+        { id: "bj-2", title: "Defense Equipment Conversion", sector: "Manufacturing", description: "Civilian applications of defense manufacturing capabilities. Precision machinery.", investmentRange: "$15M - $120M", timeline: "2-4 years", status: "active" }
+      ]},
+      { id: "xianyang", name: "Xianyang", population: "4.2M", image: "https://images.unsplash.com/photo-1547981609-4b6bfe67ca0b?w=1920&q=80", description: "Ancient Qin Dynasty capital adjacent to Xi'an airport. Major electronics manufacturing and pharmaceutical production. Growing logistics hub.", opportunities: [
+        { id: "xy-1", title: "Xi'an Airport Economy Zone", sector: "Logistics", description: "Air cargo and e-commerce logistics near major international airport.", investmentRange: "$20M - $180M", timeline: "2-3 years", status: "active" },
+        { id: "xy-2", title: "Pharmaceutical Manufacturing", sector: "Pharma", description: "Traditional Chinese medicine and generic drug production.", investmentRange: "$15M - $100M", timeline: "2-4 years", status: "active" }
+      ]}
+    ],
+    overview: "Ancient capital and Belt and Road starting point. Xi'an is a major aerospace center (AVIC, COMAC), technology hub, and tourist destination (Terracotta Warriors). Key node for China-Europe rail freight.",
+    targetSectors: ["Aerospace", "Belt and Road Trade", "Tourism", "Technology", "Energy"],
+    opportunities: [
+      { id: "sax-1", title: "Xi'an Aerospace Industrial Base", sector: "Aerospace", description: "Aircraft components, satellites, and UAVs. AVIC and COMAC supply chain opportunities.", investmentRange: "$20M - $300M", timeline: "3-5 years", status: "priority" },
+      { id: "sax-2", title: "Chang'an-Europe Railway Hub", sector: "Logistics", description: "China-Europe freight train origin point. Logistics park development for Russia-China trade.", investmentRange: "$10M - $150M", timeline: "2-3 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "sax-p1", name: "Xi'an International Trade Port", value: "$800 Million", sector: "Logistics", description: "Expanding rail freight terminal and bonded zone.", completionYear: "2027" }
+    ],
+    advantages: [
+      { icon: "logistics", title: "Belt and Road Hub", description: "Starting point of Chang'an-Europe railway. Direct trains to Moscow." },
+      { icon: "infrastructure", title: "Aerospace Center", description: "Major aircraft manufacturing base with complete supply chain." }
+    ],
+    contactInfo: { investmentAgency: "Shaanxi Provincial Department of Commerce", website: "http://sxdofcom.shaanxi.gov.cn", email: "invest@shaanxi.gov.cn" }
+  },
+  "Jiangxi": {
+    name: "Jiangxi",
+    nameRu: "Цзянси",
+    nameZh: "江西",
+    gdp: "$430 Billion",
+    population: "45.2 Million",
+    industries: ["Aviation", "Electronics", "New Materials", "Rare Earths"],
+    sezCount: 2,
+    taxBenefits: ["Central China development benefits", "Aviation industry incentives", "Rare earth processing support"],
+    majorCities: [
+      { id: "nanchang", name: "Nanchang", population: "6.3M", image: "https://images.unsplash.com/photo-1599571234909-29ed5d1321d6?w=1920&q=80", description: "Provincial capital and birthplace of PLA. Emerging aviation manufacturing hub with helicopter production. Host of World VR Industry Conference - China's VR capital.", opportunities: [
+        { id: "nc-1", title: "Nanchang Aviation Manufacturing", sector: "Aviation", description: "Helicopter and trainer aircraft production. AVIC Hongdu partnership opportunities.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "priority" },
+        { id: "nc-2", title: "Nanchang VR Industry Hub", sector: "VR/AR", description: "China's VR industry center with 200+ companies. Hardware and content development.", investmentRange: "$5M - $80M", timeline: "2-3 years", status: "active" },
+        { id: "nc-3", title: "Nanchang High-tech Zone", sector: "Electronics", description: "LED and semiconductor lighting. Electronic components manufacturing.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "active" }
+      ]},
+      { id: "ganzhou", name: "Ganzhou", population: "9.8M", image: "https://images.unsplash.com/photo-1569335468083-1b4c4b5e6fd0?w=1920&q=80", description: "China's rare earth capital with 30% of national reserves. Critical for EV batteries, electronics, and clean energy. Strategic resource for technology manufacturing.", opportunities: [
+        { id: "gz-1", title: "Ganzhou Rare Earth Processing", sector: "Materials", description: "Value-added rare earth processing. Permanent magnets for EVs and wind turbines.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "priority" },
+        { id: "gz-2", title: "Rare Earth Magnet Manufacturing", sector: "Manufacturing", description: "NdFeB magnets for electric motors and generators. Critical EV component.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "priority" },
+        { id: "gz-3", title: "Ganzhou Furniture Industry", sector: "Manufacturing", description: "Southern China's largest furniture production base. Wood processing and export.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" }
+      ]},
+      { id: "jiujiang", name: "Jiujiang", population: "4.6M", image: "https://images.unsplash.com/photo-1547981609-4b6bfe67ca0b?w=1920&q=80", description: "Major Yangtze River port city at Poyang Lake. Gateway for Jiangxi's exports with strong petrochemical and textile industries.", opportunities: [
+        { id: "jj-1", title: "Jiujiang Petrochemical Park", sector: "Petrochemicals", description: "Oil refining and chemical production on Yangtze River. Excellent logistics.", investmentRange: "$50M - $400M", timeline: "3-5 years", status: "active" },
+        { id: "jj-2", title: "Jiujiang Port Logistics", sector: "Logistics", description: "Yangtze River shipping hub. Container and bulk cargo handling.", investmentRange: "$15M - $120M", timeline: "2-3 years", status: "active" }
+      ]}
+    ],
+    overview: "Rising central province with aviation manufacturing and rare earth resources. Nanchang hosts aircraft manufacturing; Ganzhou has China's largest rare earth deposits. Cost-competitive with strong government support.",
+    targetSectors: ["Aviation", "Rare Earths", "Electronics", "New Materials", "VR/AR"],
+    opportunities: [
+      { id: "jx-1", title: "Nanchang Aviation Industrial Park", sector: "Aviation", description: "Helicopter and regional aircraft manufacturing. AVIC partnership opportunities.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "active" },
+      { id: "jx-2", title: "Ganzhou Rare Earth Processing", sector: "Materials", description: "Value-added rare earth processing and magnet manufacturing.", investmentRange: "$10M - $150M", timeline: "2-4 years", status: "priority" }
+    ],
+    keyProjects: [
+      { id: "jx-p1", name: "Nanchang VR Industry Base", value: "$300 Million", sector: "VR", description: "China's VR industry cluster with 200+ companies.", completionYear: "2026" }
+    ],
+    advantages: [
+      { icon: "resources", title: "Rare Earth Capital", description: "Ganzhou has 30% of China's rare earth reserves." },
+      { icon: "policy", title: "Cost Advantage", description: "Lower costs than coastal regions with strong incentives." }
+    ],
+    contactInfo: { investmentAgency: "Jiangxi Provincial Department of Commerce", website: "http://swt.jiangxi.gov.cn", email: "invest@jiangxi.gov.cn" }
+  },
+  "Chongqing": {
+    name: "Chongqing",
+    nameRu: "Чунцин",
+    nameZh: "重庆",
+    gdp: "$430 Billion",
+    population: "32.1 Million",
+    industries: ["Automotive", "Electronics", "Pharmaceuticals", "Logistics"],
+    sezCount: 3,
+    taxBenefits: ["Western Development incentives", "Liangjiang New Area benefits", "Land-sea trade corridor benefits"],
+    majorCities: [
+      { id: "yuzhong", name: "Yuzhong District", population: "0.6M", image: "https://images.unsplash.com/photo-1544550581-5f7ceaf7f992?w=1920&q=80", description: "Historic peninsula core of Chongqing at Yangtze-Jialing confluence. Famous for dramatic hillside architecture, hot pot cuisine, and vibrant nightlife. Major financial and commercial district.", opportunities: [
+        { id: "yz-1", title: "Jiefangbei CBD Development", sector: "Real Estate", description: "Premium office and retail in Chongqing's historic center. Finance and professional services.", investmentRange: "$30M - $250M", timeline: "2-4 years", status: "active" },
+        { id: "yz-2", title: "Yangtze Riverfront Tourism", sector: "Tourism", description: "Cruise terminal and riverside entertainment. Hongya Cave expansion.", investmentRange: "$15M - $120M", timeline: "2-3 years", status: "active" }
+      ]},
+      { id: "jiangbei", name: "Jiangbei District", population: "0.9M", image: "https://images.unsplash.com/photo-1569336415962-a4bd9f69cd83?w=1920&q=80", description: "New business district north of the Jialing River. Home to Guanyinqiao shopping area and expanding financial services sector. Major airport gateway.", opportunities: [
+        { id: "jb-1", title: "Jiangbei Airport Economy Zone", sector: "Logistics", description: "Air cargo and e-commerce logistics hub. Direct flights to Moscow and Europe.", investmentRange: "$20M - $200M", timeline: "2-3 years", status: "priority" },
+        { id: "jb-2", title: "Guanyinqiao Retail Hub", sector: "Retail", description: "One of China's top shopping districts. Chinese and international brand expansion.", investmentRange: "$10M - $100M", timeline: "1-2 years", status: "active" }
+      ]},
+      { id: "liangjiang", name: "Liangjiang New Area", population: "3.2M", image: "https://images.unsplash.com/photo-1553877522-43269d4ea984?w=1920&q=80", description: "National-level new area and western China's development engine. Automotive hub (Chang'an, Ford), electronics manufacturing, and smart industry demonstration zone.", opportunities: [
+        { id: "lj-1", title: "Chang'an Auto Partnership", sector: "Automotive", description: "EV and ICE vehicle manufacturing with China's 4th largest automaker. Complete supply chain.", investmentRange: "$30M - $300M", timeline: "2-4 years", status: "priority" },
+        { id: "lj-2", title: "Liangjiang Smart Manufacturing", sector: "Manufacturing", description: "Industry 4.0 demonstration with robotics, IoT, and AI integration.", investmentRange: "$15M - $150M", timeline: "2-3 years", status: "active" },
+        { id: "lj-3", title: "Laptop & Electronics Assembly", sector: "Electronics", description: "HP, Acer laptop production. 40% of global laptop output from Chongqing.", investmentRange: "$20M - $180M", timeline: "2-3 years", status: "active" },
+        { id: "lj-4", title: "China-Europe Rail Terminal", sector: "Logistics", description: "Chongqing-Duisburg rail freight hub. 10,000+ trains annually to Europe.", investmentRange: "$25M - $200M", timeline: "2-4 years", status: "priority" }
+      ]}
+    ],
+    overview: "China's largest municipality and western logistics hub. Major automotive center (Chang'an, Ford) and electronics manufacturer (HP, Foxconn laptops). Key terminus for China-Europe railway and land-sea corridor to Southeast Asia.",
+    targetSectors: ["Automotive", "Electronics", "Logistics", "Smart Manufacturing", "Biotech"],
+    opportunities: [
+      { id: "cq-1", title: "Liangjiang New Area Smart Manufacturing", sector: "Manufacturing", description: "Industry 4.0 demonstration zone with automotive and electronics clusters.", investmentRange: "$20M - $300M", timeline: "2-4 years", status: "priority" },
+      { id: "cq-2", title: "Western Land-Sea Corridor Hub", sector: "Logistics", description: "New trade route connecting Russia via Central Asia to Southeast Asian ports.", investmentRange: "$10M - $150M", timeline: "2-3 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "cq-p1", name: "Chongqing-Duisburg Rail Expansion", value: "$500 Million", sector: "Logistics", description: "Doubling capacity of China-Europe freight trains.", completionYear: "2027" }
+    ],
+    advantages: [
+      { icon: "logistics", title: "Western Hub", description: "Junction of Yangtze River, China-Europe railway, and land-sea corridor." },
+      { icon: "market", title: "Mega City", description: "32 million population with rapidly growing consumer market." }
+    ],
+    contactInfo: { investmentAgency: "Chongqing Municipal Commission of Commerce", website: "http://sww.cq.gov.cn", email: "invest@cq.gov.cn" }
+  },
+  "Yunnan": { name: "Yunnan", gdp: "$400 Billion", population: "47.2 Million", industries: ["Tourism", "Mining", "Agriculture", "Hydropower"], sezCount: 2, taxBenefits: ["Western Development incentives", "Border trade benefits", "Tourism industry support"], majorCities: [{ id: "kunming", name: "Kunming", population: "8.5M", lat: 25.0389, lng: 102.7183, image: "https://images.unsplash.com/photo-1570197788417-0e82375c9371?w=1920&q=80" }, { id: "yuxi", name: "Yuxi", population: "2.3M", lat: 24.3550, lng: 102.5428, image: "https://images.unsplash.com/photo-1536599018102-9f803c140fc1?w=1920&q=80" }, { id: "qujing", name: "Qujing", population: "5.8M", lat: 25.4900, lng: 103.7960, image: "https://images.unsplash.com/photo-1551845041-63e8e76836ea?w=1920&q=80" }], overview: "China's gateway to Southeast Asia with stunning natural beauty. Kunming enjoys 'Spring City' climate. Rich in minerals, biodiversity, and hydropower. Tourism powerhouse with unique ethnic cultures.", targetSectors: ["Tourism", "Mining", "Southeast Asia Trade", "Hydropower", "Specialty Agriculture"], opportunities: [{ id: "yn-1", title: "Kunming Southeast Asia Trade Hub", sector: "Trade", description: "Gateway to ASEAN via Laos railway. Trade processing and logistics development.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "active" }, { id: "yn-2", title: "Yunnan Eco-Tourism Development", sector: "Tourism", description: "Luxury resorts, adventure tourism, and ethnic cultural experiences.", investmentRange: "$5M - $100M", timeline: "2-4 years", status: "active" }], keyProjects: [{ id: "yn-p1", name: "China-Laos Railway Economic Corridor", value: "$2 Billion", sector: "Infrastructure", description: "Development zones along new railway to Southeast Asia.", completionYear: "2030" }], advantages: [{ icon: "location", title: "ASEAN Gateway", description: "Land border with Myanmar, Laos, Vietnam. New railway to Thailand." }, { icon: "resources", title: "Natural Wealth", description: "Rich in minerals, hydropower, and biodiversity." }], contactInfo: { investmentAgency: "Yunnan Provincial Department of Commerce", website: "http://swt.yn.gov.cn", email: "invest@yunnan.gov.cn" } },
+  "Guangxi": { name: "Guangxi", nameRu: "Гуанси", nameZh: "广西", gdp: "$370 Billion", population: "50.1 Million", industries: ["Sugar Processing", "Nonferrous Metals", "Machinery", "ASEAN Trade"], sezCount: 2, taxBenefits: ["ASEAN FTZ benefits", "Western Development incentives", "Border economic cooperation"], majorCities: [{ id: "nanning", name: "Nanning", population: "8.7M" }, { id: "liuzhou", name: "Liuzhou", population: "4.2M" }, { id: "guilin", name: "Guilin", population: "4.9M" }], overview: "Home to China-ASEAN Expo and gateway to Southeast Asia. Nanning hosts permanent ASEAN trade infrastructure. Guilin's stunning karst landscape attracts millions of tourists. Strong in automotive (SAIC-GM-Wuling) and aluminum.", targetSectors: ["ASEAN Trade", "Automotive", "Aluminum", "Tourism", "Sugar & Agriculture"], opportunities: [{ id: "gx-1", title: "China-ASEAN Trade Platform", sector: "Trade", description: "Permanent expo infrastructure for Southeast Asian trade. Bonded warehousing and e-commerce fulfillment.", investmentRange: "$5M - $100M", timeline: "1-2 years", status: "active" }, { id: "gx-2", title: "Wuling EV Manufacturing Expansion", sector: "Automotive", description: "Low-cost EV production with SAIC-GM-Wuling. Mini EV supply chain opportunities.", investmentRange: "$10M - $150M", timeline: "2-3 years", status: "priority" }], keyProjects: [{ id: "gx-p1", name: "Beibu Gulf Economic Zone", value: "$1 Billion", sector: "Port", description: "Port and industrial development on Gulf of Tonkin.", completionYear: "2028" }], advantages: [{ icon: "location", title: "ASEAN Hub", description: "Hosts annual China-ASEAN Expo. Direct border with Vietnam." }, { icon: "logistics", title: "Sea & Land Routes", description: "Port access and land routes to Southeast Asia." }], contactInfo: { investmentAgency: "Guangxi Department of Commerce", website: "http://swt.gxzf.gov.cn", email: "invest@guangxi.gov.cn" } },
+  "Shanxi": { name: "Shanxi", nameRu: "Шаньси", nameZh: "山西", gdp: "$340 Billion", population: "34.9 Million", industries: ["Coal Mining", "Steel", "Chemicals", "New Energy"], sezCount: 1, taxBenefits: ["Energy transition incentives", "Industrial upgrading support", "Environmental tech benefits"], majorCities: [{ id: "taiyuan", name: "Taiyuan", population: "5.3M" }, { id: "datong", name: "Datong", population: "3.1M" }, { id: "changzhi", name: "Changzhi", population: "3.2M" }], overview: "China's coal heartland undergoing green transformation. Major investment in solar, hydrogen, and clean coal technology. Rich in ancient temples and historic sites along Silk Road.", targetSectors: ["Clean Energy", "Green Coal Technology", "Hydrogen", "Cultural Tourism", "New Materials"], opportunities: [{ id: "sx-1", title: "Shanxi Green Energy Transition", sector: "Energy", description: "Solar farms, hydrogen production, and coal-to-chemicals. Government incentives for clean energy.", investmentRange: "$20M - $500M", timeline: "3-5 years", status: "priority" }, { id: "sx-2", title: "Datong Cultural Tourism", sector: "Tourism", description: "UNESCO Yungang Grottoes area development. Hotel and tourism infrastructure.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }], keyProjects: [{ id: "sx-p1", name: "Shanxi Hydrogen Corridor", value: "$2 Billion", sector: "Hydrogen", description: "Green hydrogen production and fuel cell deployment.", completionYear: "2030" }], advantages: [{ icon: "resources", title: "Energy Wealth", description: "25% of China's coal reserves. Transitioning to clean energy leader." }, { icon: "policy", title: "Transition Support", description: "Strong government support for green transformation." }], contactInfo: { investmentAgency: "Shanxi Provincial Department of Commerce", website: "http://swt.shanxi.gov.cn", email: "invest@shanxi.gov.cn" } },
+  "Inner Mongolia": { name: "Inner Mongolia", nameRu: "Внутренняя Монголия", nameZh: "内蒙古", gdp: "$330 Billion", population: "24 Million", industries: ["Mining", "Energy", "Agriculture", "Rare Earths"], sezCount: 2, taxBenefits: ["Western Development incentives", "Energy base incentives", "Rare earth processing benefits"], majorCities: [{ id: "hohhot", name: "Hohhot", population: "3.5M" }, { id: "baotou", name: "Baotou", population: "2.7M" }, { id: "ordos", name: "Ordos", population: "2.2M" }], overview: "Vast northern region bordering Mongolia and Russia. Major rare earth producer (Baotou), coal and natural gas reserves, and wind/solar potential. Growing dairy industry (Yili, Mengniu).", targetSectors: ["Rare Earths", "Renewable Energy", "Mining", "Dairy & Agriculture", "Border Trade"], opportunities: [{ id: "im-1", title: "Baotou Rare Earth High-Tech Zone", sector: "Materials", description: "Value-added rare earth processing for magnets, batteries, and electronics.", investmentRange: "$20M - $300M", timeline: "2-4 years", status: "priority" }, { id: "im-2", title: "Inner Mongolia Wind & Solar Farms", sector: "Energy", description: "Massive renewable energy development. Some of world's best wind resources.", investmentRange: "$50M - $1B", timeline: "3-5 years", status: "active" }], keyProjects: [{ id: "im-p1", name: "Ordos Renewable Energy Base", value: "$10 Billion", sector: "Energy", description: "Giant wind and solar installation with hydrogen production.", completionYear: "2030" }], advantages: [{ icon: "resources", title: "Rare Earth Capital", description: "90% of China's rare earth production. Critical for tech manufacturing." }, { icon: "location", title: "Russia-Mongolia Border", description: "Manzhouli crossing handles most China-Russia rail trade." }], contactInfo: { investmentAgency: "Inner Mongolia Department of Commerce", website: "http://swt.nmg.gov.cn", email: "invest@nmg.gov.cn" } },
+  "Guizhou": { name: "Guizhou", nameRu: "Гуйчжоу", nameZh: "贵州", gdp: "$300 Billion", population: "38.5 Million", industries: ["Big Data", "Tourism", "Liquor", "Mining"], sezCount: 2, taxBenefits: ["Big Data industry incentives", "Western Development policy", "Poverty alleviation benefits"], majorCities: [{ id: "guiyang", name: "Guiyang", population: "6M" }, { id: "zunyi", name: "Zunyi", population: "6.6M" }, { id: "liupanshui", name: "Liupanshui", population: "2.9M" }], overview: "China's big data capital with major data centers (Apple, Huawei, Tencent). Cool mountain climate ideal for servers. Home to Moutai liquor and stunning karst landscapes.", targetSectors: ["Big Data & Cloud", "Tourism", "Liquor", "Pharmaceuticals", "Mining"], opportunities: [{ id: "gz-1", title: "Guiyang Big Data Valley", sector: "Tech", description: "Data center development with cheap electricity and cool climate. Apple, Huawei, Tencent already present.", investmentRange: "$20M - $500M", timeline: "2-4 years", status: "priority" }, { id: "gz-2", title: "Guizhou Eco-Tourism", sector: "Tourism", description: "Karst caves, waterfalls, and ethnic minority villages. Adventure and cultural tourism development.", investmentRange: "$5M - $100M", timeline: "2-4 years", status: "active" }], keyProjects: [{ id: "gz-p1", name: "Huawei Cloud Guizhou Data Center", value: "$1 Billion", sector: "Cloud", description: "Major cloud infrastructure expansion.", partners: ["Huawei"], completionYear: "2027" }], advantages: [{ icon: "tech", title: "Big Data Hub", description: "China's first national big data pilot zone. Cool climate and cheap power for data centers." }, { icon: "resources", title: "Premium Liquor", description: "Moutai and other premium baijiu. China's liquor capital." }], contactInfo: { investmentAgency: "Guizhou Provincial Department of Commerce", website: "http://swt.guizhou.gov.cn", email: "invest@guizhou.gov.cn" } },
+  "Xinjiang": { name: "Xinjiang", nameRu: "Синьцзян", nameZh: "新疆", gdp: "$260 Billion", population: "25.9 Million", industries: ["Oil & Gas", "Cotton", "Agriculture", "Mining"], sezCount: 3, taxBenefits: ["Western Development incentives", "Border trade benefits", "Resource extraction support"], majorCities: [{ id: "urumqi", name: "Urumqi", population: "4M" }, { id: "kashgar", name: "Kashgar", population: "0.7M" }, { id: "korla", name: "Korla", population: "0.6M" }], overview: "Vast western region bordering Central Asia and Russia. Major oil and gas reserves, cotton production, and Belt and Road gateway. Kashgar is ancient Silk Road trading post reviving as economic hub.", targetSectors: ["Oil & Gas", "Cotton & Textiles", "Central Asia Trade", "Mining", "Solar Energy"], opportunities: [{ id: "xj-1", title: "Xinjiang Central Asia Trade Zone", sector: "Trade", description: "Border trade with Kazakhstan, Kyrgyzstan, and beyond. Logistics and processing zones.", investmentRange: "$10M - $200M", timeline: "2-4 years", status: "active" }, { id: "xj-2", title: "Tarim Basin Energy Development", sector: "Energy", description: "Oil and gas exploration and production partnerships.", investmentRange: "$100M - $1B", timeline: "5-10 years", status: "priority" }], keyProjects: [{ id: "xj-p1", name: "China-Pakistan Economic Corridor (Xinjiang Section)", value: "$5 Billion", sector: "Infrastructure", description: "Road, rail, and pipeline development through Kashgar.", completionYear: "2030" }], advantages: [{ icon: "location", title: "Central Asia Gateway", description: "Borders 8 countries. Key Belt and Road junction." }, { icon: "resources", title: "Energy Reserves", description: "Major oil, gas, and mineral deposits." }], contactInfo: { investmentAgency: "Xinjiang Department of Commerce", website: "http://swt.xinjiang.gov.cn", email: "invest@xinjiang.gov.cn" } },
+  "Tianjin": { name: "Tianjin", nameRu: "Тяньцзинь", nameZh: "天津", gdp: "$250 Billion", population: "13.9 Million", industries: ["Petrochemicals", "Manufacturing", "Shipping", "Finance"], sezCount: 3, taxBenefits: ["Binhai New Area benefits", "FTZ pilot zone incentives", "Port and logistics support"], majorCities: [{ id: "binhai", name: "Binhai New Area", population: "3M" }, { id: "heping", name: "Heping District", population: "0.4M" }, { id: "hedong", name: "Hedong District", population: "0.8M" }], overview: "Major port city serving Beijing-Tianjin-Hebei megalopolis. Binhai New Area is a comprehensive FTZ with manufacturing, finance, and shipping. Strong aerospace (Airbus final assembly) and petrochemical sectors.", targetSectors: ["Aerospace", "Petrochemicals", "Shipping", "Fintech", "Advanced Manufacturing"], opportunities: [{ id: "tj-1", title: "Tianjin Aerospace Manufacturing", sector: "Aerospace", description: "Airbus A320 final assembly line supply chain. Helicopter and drone manufacturing.", investmentRange: "$20M - $300M", timeline: "3-5 years", status: "priority" }, { id: "tj-2", title: "Tianjin Port Russia Trade Route", sector: "Logistics", description: "Direct shipping connections to Russian Arctic route. LNG receiving terminal.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" }], keyProjects: [{ id: "tj-p1", name: "Airbus Tianjin Wide-body Completion Center", value: "$500 Million", sector: "Aerospace", description: "A350 completion and delivery center.", partners: ["Airbus"], completionYear: "2026" }], advantages: [{ icon: "logistics", title: "Northern Gateway", description: "Major port serving 130 million people in Beijing-Tianjin-Hebei region." }, { icon: "infrastructure", title: "Aerospace Hub", description: "Only Airbus final assembly outside Europe." }], contactInfo: { investmentAgency: "Tianjin Municipal Commission of Commerce", website: "http://www.investtianjin.gov.cn", email: "invest@tj.gov.cn" } },
+  "Heilongjiang": { name: "Heilongjiang", nameRu: "Хэйлунцзян", nameZh: "黑龙江", gdp: "$220 Billion", population: "31.9 Million", industries: ["Agriculture", "Heavy Industry", "Energy", "Forestry"], sezCount: 2, taxBenefits: ["Northeast revitalization policy", "Russia border trade benefits", "Agricultural support"], majorCities: [{ id: "harbin", name: "Harbin", population: "9.5M", lat: 45.8038, lng: 126.5350, image: "https://images.unsplash.com/photo-1541959833400-049d37f98ccd?w=1920&q=80" }, { id: "daqing", name: "Daqing", population: "2.8M", lat: 46.5877, lng: 125.1032, image: "https://images.unsplash.com/photo-1551845041-63e8e76836ea?w=1920&q=80" }, { id: "qiqihar", name: "Qiqihar", population: "5.3M", lat: 47.3542, lng: 123.9179, image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1920&q=80" }], overview: "China's northernmost province with deepest Russia ties. Harbin has Russian architectural heritage and hosts annual Ice Festival. Major agricultural base (soybeans, rice) and oil producer (Daqing). Key for Russia-China trade.", targetSectors: ["Russia Trade", "Agriculture", "Energy", "Ice & Snow Tourism", "Forestry"], opportunities: [{ id: "hlj-1", title: "Harbin-Russia Trade & Logistics Hub", sector: "Trade", description: "Comprehensive trade zone for Russia imports. Direct rail to Vladivostok and Moscow. Cold chain logistics for Russian food.", investmentRange: "$10M - $200M", timeline: "2-3 years", status: "priority" }, { id: "hlj-2", title: "Heilongjiang Agricultural Partnership", sector: "Agriculture", description: "Soybean, rice, and dairy production. Technology partnerships with Russian Far East farmers.", investmentRange: "$5M - $100M", timeline: "2-4 years", status: "active" }, { id: "hlj-3", title: "Harbin Ice & Snow Tourism", sector: "Tourism", description: "Year-round ice tourism infrastructure, ski resorts, and winter sports facilities.", investmentRange: "$20M - $300M", timeline: "3-5 years", status: "active" }], keyProjects: [{ id: "hlj-p1", name: "Suifenhe Russia Trade Processing Zone", value: "$500 Million", sector: "Trade", description: "Border city processing zone for Russia-origin goods.", completionYear: "2027" }, { id: "hlj-p2", name: "Harbin Ice & Snow World Expansion", value: "$200 Million", sector: "Tourism", description: "Permanent ice sculpture park and resort.", completionYear: "2026" }], advantages: [{ icon: "location", title: "Russia Border", description: "3,000km border with Russia. Multiple crossing points." }, { icon: "resources", title: "Agricultural Powerhouse", description: "China's largest soybean and rice producer. Black soil breadbasket." }, { icon: "infrastructure", title: "Russia Heritage", description: "Harbin has century of Russian connections. Cultural and business ties." }], contactInfo: { investmentAgency: "Heilongjiang Provincial Department of Commerce", website: "http://swt.hlj.gov.cn", email: "invest@hlj.gov.cn", phone: "+86-451-82628177" } },
+  "Jilin": { name: "Jilin", nameRu: "Цзилинь", nameZh: "吉林", gdp: "$190 Billion", population: "24 Million", industries: ["Automotive", "Petrochemicals", "Food Processing", "Agriculture"], sezCount: 2, taxBenefits: ["Northeast revitalization incentives", "Automotive industry support", "Agricultural processing benefits"], majorCities: [{ id: "changchun", name: "Changchun", population: "9.1M" }, { id: "jilin-city", name: "Jilin City", population: "4M" }, { id: "siping", name: "Siping", population: "1.8M" }], overview: "China's auto capital - Changchun hosts FAW (First Auto Works). Strong corn and soybean production. Winter sports development for Beijing-Changchun corridor. Border access to Russia and North Korea.", targetSectors: ["Automotive", "Food Processing", "Winter Sports", "Pharmaceuticals", "Russia Trade"], opportunities: [{ id: "jl-1", title: "FAW-Volkswagen Supply Chain", sector: "Automotive", description: "Tier 1/2 supplier opportunities for China's oldest automaker. EV transition creating new opportunities.", investmentRange: "$10M - $200M", timeline: "2-4 years", status: "priority" }, { id: "jl-2", title: "Jilin Winter Sports Development", sector: "Sports", description: "Ski resorts and winter training facilities. 2022 Olympics legacy development.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "active" }], keyProjects: [{ id: "jl-p1", name: "FAW EV Manufacturing Base", value: "$3 Billion", sector: "Automotive", description: "Electric vehicle production expansion.", partners: ["FAW Group"], completionYear: "2027" }], advantages: [{ icon: "infrastructure", title: "Auto Capital", description: "FAW headquarters. Complete automotive supply chain." }, { icon: "resources", title: "Agricultural Base", description: "Major corn producer with strong food processing." }], contactInfo: { investmentAgency: "Jilin Provincial Department of Commerce", website: "http://swt.jl.gov.cn", email: "invest@jilin.gov.cn" } },
+  "Gansu": { name: "Gansu", nameRu: "Ганьсу", nameZh: "甘肃", gdp: "$160 Billion", population: "25 Million", industries: ["Petrochemicals", "Mining", "New Energy", "Agriculture"], sezCount: 1, taxBenefits: ["Western Development incentives", "New energy support", "Silk Road benefits"], majorCities: [{ id: "lanzhou", name: "Lanzhou", population: "4.4M" }, { id: "tianshui", name: "Tianshui", population: "2.9M" }, { id: "jiayuguan", name: "Jiayuguan", population: "0.3M" }], overview: "Historic Silk Road corridor with massive renewable energy potential. Dunhuang caves are UNESCO heritage. Wind and solar resources among world's best. Petrochemical hub with Lanzhou refineries.", targetSectors: ["Renewable Energy", "Tourism", "Petrochemicals", "New Materials", "Data Centers"], opportunities: [{ id: "gs-1", title: "Gansu Wind & Solar Corridor", sector: "Energy", description: "World-class wind and solar resources in Hexi Corridor. Grid-connected and off-grid projects.", investmentRange: "$50M - $1B", timeline: "3-5 years", status: "priority" }, { id: "gs-2", title: "Silk Road Cultural Tourism", sector: "Tourism", description: "Dunhuang Mogao Caves, Great Wall terminus, and desert experiences.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }], keyProjects: [{ id: "gs-p1", name: "Jiuquan Wind Power Base", value: "$15 Billion", sector: "Energy", description: "10GW wind farm - one of world's largest.", completionYear: "2028" }], advantages: [{ icon: "resources", title: "Renewable Paradise", description: "Exceptional wind and solar resources. Cheap land and power." }, { icon: "location", title: "Silk Road Heritage", description: "Historic trade route with tourism and trade potential." }], contactInfo: { investmentAgency: "Gansu Provincial Department of Commerce", website: "http://swt.gansu.gov.cn", email: "invest@gansu.gov.cn" } },
+  "Hainan": { name: "Hainan", nameRu: "Хайнань", nameZh: "海南", gdp: "$100 Billion", population: "10.1 Million", industries: ["Tourism", "Tropical Agriculture", "Free Trade Port", "Marine Industry"], sezCount: 1, taxBenefits: ["Free Trade Port zero tariff", "15% CIT cap", "Personal income tax cap 15%"], majorCities: [{ id: "haikou", name: "Haikou", population: "2.9M", lat: 20.0440, lng: 110.1999, image: "https://images.unsplash.com/photo-1578469645742-46cae010e5d4?w=1920&q=80" }, { id: "sanya", name: "Sanya", population: "1M", lat: 18.2524, lng: 109.5119, image: "https://images.unsplash.com/photo-1600077106724-946750eeaf3c?w=1920&q=80" }, { id: "danzhou", name: "Danzhou", population: "0.9M", lat: 19.5175, lng: 109.5801, image: "https://images.unsplash.com/photo-1559304787-e5db6d82acb1?w=1920&q=80" }], overview: "China's Hawaii and newest Free Trade Port with most favorable policies nationwide. Zero tariffs, 15% income tax cap, and relaxed foreign investment rules. Tropical tourism, duty-free shopping, and emerging tech hub.", targetSectors: ["Tourism", "Duty-Free Retail", "Healthcare Tourism", "Tropical Agriculture", "Marine Industry"], opportunities: [{ id: "hai-1", title: "Hainan Free Trade Port Investment", sector: "Trade", description: "Zero tariffs, 15% corporate tax, relaxed forex. China's most open zone for foreign investment.", investmentRange: "$5M - $500M", timeline: "1-3 years", status: "priority" }, { id: "hai-2", title: "Sanya Medical Tourism", sector: "Healthcare", description: "International hospitals and medical tourism. Boao Lecheng allows imported drugs and devices.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" }, { id: "hai-3", title: "Hainan Duty-Free Expansion", sector: "Retail", description: "Offshore duty-free shopping. $100,000/person annual allowance.", investmentRange: "$10M - $200M", timeline: "1-2 years", status: "active" }], keyProjects: [{ id: "hai-p1", name: "Hainan International Medical Tourism Pilot", value: "$1 Billion", sector: "Healthcare", description: "Advanced medical treatments and clinical trials zone.", completionYear: "2027" }, { id: "hai-p2", name: "Sanya Yazhou Bay Science City", value: "$3 Billion", sector: "Technology", description: "Deep-sea, space, and tropical agriculture research.", completionYear: "2030" }], advantages: [{ icon: "policy", title: "Free Trade Port", description: "China's most open zone. Zero tariffs, 15% tax cap, relaxed investment rules." }, { icon: "market", title: "Tourism Magnet", description: "Tropical paradise attracting 80 million tourists annually." }, { icon: "infrastructure", title: "World-Class Facilities", description: "International airports, cruise terminals, and resort infrastructure." }], contactInfo: { investmentAgency: "Hainan Provincial Bureau of International Economic Development", website: "http://dofcom.hainan.gov.cn", email: "invest@hainan.gov.cn", phone: "+86-898-65342377" } },
+  "Ningxia": { name: "Ningxia", nameRu: "Нинся", nameZh: "宁夏", gdp: "$70 Billion", population: "7.3 Million", industries: ["Energy", "Coal Chemicals", "Wine", "Halal Food"], sezCount: 1, taxBenefits: ["Western Development incentives", "Energy industry support", "Halal certification benefits"], majorCities: [{ id: "yinchuan", name: "Yinchuan", population: "2.9M" }, { id: "shizuishan", name: "Shizuishan", population: "0.7M" }, { id: "wuzhong", name: "Wuzhong", population: "1.1M" }], overview: "Small but strategic region for China-Arab cooperation. Halal food certification hub. Emerging wine region rivaling France. Solar energy potential and coal chemical industry.", targetSectors: ["Halal Food", "Wine", "Solar Energy", "Arab Trade", "Coal Chemicals"], opportunities: [{ id: "nx-1", title: "Ningxia Wine Industry", sector: "Agriculture", description: "Premium wine region with international awards. Winery investment and export opportunities.", investmentRange: "$5M - $50M", timeline: "3-5 years", status: "active" }, { id: "nx-2", title: "China-Arab Halal Food Hub", sector: "Food", description: "Halal certification and export platform for Arab world.", investmentRange: "$3M - $30M", timeline: "2-3 years", status: "active" }], keyProjects: [{ id: "nx-p1", name: "China-Arab States Expo Permanent Platform", value: "$300 Million", sector: "Trade", description: "Trade infrastructure for Arab partnership.", completionYear: "2027" }], advantages: [{ icon: "policy", title: "Arab Gateway", description: "China-Arab States Expo host. Halal certification hub." }, { icon: "resources", title: "Wine Region", description: "Eastern foothills of Helan Mountain produce award-winning wines." }], contactInfo: { investmentAgency: "Ningxia Department of Commerce", website: "http://swt.nx.gov.cn", email: "invest@ningxia.gov.cn" } },
+  "Qinghai": { name: "Qinghai", nameRu: "Цинхай", nameZh: "青海", gdp: "$55 Billion", population: "5.9 Million", industries: ["Mining", "New Energy", "Salt Lake Resources", "Tourism"], sezCount: 1, taxBenefits: ["Western Development incentives", "New energy support", "Ecological protection benefits"], majorCities: [{ id: "xining", name: "Xining", population: "2.5M" }, { id: "haidong", name: "Haidong", population: "1.4M" }, { id: "golmud", name: "Golmud", population: "0.2M" }], overview: "Tibetan Plateau province with vast lithium resources in salt lakes. Critical for battery manufacturing supply chain. Stunning high-altitude landscapes and wildlife. Solar energy potential.", targetSectors: ["Lithium & Battery Materials", "Solar Energy", "Eco-Tourism", "Salt Lake Resources", "Mining"], opportunities: [{ id: "qh-1", title: "Qinghai Lithium Triangle", sector: "Materials", description: "World's largest lithium reserves in salt lakes. Battery material processing and extraction.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" }, { id: "qh-2", title: "Qinghai High-Altitude Tourism", sector: "Tourism", description: "Qinghai Lake, Tibetan culture, and wildlife experiences.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }], keyProjects: [{ id: "qh-p1", name: "BYD Qinghai Lithium Processing", value: "$2 Billion", sector: "Materials", description: "Lithium extraction and battery material production.", partners: ["BYD"], completionYear: "2027" }], advantages: [{ icon: "resources", title: "Lithium Capital", description: "Largest lithium reserves. Critical for EV battery supply chain." }, { icon: "policy", title: "Ecological Zone", description: "Clean energy incentives and environmental protection focus." }], contactInfo: { investmentAgency: "Qinghai Provincial Department of Commerce", website: "http://swt.qinghai.gov.cn", email: "invest@qinghai.gov.cn" } },
+  "Tibet": { name: "Tibet", nameRu: "Тибет", nameZh: "西藏", gdp: "$30 Billion", population: "3.6 Million", industries: ["Tourism", "Mining", "Agriculture", "Traditional Crafts"], sezCount: 0, taxBenefits: ["Western Development incentives", "Poverty alleviation support", "Infrastructure investment benefits"], majorCities: [{ id: "lhasa", name: "Lhasa", population: "0.9M" }, { id: "shigatse", name: "Shigatse", population: "0.8M" }, { id: "chamdo", name: "Chamdo", population: "0.7M" }], overview: "Roof of the World with unique Buddhist culture and stunning Himalayan landscapes. Limited industrial development but growing tourism and clean energy sectors. Strategic location bordering India and Nepal.", targetSectors: ["Tourism", "Clean Energy", "Traditional Crafts", "Highland Agriculture", "Mining"], opportunities: [{ id: "tb-1", title: "Tibet Luxury Tourism", sector: "Tourism", description: "High-end cultural and adventure tourism. Limited but premium market.", investmentRange: "$5M - $50M", timeline: "3-5 years", status: "active" }, { id: "tb-2", title: "Tibet Solar & Hydropower", sector: "Energy", description: "Exceptional solar radiation and hydropower potential.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "active" }], keyProjects: [{ id: "tb-p1", name: "Lhasa-Nyingchi Railway Extension", value: "$5 Billion", sector: "Infrastructure", description: "Railway expansion opening new tourism areas.", completionYear: "2030" }], advantages: [{ icon: "location", title: "Unique Destination", description: "Unmatched cultural and natural heritage. Premium tourism market." }, { icon: "resources", title: "Clean Energy", description: "Exceptional solar and hydro resources." }], contactInfo: { investmentAgency: "Tibet Department of Commerce", website: "http://www.xizang.gov.cn", email: "invest@tibet.gov.cn" } },
+  "Hong Kong": { name: "Hong Kong SAR", nameRu: "Гонконг", nameZh: "香港", gdp: "$360 Billion", population: "7.5 Million", industries: ["Finance", "Trade", "Professional Services", "Tourism"], sezCount: 0, taxBenefits: ["16.5% corporate tax", "No VAT/sales tax", "Free port status"], majorCities: [{ id: "central", name: "Central", population: "0.1M", lat: 22.2819, lng: 114.1580, image: "https://images.unsplash.com/photo-1536599424071-0b215a388ba7?w=1920&q=80" }, { id: "kowloon", name: "Kowloon", population: "2.3M", lat: 22.3193, lng: 114.1694, image: "https://images.unsplash.com/photo-1524236246106-c8c1e2e5cff4?w=1920&q=80" }, { id: "new-territories", name: "New Territories", population: "4M", lat: 22.4530, lng: 114.1650, image: "https://images.unsplash.com/photo-1517154421773-0529f29ea451?w=1920&q=80" }], overview: "Global financial center and gateway between China and the world. Common law system, free capital flows, and world-class professional services. Strategic platform for Russia-China investment and trade structuring.", targetSectors: ["Finance", "Professional Services", "Trade", "Technology", "Asset Management"], opportunities: [{ id: "hk-1", title: "Hong Kong Russia-China Finance Platform", sector: "Finance", description: "Structure cross-border investments, trade finance, and RMB settlement through Hong Kong.", investmentRange: "$10M - $500M", timeline: "6-12 months", status: "active" }, { id: "hk-2", title: "Hong Kong Family Office Hub", sector: "Wealth Management", description: "Establish family offices with access to Greater China investments.", investmentRange: "$50M - $1B", timeline: "3-6 months", status: "active" }], keyProjects: [{ id: "hk-p1", name: "Northern Metropolis Development", value: "$100 Billion", sector: "Urban Development", description: "New economic hub connecting to Shenzhen.", completionYear: "2035" }], advantages: [{ icon: "policy", title: "One Country Two Systems", description: "Common law, free press, independent judiciary until 2047." }, { icon: "market", title: "Global Finance Hub", description: "Top 3 financial center. Gateway for China investment." }], contactInfo: { investmentAgency: "InvestHK", website: "http://www.investhk.gov.hk", email: "enq@investhk.gov.hk", phone: "+852-3107-1000" } },
+  "Macau": { name: "Macau SAR", nameRu: "Макао", nameZh: "澳门", gdp: "$30 Billion", population: "0.7 Million", industries: ["Gaming", "Tourism", "Finance", "MICE"], sezCount: 0, taxBenefits: ["12% corporate tax max", "No foreign exchange controls", "Gaming license benefits"], majorCities: [{ id: "macau-peninsula", name: "Macau Peninsula", population: "0.5M", lat: 22.1932, lng: 113.5415, image: "https://images.unsplash.com/photo-1518733057094-95b53143d2a7?w=1920&q=80" }, { id: "taipa", name: "Taipa", population: "0.1M", lat: 22.1560, lng: 113.5577, image: "https://images.unsplash.com/photo-1563436233770-eeca7a64cfcd?w=1920&q=80" }, { id: "cotai", name: "Cotai", population: "0.05M", lat: 22.1438, lng: 113.5581, image: "https://images.unsplash.com/photo-1545893835-abaa50cbe628?w=1920&q=80" }], overview: "World's largest gaming center and Portuguese-Chinese cultural fusion. Transitioning to diversified tourism and MICE destination. Hengqin cooperation zone expanding opportunities.", targetSectors: ["Tourism", "MICE", "Finance", "Portuguese-speaking Countries Trade", "Healthcare"], opportunities: [{ id: "mo-1", title: "Macau-Hengqin Cooperation Zone", sector: "Services", description: "New zone quadrupling Macau's development space. Modern industries and Portuguese trade platform.", investmentRange: "$10M - $200M", timeline: "2-4 years", status: "priority" }, { id: "mo-2", title: "Macau MICE & Events", sector: "Tourism", description: "Convention, exhibition, and entertainment infrastructure.", investmentRange: "$5M - $100M", timeline: "1-3 years", status: "active" }], keyProjects: [{ id: "mo-p1", name: "Hengqin Guangdong-Macao Deep Cooperation Zone", value: "$10 Billion", sector: "Development", description: "106 sq km new development zone.", completionYear: "2029" }], advantages: [{ icon: "policy", title: "Gaming Hub", description: "World's largest casino market. Premium tourism infrastructure." }, { icon: "location", title: "Portuguese Gateway", description: "Platform for trade with Portuguese-speaking countries." }], contactInfo: { investmentAgency: "Macau Trade and Investment Promotion Institute", website: "http://www.ipim.gov.mo", email: "ipim@ipim.gov.mo", phone: "+853-2871-0300" } },
+};
+
+export const RUSSIA_REGIONS: Record<string, RegionData> = {
+  "Moscow": {
+    name: "Moscow",
+    nameRu: "Москва",
+    nameZh: "莫斯科",
+    gdp: "$416 Billion",
+    population: "12.6 Million",
+    industries: ["Finance", "Technology", "Services", "Media"],
+    industriesRu: ["Финансы", "Технологии", "Услуги", "Медиа"],
+    industriesZh: ["金融", "科技", "服务业", "媒体"],
+    sezCount: 4,
+    taxBenefits: ["Special Investment Contracts", "Technology park benefits", "R&D incentives"],
+    taxBenefitsRu: ["Специальные инвестиционные контракты", "Льготы технопарков", "Льготы на НИОКР"],
+    taxBenefitsZh: ["特别投资合同", "科技园区优惠", "研发激励政策"],
+    majorCities: [
+      { id: "central-ao", name: "Central Administrative Okrug", population: "0.8M", lat: 55.7539, lng: 37.6208, image: "https://images.unsplash.com/photo-1513326738677-b964603b136d?w=1920&q=80", description: "The heart of Moscow with Red Square, the Kremlin, and Tverskaya Street. Russia's political and business epicenter with the highest concentration of headquarters and luxury retail.", opportunities: [
+        { id: "msc-c-1", title: "Tverskaya Premium Retail", sector: "Retail", description: "Flagship stores on Russia's most prestigious shopping street. Chinese luxury brands entering Russian market.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" },
+        { id: "msc-c-2", title: "Moscow City Business Center", sector: "Real Estate", description: "Grade A office space in Russia's Manhattan. Chinese company regional headquarters.", investmentRange: "$20M - $200M", timeline: "2-3 years", status: "active" }
+      ]},
+      { id: "northern-ao", name: "Northern Administrative Okrug", population: "1.2M", image: "https://images.unsplash.com/photo-1520106212299-d99c443e4568?w=1920&q=80", description: "Major industrial and residential district with Sheremetyevo Airport connection. Home to tech parks and manufacturing zones near key transportation infrastructure.", opportunities: [
+        { id: "msc-n-1", title: "Sheremetyevo Logistics Zone", sector: "Logistics", description: "Air cargo and distribution facilities near Russia's largest airport. E-commerce fulfillment center.", investmentRange: "$15M - $150M", timeline: "2-3 years", status: "priority" }
+      ]},
+      { id: "southern-ao", name: "Southern Administrative Okrug", population: "1.8M", image: "https://images.unsplash.com/photo-1547448415-e9f5b28e570d?w=1920&q=80", description: "Growing residential and commercial district with major industrial heritage. Home to technology parks and research institutes.", opportunities: [
+        { id: "msc-s-1", title: "Skolkovo Innovation Center", sector: "Technology", description: "Russia's Silicon Valley. Tech startups, R&D centers, and university partnerships.", investmentRange: "$5M - $80M", timeline: "1-3 years", status: "priority" }
+      ]}
+    ],
+    overview: "Russia's capital and largest city, Moscow is the undisputed political, economic, and cultural center. Home to the Kremlin, major banks, tech companies (Yandex, Mail.ru), and serves as headquarters for most Russian-Chinese joint ventures. Key gateway for Chinese investment into Russia.",
+    overviewRu: "Столица и крупнейший город России, Москва является бесспорным политическим, экономическим и культурным центром. Здесь находятся Кремль, крупнейшие банки, технологические компании (Яндекс, Mail.ru), а также штаб-квартиры большинства российско-китайских совместных предприятий.",
+    overviewZh: "俄罗斯首都和最大城市，莫斯科是无可争议的政治、经济和文化中心。这里是克里姆林宫、主要银行、科技公司（Yandex、Mail.ru）的所在地，也是大多数中俄合资企业的总部所在地。是中国投资进入俄罗斯的重要门户。",
+    targetSectors: ["Fintech", "E-commerce", "IT Services", "Real Estate", "Consumer Goods"],
+    opportunities: [
+      { id: "msk-1", title: "Moscow International Financial Center", sector: "Finance", description: "Establish banking, insurance, or asset management presence. RMB clearing center and SPFS payment system integration for China trade.", investmentRange: "$20M - $500M", timeline: "1-2 years", status: "priority" },
+      { id: "msk-2", title: "Skolkovo Innovation Center", sector: "Technology", description: "Russia's Silicon Valley with tax-free status. AI, biotech, and IT partnerships with major Russian tech companies.", investmentRange: "$5M - $100M", timeline: "1-3 years", status: "active" },
+      { id: "msk-3", title: "Moscow E-commerce & Logistics", sector: "E-commerce", description: "Last-mile delivery and fulfillment centers for Chinese goods. Partnership with Ozon, Wildberries marketplaces.", investmentRange: "$10M - $100M", timeline: "1-2 years", status: "active" },
+      { id: "msk-4", title: "Moscow Real Estate Development", sector: "Real Estate", description: "Commercial and residential development in expanding Moscow. Chinese construction technology and materials.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "msk-p1", name: "Moscow-Beijing High-Speed Rail Planning", value: "$242 Billion", sector: "Infrastructure", description: "Planning phase for 7,000km HSR connection. Feasibility studies and route planning.", partners: ["Russian Railways", "China Railway"], completionYear: "2035" },
+      { id: "msk-p2", name: "Yandex-Alibaba E-commerce Platform", value: "$1 Billion", sector: "E-commerce", description: "Joint venture for cross-border e-commerce between Russia and China.", partners: ["Yandex", "Alibaba"], completionYear: "Ongoing" }
+    ],
+    advantages: [
+      { icon: "market", title: "Economic Hub", description: "25% of Russia's GDP. Headquarters of major corporations and banks." },
+      { icon: "talent", title: "Talent Pool", description: "250+ universities, 1 million+ students. Strong IT and engineering talent." },
+      { icon: "infrastructure", title: "Global Connectivity", description: "3 international airports, high-speed rail hub. Direct flights to all Chinese cities." },
+      { icon: "policy", title: "Administrative Center", description: "All federal ministries and regulatory bodies. Fastest approvals." }
+    ],
+    notableEntrepreneurs: [
+      { name: "Vladimir Potanin", nameRu: "Владимир Потанин", nameZh: "弗拉基米尔·波塔宁", company: "Norilsk Nickel", industry: "Mining & Metals", netWorth: "$30.4B", description: "President of Nornickel, world's largest producer of nickel and palladium. Russia's richest person." },
+      { name: "Leonid Mikhelson", nameRu: "Леонид Михельсон", nameZh: "列昂尼德·米赫尔松", company: "Novatek", industry: "Natural Gas", netWorth: "$27.4B", description: "CEO of Novatek, Russia's largest independent gas producer. Leading Arctic LNG development." },
+      { name: "Pavel Durov", nameRu: "Павел Дуров", nameZh: "帕维尔·杜罗夫", company: "Telegram", industry: "Technology", netWorth: "$15.5B", description: "Founder of Telegram and VKontakte. Russia's most famous tech entrepreneur, now based in Dubai." },
+      { name: "Arkady Volozh", nameRu: "Аркадий Волож", nameZh: "阿尔卡季·沃洛日", company: "Yandex", industry: "Technology", netWorth: "$5.7B", description: "Co-founder of Yandex, Russia's largest search engine and tech company. Pioneer of Russian internet." }
+    ],
+    contactInfo: { investmentAgency: "Moscow City Investment Agency", website: "https://investmoscow.ru", email: "info@investmoscow.ru", phone: "+7-495-620-2045" }
+  },
+  "Saint Petersburg": {
+    name: "Saint Petersburg",
+    nameRu: "Санкт-Петербург",
+    nameZh: "圣彼得堡",
+    gdp: "$163 Billion",
+    population: "5.4 Million",
+    industries: ["Shipbuilding", "Automotive", "IT", "Tourism"],
+    sezCount: 2,
+    taxBenefits: ["SEZ benefits", "IT park incentives", "Cultural industry support"],
+    majorCities: [
+      { id: "admiralteysky", name: "Admiralteysky District", population: "0.16M", lat: 59.9311, lng: 30.3150, image: "https://images.unsplash.com/photo-1556610961-2fecc5927173?w=1920&q=80", description: "Historic heart of St. Petersburg with the Admiralty, St. Isaac's Cathedral, and the Hermitage. Russia's cultural capital and UNESCO World Heritage site.", opportunities: [
+        { id: "spb-a-1", title: "Heritage Tourism Development", sector: "Tourism", description: "Boutique hotels and cultural tourism near Hermitage and Palace Square. Growing Chinese tourist segment.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" },
+        { id: "spb-a-2", title: "Luxury Hospitality", sector: "Hospitality", description: "5-star hotels and restaurants catering to high-end Chinese tourists. WeChat/Alipay integration.", investmentRange: "$20M - $150M", timeline: "2-4 years", status: "active" }
+      ]},
+      { id: "vasileostrovsky", name: "Vasileostrovsky Island", population: "0.21M", image: "https://images.unsplash.com/photo-1548834925-e48f8a27ae1f?w=1920&q=80", description: "Historic island district with the Rostral Columns, universities, and emerging tech scene. Major port facilities and the new Lakhta Center (Gazprom HQ).", opportunities: [
+        { id: "spb-v-1", title: "Baltic Port Development", sector: "Logistics", description: "Container terminal and logistics facilities. Direct shipping connections to China.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "priority" },
+        { id: "spb-v-2", title: "St. Petersburg IT Cluster", sector: "IT", description: "Software development and gaming studios. JetBrains and Vkontakte ecosystem.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" }
+      ]},
+      { id: "petrogradsky", name: "Petrogradsky District", population: "0.13M", image: "https://images.unsplash.com/photo-1553877522-43269d4ea984?w=1920&q=80", description: "Historic district with the Peter and Paul Fortress and growing residential development. Mix of heritage sites and modern apartments.", opportunities: [
+        { id: "spb-p-1", title: "Mixed-Use Development", sector: "Real Estate", description: "Premium residential and retail development in historic settings.", investmentRange: "$15M - $100M", timeline: "3-4 years", status: "active" }
+      ]}
+    ],
+    overview: "Russia's cultural capital and second-largest city. Major port on the Baltic Sea with strong shipbuilding, automotive (Toyota, Hyundai, Nissan plants), and IT sectors. Historic architecture attracts millions of Chinese tourists annually. Hosts St. Petersburg International Economic Forum.",
+    overviewRu: "Культурная столица России и второй по величине город. Крупный порт на Балтийском море с развитым судостроением, автомобильной промышленностью (заводы Toyota, Hyundai, Nissan) и IT-сектором. Историческая архитектура привлекает миллионы китайских туристов ежегодно.",
+    overviewZh: "俄罗斯的文化之都和第二大城市。波罗的海主要港口，拥有发达的造船业、汽车制造业（丰田、现代、日产工厂）和IT行业。历史建筑每年吸引数百万中国游客。圣彼得堡国际经济论坛的举办地。",
+    targetSectors: ["Shipbuilding", "Automotive", "IT & Software", "Tourism", "Pharmaceuticals"],
+    opportunities: [
+      { id: "spb-1", title: "Baltic Shipyard Modernization", sector: "Shipbuilding", description: "Icebreaker and LNG carrier construction partnerships. Russian Arctic fleet expansion.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" },
+      { id: "spb-2", title: "St. Petersburg IT Cluster", sector: "IT", description: "Software development, gaming, and fintech. Partnerships with JetBrains, Vkontakte, and gaming studios.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" },
+      { id: "spb-3", title: "Chinese Tourism Infrastructure", sector: "Tourism", description: "Hotels, restaurants, and tourism services for 1 million+ Chinese visitors. WeChat/Alipay integration.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "active" },
+      { id: "spb-4", title: "Pharmaceutical Production", sector: "Pharma", description: "Generic drug manufacturing and biotech. Partnerships with Russian pharmaceutical companies.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "spb-p1", name: "Lakhta Center Phase 2", value: "$2 Billion", sector: "Real Estate", description: "Gazprom headquarters expansion. Commercial and residential development.", partners: ["Gazprom"], completionYear: "2028" },
+      { id: "spb-p2", name: "Pulkovo Airport Expansion", value: "$1 Billion", sector: "Aviation", description: "Terminal expansion for increased China traffic.", completionYear: "2027" }
+    ],
+    advantages: [
+      { icon: "logistics", title: "Baltic Port", description: "Major port connecting to Europe. Icebreaker support for year-round operations." },
+      { icon: "talent", title: "IT Excellence", description: "Strong software engineering tradition. JetBrains, Vkontakte headquarters." },
+      { icon: "infrastructure", title: "Tourism Hub", description: "UNESCO World Heritage city. Hermitage, Mariinsky Theatre." },
+      { icon: "policy", title: "SPIEF Host", description: "Annual St. Petersburg International Economic Forum - key China-Russia business platform." }
+    ],
+    notableEntrepreneurs: [
+      { name: "Yuri Milner", nameRu: "Юрий Мильнер", nameZh: "尤里·米尔纳", company: "DST Global", industry: "Venture Capital", netWorth: "$7.3B", description: "Co-founder of DST Global, early investor in Facebook, Twitter, and Alibaba. Pioneer of Russian tech investing globally." },
+      { name: "Pavel Durov", nameRu: "Павел Дуров", nameZh: "帕维尔·杜罗夫", company: "Telegram", industry: "Technology", netWorth: "$15.5B", description: "Founder of VKontakte and Telegram. Born and studied in St. Petersburg. Russia's most influential tech entrepreneur." },
+      { name: "Maxim Galkin", nameRu: "Максим Галкин", nameZh: "马克西姆·加尔金", company: "JetBrains", industry: "Software", netWorth: "$1.8B", description: "Co-founder of JetBrains, maker of IntelliJ IDEA and Kotlin programming language. St. Petersburg-based software tools company." },
+      { name: "Sergey Galitsky", nameRu: "Сергей Галицкий", nameZh: "谢尔盖·加利茨基", company: "Magnit", industry: "Retail", netWorth: "$3.2B", description: "Founder of Magnit retail chain. One of Russia's most successful self-made entrepreneurs. Major philanthropist." }
+    ],
+    contactInfo: { investmentAgency: "St. Petersburg Investment Agency", website: "https://spbia.ru", email: "info@spbia.ru", phone: "+7-812-576-7500" }
+  },
+  "Moscow Oblast": {
+    name: "Moscow Oblast",
+    nameRu: "Московская область",
+    nameZh: "莫斯科州",
+    gdp: "$113 Billion",
+    population: "8.5 Million",
+    industries: ["Manufacturing", "Logistics", "Food Processing", "Chemicals"],
+    sezCount: 3,
+    taxBenefits: ["Industrial park benefits", "Logistics hub incentives", "Manufacturing support"],
+    majorCities: [
+      { id: "krasnogorsk", name: "Krasnogorsk", population: "0.2M", image: "https://images.unsplash.com/photo-1596484552834-6a58f850e0a1?w=1920&q=80", description: "Modern satellite city northwest of Moscow. Major business center with Crocus City complex and growing tech presence.", opportunities: [
+        { id: "krs-1", title: "Crocus City Expansion", sector: "Real Estate", description: "Exhibition, retail, and office development in Russia's largest expo complex.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" }
+      ]},
+      { id: "balashikha", name: "Balashikha", population: "0.5M", image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1920&q=80", description: "Largest satellite city of Moscow with strong manufacturing and logistics base. Excellent highway access to Moscow center.", opportunities: [
+        { id: "bal-1", title: "Moscow East Logistics Hub", sector: "Logistics", description: "Warehousing and distribution for eastern approaches to Moscow. E-commerce fulfillment.", investmentRange: "$15M - $120M", timeline: "2-3 years", status: "priority" }
+      ]},
+      { id: "khimki", name: "Khimki", population: "0.3M", image: "https://images.unsplash.com/photo-1558618047-f4b4c45d7b42?w=1920&q=80", description: "Northern satellite city home to Sheremetyevo Airport and major shopping centers. Key logistics and retail hub.", opportunities: [
+        { id: "khm-1", title: "Airport City Development", sector: "Real Estate", description: "Hotels, offices, and retail near Sheremetyevo. Transit-oriented development.", investmentRange: "$25M - $180M", timeline: "3-5 years", status: "active" },
+        { id: "khm-2", title: "Mega Shopping Center", sector: "Retail", description: "Partnership with IKEA centers and retail development.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" }
+      ]}
+    ],
+    overview: "Region surrounding Moscow with massive logistics and manufacturing infrastructure. Home to major industrial parks, warehouses, and food processing facilities serving the 20+ million Moscow metropolitan area.",
+    targetSectors: ["Logistics", "Food Processing", "Manufacturing", "Data Centers", "Retail"],
+    opportunities: [
+      { id: "mo-1", title: "Moscow Region Logistics Hub", sector: "Logistics", description: "Warehouse and distribution centers for Chinese goods entering Russia. E-commerce fulfillment.", investmentRange: "$20M - $200M", timeline: "2-3 years", status: "priority" },
+      { id: "mo-2", title: "Food Processing Cluster", sector: "Food", description: "Processing facilities for Chinese food products and Russian agricultural exports.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "mo-p1", name: "Sheremetyevo Cargo Expansion", value: "$500 Million", sector: "Logistics", description: "Air cargo terminal expansion for China trade.", completionYear: "2027" }
+    ],
+    advantages: [
+      { icon: "logistics", title: "Moscow Gateway", description: "Surrounds Moscow with excellent highway and rail access." },
+      { icon: "market", title: "Massive Market", description: "Direct access to 20+ million Moscow metro consumers." }
+    ],
+    contactInfo: { investmentAgency: "Moscow Oblast Investment Agency", website: "https://mosreg.ru", email: "invest@mosreg.ru" }
+  },
+  "Tatarstan": {
+    name: "Republic of Tatarstan",
+    nameRu: "Республика Татарстан",
+    nameZh: "鞑靼斯坦共和国",
+    gdp: "$61 Billion",
+    population: "4 Million",
+    industries: ["Oil & Gas", "Petrochemicals", "Automotive", "IT"],
+    sezCount: 4,
+    taxBenefits: ["Alabuga SEZ benefits", "IT park Innopolis incentives", "Petrochemical support"],
+    majorCities: [
+      { id: "kazan", name: "Kazan", population: "1.3M", lat: 55.7887, lng: 49.1221, image: "https://images.unsplash.com/photo-1561627358-3e27ef39c9dd?w=1920&q=80", description: "Capital of Tatarstan and Russia's sports capital. Beautiful UNESCO World Heritage Kremlin, emerging IT hub (Innopolis nearby), and Haier manufacturing base. Model for Russian regional development.", opportunities: [
+        { id: "kzn-1", title: "Kazan IT Park", titleRu: "Казанский IT-парк", titleZh: "喀山IT园区", sector: "IT", description: "Software development and tech services. Gateway to Innopolis ecosystem with tax incentives.", descriptionRu: "Разработка программного обеспечения и IT-услуги. Доступ к экосистеме Иннополиса с налоговыми льготами.", descriptionZh: "软件开发和技术服务。通往伊诺波利斯生态系统的门户，享受税收优惠。", investmentRange: "$3M - $40M", timeline: "1-2 years", status: "priority" },
+        { id: "kzn-2", title: "Haier Ecosystem Expansion", sector: "Manufacturing", description: "Supply chain partnerships with Haier's Russian manufacturing base. Appliance components.", investmentRange: "$5M - $60M", timeline: "1-2 years", status: "active" },
+        { id: "kzn-3", title: "Kazan Sports Tourism", sector: "Tourism", description: "Sports facilities and tourism from World Cup and Universiade legacy. Chinese sports partnerships.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" },
+        { id: "kzn-4", title: "Halal Industry Development", sector: "Food", description: "Halal food production and certification. Gateway to Muslim markets globally.", investmentRange: "$5M - $50M", timeline: "2-3 years", status: "active" }
+      ]},
+      { id: "naberezhnye-chelny", name: "Naberezhnye Chelny", population: "0.5M", image: "https://images.unsplash.com/photo-1547981609-4b6bfe67ca0b?w=1920&q=80", description: "Home of KAMAZ - Russia's largest truck manufacturer. Industrial city with strong automotive supply chain and Alabuga SEZ nearby.", opportunities: [
+        { id: "nch-1", title: "KAMAZ EV Partnership", sector: "Automotive", description: "Electric truck development with Russia's largest truck maker. Battery and powertrain components.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "priority" },
+        { id: "nch-2", title: "Alabuga SEZ Manufacturing", sector: "Manufacturing", description: "Russia's best SEZ: 0% profit tax 10 years, 0% property tax. Turnkey factory facilities.", investmentRange: "$10M - $150M", timeline: "1-2 years", status: "priority" },
+        { id: "nch-3", title: "Automotive Components Cluster", sector: "Automotive", description: "Tier 1/2 supplier facilities for KAMAZ and nearby automakers.", investmentRange: "$5M - $80M", timeline: "1-3 years", status: "active" }
+      ]},
+      { id: "nizhnekamsk", name: "Nizhnekamsk", population: "0.2M", image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=1920&q=80", description: "Petrochemical capital of Tatarstan. Home to TATNEFT and SIBUR facilities. Major polymer and rubber production center.", opportunities: [
+        { id: "nzk-1", title: "SIBUR Polymer Partnership", sector: "Petrochemicals", description: "Ethylene and polyethylene production. World-scale petrochemical complex.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" },
+        { id: "nzk-2", title: "Specialty Chemicals Production", sector: "Chemicals", description: "High-value chemical products leveraging local feedstock and infrastructure.", investmentRange: "$20M - $150M", timeline: "2-4 years", status: "active" },
+        { id: "nzk-3", title: "Tire & Rubber Manufacturing", sector: "Manufacturing", description: "Tire production and rubber products for domestic and export markets.", investmentRange: "$15M - $100M", timeline: "2-3 years", status: "active" }
+      ]}
+    ],
+    overview: "Russia's most successful regional economy and investment destination. Alabuga SEZ is Russia's best-performing special economic zone. Innopolis is Russia's IT city. KAMAZ truck manufacturing and TATNEFT oil production. Strong Chinese investment track record.",
+    overviewRu: "Самая успешная региональная экономика России и лучшее направление для инвестиций. ОЭЗ «Алабуга» — лучшая особая экономическая зона России. Иннополис — IT-город России. Производство грузовиков КАМАЗ и добыча нефти ТАТНЕФТЬ. Успешный опыт китайских инвестиций.",
+    overviewZh: "俄罗斯最成功的区域经济体和投资目的地。阿拉布加经济特区是俄罗斯表现最好的经济特区。伊诺波利斯是俄罗斯的IT城市。卡玛斯卡车制造和鞑靼石油生产。拥有良好的中国投资记录。",
+    targetSectors: ["Petrochemicals", "Automotive Components", "IT", "Halal Industry", "Advanced Manufacturing"],
+    opportunities: [
+      { id: "tt-1", title: "Alabuga Special Economic Zone", sector: "Manufacturing", description: "Russia's top SEZ with 0% profit tax for 10 years, 0% property tax, subsidized utilities. 100+ residents including Chinese companies.", investmentRange: "$10M - $300M", timeline: "1-3 years", status: "priority" },
+      { id: "tt-2", title: "Innopolis IT City", sector: "IT", description: "Russia's purpose-built tech city. AI, blockchain, and software development. Tax-free zone for IT companies.", investmentRange: "$5M - $100M", timeline: "1-2 years", status: "priority" },
+      { id: "tt-3", title: "KAMAZ Electric Truck Partnership", sector: "Automotive", description: "Electric truck development and component manufacturing with Russia's largest truck maker.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" },
+      { id: "tt-4", title: "Nizhnekamsk Petrochemical Expansion", sector: "Petrochemicals", description: "SIBUR and TATNEFT petrochemical projects. Polymer and specialty chemical production.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "tt-p1", name: "Haier Industrial Park Kazan", value: "$200 Million", sector: "Electronics", description: "Chinese home appliance manufacturing base for Russia market.", partners: ["Haier"], completionYear: "2026" },
+      { id: "tt-p2", name: "SIBUR Nizhnekamsk Polymer", value: "$3 Billion", sector: "Petrochemicals", description: "Ethylene and polyethylene production expansion.", partners: ["SIBUR"], completionYear: "2027" }
+    ],
+    advantages: [
+      { icon: "policy", title: "Best Regional Government", description: "Most efficient bureaucracy in Russia. English-speaking investment services." },
+      { icon: "infrastructure", title: "Top SEZ", description: "Alabuga consistently rated Russia's best special economic zone." },
+      { icon: "tech", title: "IT City", description: "Innopolis - Russia's only purpose-built tech city." },
+      { icon: "market", title: "China Track Record", description: "Haier, Midea, and other Chinese companies already operating successfully." }
+    ],
+    notableEntrepreneurs: [
+      { name: "Rustam Minnikhanov", nameRu: "Рустам Минниханов", nameZh: "鲁斯塔姆·明尼哈诺夫", company: "Tatarstan Government", industry: "Government & Business", netWorth: "N/A", description: "President of Tatarstan since 2010. Architect of Tatarstan's investment-friendly policies and SEZ success." },
+      { name: "Airat Shaimiev", nameRu: "Айрат Шаймиев", nameZh: "艾拉特·沙伊米耶夫", company: "TAIF Group", industry: "Petrochemicals", netWorth: "$2.5B", description: "Part of founding family of TAIF, Tatarstan's largest private company. Major petrochemical and energy conglomerate." },
+      { name: "Sergey Kogogin", nameRu: "Сергей Когогин", nameZh: "谢尔盖·科戈金", company: "KAMAZ", industry: "Automotive", netWorth: "N/A", description: "CEO of KAMAZ, Russia's largest truck manufacturer. Leading electric truck and autonomous vehicle development." },
+      { name: "Albert Shigabutdinov", nameRu: "Альберт Шигабутдинов", nameZh: "阿尔伯特·希加布特季诺夫", company: "TAIF Group", industry: "Energy", netWorth: "$1.1B", description: "General Director of TAIF. Transformed local refinery into integrated petrochemical powerhouse." }
+    ],
+    contactInfo: { investmentAgency: "Tatarstan Investment Development Agency", website: "https://tida.tatarstan.ru", email: "info@tida.tatarstan.ru", phone: "+7-843-524-9091" }
+  },
+  "Sverdlovsk Oblast": {
+    name: "Sverdlovsk Oblast",
+    nameRu: "Свердловская область",
+    nameZh: "斯维尔德洛夫斯克州",
+    gdp: "$51 Billion",
+    population: "4.3 Million",
+    industries: ["Metallurgy", "Heavy Machinery", "Mining", "Defense"],
+    sezCount: 2,
+    taxBenefits: ["Industrial cluster benefits", "Mining incentives", "Titanium Valley SEZ"],
+    majorCities: [
+      { id: "yekaterinburg", name: "Yekaterinburg", population: "1.5M", image: "https://images.unsplash.com/photo-1558985212-1512ae10b850?w=1920&q=80", description: "Russia's 4th largest city and industrial capital of the Urals. Historic gateway between Europe and Asia on Trans-Siberian Railway. Hosts annual INNOPROM industrial fair - Russia's main platform for China partnerships.", opportunities: [
+        { id: "ykt-1", title: "INNOPROM Industrial Partnership", sector: "Manufacturing", description: "Annual industrial fair connecting Chinese and Russian manufacturers. Technology transfer and JV platform.", investmentRange: "$5M - $100M", timeline: "1-2 years", status: "priority" },
+        { id: "ykt-2", title: "Urals Heavy Industry Modernization", sector: "Machinery", description: "Industry 4.0 upgrades for metallurgy and machinery. Smart manufacturing solutions.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" },
+        { id: "ykt-3", title: "Yekaterinburg Tech Hub", sector: "IT", description: "Software development and IT services. Growing startup ecosystem.", investmentRange: "$3M - $40M", timeline: "1-2 years", status: "active" }
+      ]},
+      { id: "nizhny-tagil", name: "Nizhny Tagil", population: "0.3M", image: "https://images.unsplash.com/photo-1590244840770-b9a0a36a3a83?w=1920&q=80", description: "Major metallurgical center home to EVRAZ steel operations. Historic arms manufacturing city now diversifying into civilian products and green steel.", opportunities: [
+        { id: "ntg-1", title: "EVRAZ Green Steel Partnership", sector: "Steel", description: "Low-carbon steel production and rail manufacturing. Technology and supply partnerships.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "priority" },
+        { id: "ntg-2", title: "Defense Conversion Manufacturing", sector: "Manufacturing", description: "Civilian applications for defense industry capabilities. Precision machinery.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
+      ]},
+      { id: "kamensk-uralsky", name: "Kamensk-Uralsky", population: "0.2M", image: "https://images.unsplash.com/photo-1597473322203-2c4f0e36e1c3?w=1920&q=80", description: "Aluminum and titanium processing center. Key supplier for aerospace and defense industries with VSMPO-AVISMA operations nearby.", opportunities: [
+        { id: "kmu-1", title: "Titanium Valley Partnership", sector: "Aerospace", description: "Titanium processing and aerospace components. VSMPO-AVISMA ecosystem.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "priority" }
+      ]}
+    ],
+    overview: "Industrial heartland of the Urals and Russia's fourth-largest city (Yekaterinburg). Major metallurgy center (EVRAZ, UMMC), heavy machinery, and defense industry. Hosts annual INNOPROM industrial exhibition. Titanium Valley SEZ for aerospace.",
+    targetSectors: ["Metallurgy", "Heavy Machinery", "Titanium & Aerospace", "Mining Equipment", "Industrial IoT"],
+    opportunities: [
+      { id: "sv-1", title: "Titanium Valley SEZ", sector: "Aerospace", description: "Titanium processing and aerospace component manufacturing. VSMPO-AVISMA partnership opportunities.", investmentRange: "$20M - $300M", timeline: "3-5 years", status: "priority" },
+      { id: "sv-2", title: "INNOPROM Industrial Partnership", sector: "Manufacturing", description: "Annual industrial exhibition - platform for China-Russia manufacturing partnerships.", investmentRange: "$5M - $100M", timeline: "1-2 years", status: "active" },
+      { id: "sv-3", title: "Urals Mining Equipment", sector: "Mining", description: "Mining machinery and equipment manufacturing for Russia's resource sector.", investmentRange: "$10M - $150M", timeline: "2-4 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "sv-p1", name: "EVRAZ Nizhny Tagil Modernization", value: "$2 Billion", sector: "Steel", description: "Green steel production and rail manufacturing.", partners: ["EVRAZ"], completionYear: "2028" }
+    ],
+    advantages: [
+      { icon: "resources", title: "Mineral Wealth", description: "Major deposits of iron, copper, titanium, and precious metals." },
+      { icon: "infrastructure", title: "Industrial Base", description: "Complete heavy industry supply chain and skilled workforce." },
+      { icon: "location", title: "Eurasia Gateway", description: "Yekaterinburg on Trans-Siberian Railway. Historic gateway between Europe and Asia." }
+    ],
+    contactInfo: { investmentAgency: "Sverdlovsk Region Investment Agency", website: "https://invest-in-ural.ru", email: "info@invest-in-ural.ru" }
+  },
+  "Krasnoyarsk Krai": {
+    name: "Krasnoyarsk Krai",
+    nameRu: "Красноярский край",
+    nameZh: "克拉斯诺亚尔斯克边疆区",
+    gdp: "$48 Billion",
+    population: "2.9 Million",
+    industries: ["Mining", "Metallurgy", "Hydropower", "Forestry"],
+    sezCount: 1,
+    taxBenefits: ["Resource extraction benefits", "Arctic development incentives", "Hydropower support"],
+    majorCities: [
+      { id: "krasnoyarsk", name: "Krasnoyarsk", population: "1.1M", image: "https://images.unsplash.com/photo-1589308078059-be1415eab4c3?w=1920&q=80", description: "Siberia's largest city on the Yenisei River. Major aluminum production (RUSAL) and hydropower hub. Gateway to vast mineral resources of northern Siberia.", opportunities: [
+        { id: "kry-1", title: "RUSAL Aluminum Partnership", sector: "Aluminum", description: "World's lowest-cost aluminum production using hydropower. Processing and export.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "active" },
+        { id: "kry-2", title: "Siberian Hydropower Projects", sector: "Energy", description: "New hydropower development and integration with mining operations.", investmentRange: "$50M - $500M", timeline: "5-10 years", status: "upcoming" },
+        { id: "kry-3", title: "Forestry & Wood Processing", sector: "Forestry", description: "Sustainable forestry and wood products export to China.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
+      ]},
+      { id: "norilsk", name: "Norilsk", population: "0.2M", image: "https://images.unsplash.com/photo-1551845041-63e8e76836ea?w=1920&q=80", description: "Arctic mining city and home to Nornickel - world's largest nickel and palladium producer. Critical minerals for EV batteries and electronics. Extreme environment with unique investment opportunities.", opportunities: [
+        { id: "nrl-1", title: "Nornickel Strategic Partnership", sector: "Mining", description: "Nickel, palladium, and copper supply agreements. Critical minerals for Chinese EV industry.", investmentRange: "$100M - $1B", timeline: "5-10 years", status: "priority" },
+        { id: "nrl-2", title: "Mining Technology", sector: "Technology", description: "Autonomous mining equipment and Arctic technology. Harsh environment solutions.", investmentRange: "$20M - $150M", timeline: "3-5 years", status: "active" }
+      ]},
+      { id: "achinsk", name: "Achinsk", population: "0.1M", image: "https://images.unsplash.com/photo-1598286867762-8bde84aae1e3?w=1920&q=80", description: "Industrial city on the Trans-Siberian Railway. Aluminum and cement production. Growing logistics importance for eastbound freight.", opportunities: [
+        { id: "ach-1", title: "Trans-Siberian Logistics Hub", sector: "Logistics", description: "Warehousing and transshipment on main rail corridor to Asia.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" }
+      ]}
+    ],
+    overview: "Vast Siberian region with enormous mineral wealth. Norilsk Nickel is world's largest nickel and palladium producer. Major aluminum (RUSAL) and hydropower production. Growing Arctic development importance.",
+    targetSectors: ["Mining", "Aluminum", "Hydropower", "Arctic Development", "Forestry"],
+    opportunities: [
+      { id: "kr-1", title: "Nornickel Expansion Partnership", sector: "Mining", description: "Nickel, palladium, and copper mining technology and equipment. Green mining initiatives.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" },
+      { id: "kr-2", title: "RUSAL Aluminum Partnership", sector: "Aluminum", description: "Aluminum smelting and processing. World's lowest-cost aluminum production using hydropower.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "active" },
+      { id: "kr-3", title: "Siberian Forestry Modernization", sector: "Forestry", description: "Sustainable forestry and wood processing. Export to China.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "kr-p1", name: "Nornickel Sulphur Program", value: "$3.5 Billion", sector: "Mining", description: "Environmental modernization capturing 95% of sulphur emissions.", partners: ["Nornickel"], completionYear: "2025" }
+    ],
+    advantages: [
+      { icon: "resources", title: "Mineral Superpower", description: "Largest nickel, palladium reserves. Major copper, gold, platinum." },
+      { icon: "infrastructure", title: "Cheap Hydropower", description: "Massive hydroelectric dams provide lowest-cost electricity." }
+    ],
+    contactInfo: { investmentAgency: "Krasnoyarsk Krai Investment Agency", website: "https://krskinvest.ru", email: "info@krskinvest.ru" }
+  },
+  "Krasnodar Krai": {
+    name: "Krasnodar Krai",
+    nameRu: "Краснодарский край",
+    nameZh: "克拉斯诺达尔边疆区",
+    gdp: "$63 Billion",
+    population: "5.7 Million",
+    industries: ["Agriculture", "Tourism", "Food Processing", "Oil & Gas"],
+    sezCount: 2,
+    taxBenefits: ["Agricultural support", "Resort zone benefits", "Investment incentives"],
+    majorCities: [
+      { id: "krasnodar", name: "Krasnodar", population: "1.1M", image: "https://images.unsplash.com/photo-1568954775058-be47c87a0a20?w=1920&q=80", description: "Capital of Russia's agricultural heartland. Fast-growing modern city with excellent climate. Major food processing and agribusiness center serving southern Russia.", opportunities: [
+        { id: "krd-1", title: "Krasnodar Agribusiness Hub", sector: "Agriculture", description: "Grain, sunflower, and food processing. Partnership with Russia's largest agricultural producers.", investmentRange: "$10M - $150M", timeline: "2-3 years", status: "priority" },
+        { id: "krd-2", title: "Food Processing Cluster", sector: "Food", description: "Modern processing facilities for export to China. Cold chain and packaging.", investmentRange: "$15M - $120M", timeline: "2-4 years", status: "active" },
+        { id: "krd-3", title: "Wine Industry Development", sector: "Wine", description: "Partnership with local wineries. China market export and tourism development.", investmentRange: "$5M - $50M", timeline: "2-3 years", status: "active" }
+      ]},
+      { id: "sochi", name: "Sochi", population: "0.4M", image: "https://images.unsplash.com/photo-1578070181910-f1e514afdd08?w=1920&q=80", description: "Russia's premier Black Sea resort and 2014 Winter Olympics host. Year-round destination with beaches and ski slopes. World-class sports and entertainment facilities.", opportunities: [
+        { id: "soc-1", title: "Sochi Resort Development", sector: "Tourism", description: "Luxury hotels and resort facilities. Growing Chinese tourist segment.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" },
+        { id: "soc-2", title: "Olympic Legacy Sports Hub", sector: "Sports", description: "Sports training and event facilities. Formula 1 circuit and ski resorts.", investmentRange: "$15M - $150M", timeline: "2-4 years", status: "active" },
+        { id: "soc-3", title: "Medical Tourism", sector: "Healthcare", description: "Wellness resorts and medical tourism. Traditional Russian spa treatments.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "upcoming" }
+      ]},
+      { id: "novorossiysk", name: "Novorossiysk", population: "0.3M", image: "https://images.unsplash.com/photo-1562073853-7d6039f3cb8a?w=1920&q=80", description: "Russia's largest Black Sea port handling 25% of seaborne trade. Major grain export terminal and oil terminal. Key logistics hub for southern Russia.", opportunities: [
+        { id: "nvr-1", title: "Novorossiysk Container Terminal", sector: "Logistics", description: "Container handling expansion for China trade via Suez Canal route.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" },
+        { id: "nvr-2", title: "Grain Export Terminal", sector: "Agriculture", description: "Grain export facilities for Russian wheat to global markets.", investmentRange: "$30M - $200M", timeline: "2-4 years", status: "active" }
+      ]}
+    ],
+    overview: "Russia's agricultural heartland and Black Sea resort region. Sochi hosted 2014 Winter Olympics. Novorossiysk is Russia's largest port. Warm climate attracts millions of tourists and agricultural investment.",
+    targetSectors: ["Agriculture", "Tourism", "Food Processing", "Wine", "Port & Logistics"],
+    opportunities: [
+      { id: "kd-1", title: "Krasnodar Agricultural Investment", sector: "Agriculture", description: "Grain, sunflower, and vegetable production. Largest agricultural region in Russia.", investmentRange: "$10M - $200M", timeline: "2-4 years", status: "priority" },
+      { id: "kd-2", title: "Sochi Resort Development", sector: "Tourism", description: "Hotels, resorts, and tourism infrastructure. Olympic legacy facilities.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" },
+      { id: "kd-3", title: "Novorossiysk Port Expansion", sector: "Logistics", description: "Container terminal and grain export facilities. China trade gateway.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "kd-p1", name: "Sochi-Adler Tourism Cluster", value: "$1 Billion", sector: "Tourism", description: "Year-round resort development.", completionYear: "2028" }
+    ],
+    advantages: [
+      { icon: "resources", title: "Agricultural Leader", description: "Russia's breadbasket. Best climate for farming." },
+      { icon: "logistics", title: "Black Sea Ports", description: "Novorossiysk handles 25% of Russian seaborne trade." },
+      { icon: "infrastructure", title: "Olympic Legacy", description: "World-class sports and tourism facilities from 2014 Olympics." }
+    ],
+    contactInfo: { investmentAgency: "Krasnodar Krai Investment Agency", website: "https://kubaninvest.ru", email: "info@kubaninvest.ru" }
+  },
+  "Primorsky Krai": {
+    name: "Primorsky Krai",
+    nameRu: "Приморский край",
+    nameZh: "滨海边疆区",
+    gdp: "$20 Billion",
+    population: "1.9 Million",
+    industries: ["Shipping", "Fishing", "Trade", "Shipbuilding"],
+    sezCount: 3,
+    taxBenefits: ["Free Port of Vladivostok benefits", "Far East development incentives", "Fishing industry support"],
+    majorCities: [
+      { id: "vladivostok", name: "Vladivostok", population: "0.6M", lat: 43.1155, lng: 131.8855, image: "https://images.unsplash.com/photo-1606761568499-6d2451b23c66?w=1920&q=80", description: "Russia's Pacific capital and gateway to Asia. Free Port of Vladivostok offers unique investment incentives. 2 hours from Harbin, direct connections to all major Asian cities. Eastern Economic Forum host.", opportunities: [
+        { id: "vlk-1", title: "Free Port of Vladivostok", titleRu: "Свободный порт Владивосток", titleZh: "符拉迪沃斯托克自由港", sector: "Trade", description: "Simplified visa, customs, and tax regime. Gateway for China-Russia-Asia trade. Duty-free processing zones.", descriptionRu: "Упрощённый визовый, таможенный и налоговый режим. Ворота для торговли Китай-Россия-Азия. Беспошлинные зоны переработки.", descriptionZh: "简化签证、海关和税收制度。中俄亚贸易门户。免税加工区。", investmentRange: "$5M - $100M", timeline: "1-2 years", status: "priority" },
+        { id: "vlk-2", title: "Vladivostok Port Expansion", sector: "Logistics", description: "Container terminal and logistics hub. Direct shipping to all Chinese ports.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "priority" },
+        { id: "vlk-3", title: "Casino & Tourism Zone", sector: "Tourism", description: "Primorye integrated entertainment resort. Gaming license and resort development.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" },
+        { id: "vlk-4", title: "Seafood Processing Hub", sector: "Food", description: "Fish and seafood processing for China market. Cold chain and export facilities.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" }
+      ]},
+      { id: "nakhodka", name: "Nakhodka", population: "0.1M", image: "https://images.unsplash.com/photo-1569335468083-1b4c4b5e6fd0?w=1920&q=80", description: "Major Pacific port with ice-free harbor. Key terminus for Russian exports to Asia. Growing oil and LNG export terminal operations.", opportunities: [
+        { id: "nak-1", title: "Nakhodka Oil Terminal", sector: "Energy", description: "Oil export terminal operations and logistics. Russian crude to China.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" },
+        { id: "nak-2", title: "Container Port Development", sector: "Logistics", description: "Container handling expansion for trans-Pacific trade.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" }
+      ]},
+      { id: "ussuriysk", name: "Ussuriysk", population: "0.2M", image: "https://images.unsplash.com/photo-1602746280895-acb6f3b8a01a?w=1920&q=80", description: "Major rail junction and agricultural center near Chinese border. Processing hub for agricultural products and manufacturing gateway for Chinese goods entering Russia.", opportunities: [
+        { id: "uss-1", title: "Border Trade Processing Zone", sector: "Trade", description: "Processing and packaging for China-sourced goods. Rail transfer and logistics.", investmentRange: "$5M - $60M", timeline: "1-2 years", status: "priority" },
+        { id: "uss-2", title: "Agricultural Processing", sector: "Agriculture", description: "Soybean, rice, and honey processing for export. Food industry cluster.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" }
+      ]}
+    ],
+    overview: "Russia's Pacific gateway and closest major Russian city to China. Vladivostok hosts Eastern Economic Forum. Free Port regime with visa-free entry, tax benefits, and simplified customs. Direct border crossing to Heilongjiang and Jilin provinces.",
+    targetSectors: ["Shipping & Logistics", "Fishing", "China Border Trade", "Shipbuilding", "Tourism"],
+    opportunities: [
+      { id: "pk-1", title: "Free Port of Vladivostok", sector: "Trade", description: "Tax-free zone with simplified customs, visa-free entry for 18 countries, 0% import duties for SEZ goods. Gateway for China-Russia trade.", investmentRange: "$10M - $300M", timeline: "1-3 years", status: "priority" },
+      { id: "pk-2", title: "Vladivostok-Harbin Trade Corridor", sector: "Logistics", description: "Cross-border logistics connecting Russian Far East to Northeast China. Rail and road infrastructure.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "priority" },
+      { id: "pk-3", title: "Russian Seafood Export Hub", sector: "Fishing", description: "Fishing fleet investment and seafood processing for China market. Russia supplies 10% of China's seafood.", investmentRange: "$10M - $150M", timeline: "2-4 years", status: "active" },
+      { id: "pk-4", title: "Zvezda Shipyard Partnership", sector: "Shipbuilding", description: "LNG carriers, tankers, and icebreakers at Russia's largest shipyard.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "pk-p1", name: "Eastern Economic Forum Infrastructure", value: "$2 Billion", sector: "Infrastructure", description: "Vladivostok development as Russia-Asia business hub.", completionYear: "2030" },
+      { id: "pk-p2", name: "Zarubino Port Development", value: "$3 Billion", sector: "Port", description: "Major new port for Northeast China transit trade.", partners: ["Summa Group", "Chinese investors"], completionYear: "2030" }
+    ],
+    advantages: [
+      { icon: "location", title: "China Gateway", description: "2 hours from Harbin by car. Closest Russian city to Asian markets." },
+      { icon: "policy", title: "Free Port Regime", description: "Visa-free, tax-free, simplified customs. Best incentives in Russia." },
+      { icon: "resources", title: "Seafood Capital", description: "Rich fishing grounds. Major crab, salmon, and pollock supply." },
+      { icon: "infrastructure", title: "EEF Host", description: "Annual Eastern Economic Forum brings top China-Russia business leaders." }
+    ],
+    contactInfo: { investmentAgency: "Primorsky Krai Investment Agency", website: "https://invest.primorsky.ru", email: "info@invest.primorsky.ru", phone: "+7-423-220-5555" }
+  },
+  "Sakhalin Oblast": {
+    name: "Sakhalin Oblast",
+    nameRu: "Сахалинская область",
+    nameZh: "萨哈林州",
+    gdp: "$25 Billion",
+    population: "0.5 Million",
+    industries: ["Oil & Gas", "Fishing", "Mining", "LNG"],
+    sezCount: 1,
+    taxBenefits: ["PSA benefits", "Far East incentives", "LNG project support"],
+    majorCities: [
+      { id: "yuzhno-sakhalinsk", name: "Yuzhno-Sakhalinsk", population: "0.2M", image: "https://images.unsplash.com/photo-1551845041-63e8e76836ea?w=1920&q=80", description: "Capital of Russia's richest Far Eastern region. Oil and gas service center with Japanese heritage. Gateway to massive offshore energy projects.", opportunities: [
+        { id: "ysk-1", title: "Oil & Gas Service Hub", sector: "Energy Services", description: "Service base for Sakhalin offshore projects. Equipment, logistics, and technical services.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "priority" },
+        { id: "ysk-2", title: "LNG Terminal Operations", sector: "LNG", description: "LNG export operations and maintenance. Ship loading and storage services.", investmentRange: "$50M - $400M", timeline: "3-5 years", status: "active" },
+        { id: "ysk-3", title: "Sakhalin Tech Services", sector: "IT", description: "Remote operations and digital oilfield services. Arctic technology development.", investmentRange: "$5M - $50M", timeline: "1-3 years", status: "active" }
+      ]},
+      { id: "korsakov", name: "Korsakov", population: "0.03M", image: "https://images.unsplash.com/photo-1569335468083-1b4c4b5e6fd0?w=1920&q=80", description: "Major port city and LNG export terminal. Gateway for Sakhalin-2 project shipments to Asia.", opportunities: [
+        { id: "kor-1", title: "Korsakov LNG Transshipment", sector: "LNG", description: "LNG transshipment and bunkering services. Arctic route support.", investmentRange: "$30M - $250M", timeline: "3-5 years", status: "priority" },
+        { id: "kor-2", title: "Seafood Processing Complex", sector: "Fishing", description: "Premium crab and salmon processing. Direct export to Chinese markets.", investmentRange: "$15M - $100M", timeline: "2-3 years", status: "active" }
+      ]}
+    ],
+    overview: "Island region with massive offshore oil and gas resources. Major LNG exporter to Asia. Sakhalin-1 and Sakhalin-2 are among world's largest integrated oil and gas projects. Strategic location for Asia energy supply.",
+    targetSectors: ["Oil & Gas", "LNG", "Fishing", "Mining", "Hydrogen"],
+    opportunities: [
+      { id: "sk-1", title: "Sakhalin LNG Expansion", sector: "LNG", description: "LNG plant expansion and Asian export infrastructure. Direct shipments to China LNG terminals.", investmentRange: "$100M - $1B", timeline: "5-10 years", status: "priority" },
+      { id: "sk-2", title: "Sakhalin Hydrogen Hub", sector: "Hydrogen", description: "Blue and green hydrogen production for Asian markets. Leverage existing gas infrastructure.", investmentRange: "$50M - $500M", timeline: "5-10 years", status: "upcoming" },
+      { id: "sk-3", title: "Sakhalin Seafood Processing", sector: "Fishing", description: "Premium crab and salmon processing for Chinese market.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "sk-p1", name: "Sakhalin Energy LNG Train 3", value: "$10 Billion", sector: "LNG", description: "Additional LNG production capacity.", partners: ["Sakhalin Energy"], completionYear: "2030" }
+    ],
+    advantages: [
+      { icon: "resources", title: "Energy Superpower", description: "Massive oil and gas reserves. Russia's LNG export hub to Asia." },
+      { icon: "location", title: "Asia Proximity", description: "Short shipping distance to China, Japan, Korea LNG markets." }
+    ],
+    contactInfo: { investmentAgency: "Sakhalin Oblast Investment Agency", website: "https://investinsakhalin.ru", email: "info@investinsakhalin.ru" }
+  },
+  "Khabarovsk Krai": {
+    name: "Khabarovsk Krai",
+    nameRu: "Хабаровский край",
+    nameZh: "哈巴罗夫斯克边疆区",
+    gdp: "$17 Billion",
+    population: "1.3 Million",
+    industries: ["Mining", "Forestry", "Fishing", "Manufacturing"],
+    sezCount: 2,
+    taxBenefits: ["Far East development benefits", "Resource extraction incentives", "Border trade support"],
+    majorCities: [
+      { id: "khabarovsk", name: "Khabarovsk", population: "0.6M", image: "https://images.unsplash.com/photo-1569935738295-3ef208855c9e?w=1920&q=80", description: "Capital of Russia's Far East Federal District on the Amur River. Major administrative and cultural center with direct border crossing to China. Gateway for Heilongjiang trade.", opportunities: [
+        { id: "khb-1", title: "Khabarovsk-Fuyuan Border Hub", sector: "Trade", description: "Cross-border trade zone with direct China access. Simplified customs for Russian-Chinese goods.", investmentRange: "$15M - $150M", timeline: "2-3 years", status: "priority" },
+        { id: "khb-2", title: "Khabarovsk Logistics Center", sector: "Logistics", description: "Regional distribution hub for Far East. Rail and river transport integration.", investmentRange: "$20M - $180M", timeline: "2-4 years", status: "active" },
+        { id: "khb-3", title: "Far East Food Processing", sector: "Food", description: "Processing Russian agricultural products for Chinese market. Honey, berries, and game.", investmentRange: "$8M - $60M", timeline: "1-3 years", status: "active" }
+      ]},
+      { id: "komsomolsk-on-amur", name: "Komsomolsk-on-Amur", population: "0.2M", image: "https://images.unsplash.com/photo-1590244840770-b9a0a36a3a83?w=1920&q=80", description: "Russia's major aerospace manufacturing city. Home to Sukhoi fighter jets and civilian aircraft production. Strong industrial base with skilled workforce.", opportunities: [
+        { id: "kms-1", title: "Sukhoi Supply Partnership", sector: "Aerospace", description: "Component supply for Su-35, Su-57 fighters and Superjet 100. Avionics and materials.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "priority" },
+        { id: "kms-2", title: "Civilian Aircraft Components", sector: "Aerospace", description: "Superjet and MC-21 supply chain. Composite materials and systems.", investmentRange: "$20M - $150M", timeline: "2-4 years", status: "active" },
+        { id: "kms-3", title: "Steel & Metallurgy Processing", sector: "Steel", description: "Amurstal steel plant partnerships. Specialty steel products.", investmentRange: "$25M - $200M", timeline: "2-4 years", status: "active" }
+      ]}
+    ],
+    overview: "Major Far East region on Amur River bordering China. Khabarovsk is administrative center of Far Eastern Federal District. Strong aerospace (Sukhoi aircraft), mining, and forestry sectors. Direct border trade with Heilongjiang.",
+    targetSectors: ["Aerospace", "Mining", "Forestry", "Border Trade", "Food Processing"],
+    opportunities: [
+      { id: "kh-1", title: "Khabarovsk-Fuyuan Border Trade", sector: "Trade", description: "Cross-border trade zone with Heilongjiang. Simplified customs and logistics.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "active" },
+      { id: "kh-2", title: "Komsomolsk Aviation Cluster", sector: "Aerospace", description: "Sukhoi aircraft manufacturing. Supplier and technology partnerships.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "active" },
+      { id: "kh-3", title: "Far East Timber Processing", sector: "Forestry", description: "Value-added wood processing for China export. Sustainable forestry.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "kh-p1", name: "Sukhoi Superjet Production", value: "$1 Billion", sector: "Aerospace", description: "Regional jet manufacturing expansion.", partners: ["UAC"], completionYear: "2027" }
+    ],
+    advantages: [
+      { icon: "location", title: "Far East Capital", description: "Administrative center of Far Eastern Federal District." },
+      { icon: "infrastructure", title: "Aerospace Hub", description: "Sukhoi fighter and civilian aircraft production." }
+    ],
+    contactInfo: { investmentAgency: "Khabarovsk Krai Investment Agency", website: "https://invest.khabkrai.ru", email: "info@invest.khabkrai.ru" }
+  },
+  "Novosibirsk Oblast": {
+    name: "Novosibirsk Oblast",
+    nameRu: "Новосибирская область",
+    nameZh: "新西伯利亚州",
+    gdp: "$23 Billion",
+    population: "2.8 Million",
+    industries: ["IT", "Science", "Manufacturing", "Agriculture"],
+    sezCount: 2,
+    taxBenefits: ["Akademgorodok technopark benefits", "IT incentives", "Science city support"],
+    majorCities: [
+      { id: "novosibirsk", name: "Novosibirsk", population: "1.6M", image: "https://images.unsplash.com/photo-1596389662031-aa6e6b8d0c09?w=1920&q=80", description: "Russia's third-largest city and capital of Siberia. Home to Akademgorodok - Russia's premier science city. Major IT hub with strong research tradition. Strategic location on Trans-Siberian Railway.", opportunities: [
+        { id: "nvs-1", title: "Akademgorodok Tech Partnership", sector: "R&D", description: "Joint research with 35+ institutes. AI, physics, biology, and materials science.", investmentRange: "$10M - $150M", timeline: "2-4 years", status: "priority" },
+        { id: "nvs-2", title: "Novosibirsk IT Cluster", sector: "IT", description: "Software development hub. Strong mathematics and programming talent from NSU.", investmentRange: "$5M - $60M", timeline: "1-2 years", status: "active" },
+        { id: "nvs-3", title: "Vector Institute Partnership", sector: "Biotech", description: "Virology and vaccine research. World-renowned biosecurity expertise.", investmentRange: "$15M - $120M", timeline: "3-5 years", status: "active" },
+        { id: "nvs-4", title: "Siberian Logistics Hub", sector: "Logistics", description: "Trans-Siberian Railway node. China-Europe freight and distribution.", investmentRange: "$20M - $180M", timeline: "2-4 years", status: "active" }
+      ]},
+      { id: "berdsk", name: "Berdsk", population: "0.1M", image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1920&q=80", description: "Satellite city with electronics manufacturing and recreation on Ob Sea reservoir. Growing residential and tech services.", opportunities: [
+        { id: "brd-1", title: "Electronics Manufacturing", sector: "Electronics", description: "Consumer and industrial electronics production. Novosibirsk metro area supplier.", investmentRange: "$8M - $60M", timeline: "2-3 years", status: "active" }
+      ]}
+    ],
+    overview: "Russia's third-largest city and Siberian capital. Akademgorodok is Russia's premier science city with world-class research institutes. Strong IT sector and growing tech startup ecosystem. Strategic location on Trans-Siberian Railway.",
+    targetSectors: ["IT & Software", "Science & R&D", "Biotech", "Nuclear Technology", "Education"],
+    opportunities: [
+      { id: "ns-1", title: "Akademgorodok Science Partnership", sector: "R&D", description: "Joint research with 35+ institutes in physics, biology, chemistry. Technology commercialization opportunities.", investmentRange: "$5M - $100M", timeline: "2-4 years", status: "priority" },
+      { id: "ns-2", title: "Novosibirsk IT Cluster", sector: "IT", description: "Software development and tech startups. Strong mathematics and programming talent.", investmentRange: "$3M - $50M", timeline: "1-2 years", status: "active" },
+      { id: "ns-3", title: "Siberian Biotech Hub", sector: "Biotech", description: "Vector Institute for virology and biotech research. Vaccine and pharmaceutical development.", investmentRange: "$10M - $100M", timeline: "3-5 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "ns-p1", name: "Akademgorodok 2.0", value: "$500 Million", sector: "Science", description: "Modernization of Russia's premier science city.", completionYear: "2030" }
+    ],
+    advantages: [
+      { icon: "talent", title: "Science Capital", description: "Akademgorodok - Russia's largest scientific center with 35+ research institutes." },
+      { icon: "tech", title: "IT Hub", description: "Strong programming talent and growing startup ecosystem." }
+    ],
+    contactInfo: { investmentAgency: "Novosibirsk Oblast Investment Agency", website: "https://invest.nso.ru", email: "info@invest.nso.ru" }
+  },
+  "Kaliningrad Oblast": {
+    name: "Kaliningrad Oblast",
+    nameRu: "Калининградская область",
+    nameZh: "加里宁格勒州",
+    gdp: "$12 Billion",
+    population: "1 Million",
+    industries: ["Automotive", "Electronics", "Food Processing", "Amber"],
+    sezCount: 1,
+    taxBenefits: ["SEZ Yantar benefits", "EU border trade advantages", "Import substitution support"],
+    majorCities: [{ id: "kaliningrad", name: "Kaliningrad", population: "0.5M" }, { id: "sovetsk", name: "Sovetsk", population: "0.04M" }],
+    overview: "Russian exclave on Baltic Sea between Poland and Lithuania. Special Economic Zone with unique EU border position. Automotive assembly (BMW, Kia), electronics manufacturing, and 90% of world's amber reserves.",
+    targetSectors: ["Automotive", "Electronics Assembly", "Amber", "Food Processing", "Tourism"],
+    opportunities: [
+      { id: "kg-1", title: "Kaliningrad Assembly Hub", sector: "Manufacturing", description: "Electronics and automotive assembly for Russia market. SEZ tax benefits.", investmentRange: "$20M - $200M", timeline: "2-3 years", status: "active" },
+      { id: "kg-2", title: "Baltic Tourism Development", sector: "Tourism", description: "Beach resorts and historical tourism. Amber jewelry and crafts.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "kg-p1", name: "Kaliningrad Port Modernization", value: "$300 Million", sector: "Port", description: "Baltic container terminal expansion.", completionYear: "2027" }
+    ],
+    advantages: [
+      { icon: "location", title: "EU Gateway", description: "Only Russian region bordering EU. Unique trade position." },
+      { icon: "resources", title: "Amber Capital", description: "90% of world's amber deposits." }
+    ],
+    contactInfo: { investmentAgency: "Kaliningrad Oblast Development Corporation", website: "https://investinkaliningrad.ru", email: "info@investinkaliningrad.ru" }
+  },
+  "Samara Oblast": { name: "Samara Oblast", nameRu: "Самарская область", nameZh: "萨马拉州", gdp: "$35 Billion", population: "3.2 Million", industries: ["Automotive", "Aerospace", "Petrochemicals", "Agriculture"], sezCount: 1, taxBenefits: ["Automotive cluster benefits", "Aerospace incentives", "Togliatti SEZ"], majorCities: [{ id: "samara", name: "Samara", population: "1.2M" }, { id: "togliatti", name: "Togliatti", population: "0.7M" }, { id: "syzran", name: "Syzran", population: "0.2M" }], overview: "Major Volga region industrial center. AVTOVAZ (Lada) headquarters in Togliatti. Space rocket production at Progress. Strong petrochemical sector.", targetSectors: ["Automotive", "Aerospace", "Petrochemicals", "Agriculture"], opportunities: [{ id: "sm-1", title: "AVTOVAZ Supplier Partnership", sector: "Automotive", description: "Component supply for Russia's largest automaker. EV transition opportunities.", investmentRange: "$10M - $150M", timeline: "2-3 years", status: "active" }], keyProjects: [{ id: "sm-p1", name: "Togliatti SEZ Expansion", value: "$200 Million", sector: "Industrial", description: "Automotive supplier park development.", completionYear: "2027" }], advantages: [{ icon: "infrastructure", title: "Auto Capital", description: "AVTOVAZ headquarters and supplier ecosystem." }], contactInfo: { investmentAgency: "Samara Oblast Investment Agency", website: "https://investinsamara.ru" } },
+  "Nizhny Novgorod Oblast": { name: "Nizhny Novgorod Oblast", nameRu: "Нижегородская область", nameZh: "下诺夫哥罗德州", gdp: "$32 Billion", population: "3.2 Million", industries: ["Automotive", "IT", "Metallurgy", "Chemicals"], sezCount: 2, taxBenefits: ["IT cluster benefits", "Automotive support", "Investment incentives"], majorCities: [{ id: "nizhny-novgorod", name: "Nizhny Novgorod", population: "1.3M" }, { id: "dzerzhinsk", name: "Dzerzhinsk", population: "0.2M" }, { id: "arzamas", name: "Arzamas", population: "0.1M" }], overview: "Historic trading city at Volga-Oka confluence. GAZ Group truck manufacturing. Growing IT sector and strong chemicals industry in Dzerzhinsk.", targetSectors: ["Automotive", "IT", "Chemicals", "Nuclear"], opportunities: [{ id: "nn-1", title: "GAZ Group Partnership", sector: "Automotive", description: "Commercial vehicle manufacturing. Chinese brand assembly.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" }], keyProjects: [], advantages: [{ icon: "logistics", title: "Volga Hub", description: "Strategic location on major river trade routes." }], contactInfo: { investmentAgency: "Nizhny Novgorod Investment Agency", website: "https://invest.nnov.ru" } },
+  "Rostov Oblast": { name: "Rostov Oblast", nameRu: "Ростовская область", nameZh: "罗斯托夫州", gdp: "$33 Billion", population: "4.2 Million", industries: ["Agriculture", "Heavy Machinery", "Food Processing", "Trade"], sezCount: 1, taxBenefits: ["Agricultural processing benefits", "Southern Russia incentives", "Port zone benefits"], majorCities: [{ id: "rostov-on-don", name: "Rostov-on-Don", population: "1.1M" }, { id: "taganrog", name: "Taganrog", population: "0.3M" }, { id: "shakhty", name: "Shakhty", population: "0.2M" }], overview: "Southern Russia's largest city and agricultural hub. Gateway to Caucasus. Major agricultural machinery (Rostselmash) production. Port city on Don River.", targetSectors: ["Agriculture", "Agricultural Machinery", "Food Processing", "Logistics"], opportunities: [{ id: "rs-1", title: "Rostselmash Partnership", sector: "Machinery", description: "Agricultural machinery manufacturing. Combine harvester production.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" }], keyProjects: [], advantages: [{ icon: "resources", title: "Agricultural Belt", description: "Major grain and sunflower production region." }], contactInfo: { investmentAgency: "Rostov Oblast Investment Agency", website: "https://investinrostov.ru" } },
+  "Chelyabinsk Oblast": { name: "Chelyabinsk Oblast", nameRu: "Челябинская область", nameZh: "车里雅宾斯克州", gdp: "$28 Billion", population: "3.4 Million", industries: ["Metallurgy", "Heavy Machinery", "Mining", "Defense"], sezCount: 1, taxBenefits: ["Industrial cluster benefits", "Metallurgy support", "Defense industry incentives"], majorCities: [{ id: "chelyabinsk", name: "Chelyabinsk", population: "1.2M" }, { id: "magnitogorsk", name: "Magnitogorsk", population: "0.4M" }, { id: "zlatoust", name: "Zlatoust", population: "0.2M" }], overview: "Major Urals industrial center. MMK steel giant in Magnitogorsk. Pipe manufacturing and heavy machinery. Strong defense industry.", targetSectors: ["Steel", "Pipe Manufacturing", "Mining Equipment", "Defense"], opportunities: [{ id: "ch-1", title: "MMK Steel Partnership", sector: "Steel", description: "Steel production and processing. Green steel initiatives.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "active" }], keyProjects: [], advantages: [{ icon: "infrastructure", title: "Steel Giant", description: "MMK - one of world's largest steel plants." }], contactInfo: { investmentAgency: "Chelyabinsk Oblast Investment Agency", website: "https://investinchel.ru" } },
+  "Bashkortostan": { name: "Republic of Bashkortostan", nameRu: "Республика Башкортостан", nameZh: "巴什科尔托斯坦共和国", gdp: "$27 Billion", population: "4 Million", industries: ["Oil & Gas", "Petrochemicals", "Agriculture", "Mining"], sezCount: 1, taxBenefits: ["Petrochemical cluster benefits", "Agricultural support", "Investment incentives"], majorCities: [{ id: "ufa", name: "Ufa", population: "1.1M" }, { id: "sterlitamak", name: "Sterlitamak", population: "0.3M" }, { id: "salavat", name: "Salavat", population: "0.2M" }], overview: "Major petrochemical and agricultural region. Bashneft oil company. Diverse ethnic republic with strong manufacturing base.", targetSectors: ["Petrochemicals", "Oil Refining", "Agriculture", "Soda & Chemicals"], opportunities: [{ id: "bs-1", title: "Bashkortostan Petrochemical Investment", sector: "Petrochemicals", description: "Downstream oil processing and specialty chemicals.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "active" }], keyProjects: [], advantages: [{ icon: "resources", title: "Petrochemical Hub", description: "Major refining and chemical production capacity." }], contactInfo: { investmentAgency: "Bashkortostan Investment Agency", website: "https://investinbashkortostan.ru" } },
+  "Perm Krai": { name: "Perm Krai", nameRu: "Пермский край", nameZh: "彼尔姆边疆区", gdp: "$26 Billion", population: "2.6 Million", industries: ["Oil & Gas", "Chemicals", "Mining", "Machinery"], sezCount: 1, taxBenefits: ["Chemical cluster benefits", "Mining incentives", "Industrial park support"], majorCities: [{ id: "perm", name: "Perm", population: "1.1M" }, { id: "berezniki", name: "Berezniki", population: "0.1M" }, { id: "solikamsk", name: "Solikamsk", population: "0.1M" }], overview: "Major Urals industrial region. Uralkali potash production. Strong chemicals and oil sector. Aviation engine manufacturing.", targetSectors: ["Potash & Fertilizers", "Oil & Gas", "Aviation", "Chemicals"], opportunities: [{ id: "pm-1", title: "Uralkali Potash Partnership", sector: "Fertilizers", description: "Potash mining and fertilizer production for China agriculture.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" }], keyProjects: [], advantages: [{ icon: "resources", title: "Potash Leader", description: "World's largest potash producer. Critical for agriculture." }], contactInfo: { investmentAgency: "Perm Krai Investment Agency", website: "https://investinperm.ru" } },
+  "Leningrad Oblast": { name: "Leningrad Oblast", nameRu: "Ленинградская область", nameZh: "列宁格勒州", gdp: "$22 Billion", population: "2 Million", industries: ["Automotive", "Shipbuilding", "Food Processing", "Logistics"], sezCount: 2, taxBenefits: ["Port zone benefits", "Automotive cluster support", "Logistics incentives"], majorCities: [{ id: "gatchina", name: "Gatchina", population: "0.1M" }, { id: "vyborg", name: "Vyborg", population: "0.08M" }, { id: "vsevolozhsk", name: "Vsevolozhsk", population: "0.07M" }], overview: "Region surrounding St. Petersburg with major ports and industry. Major automotive plants (Ford, Toyota, GM). Ust-Luga port is Russia's largest Baltic terminal.", targetSectors: ["Automotive", "Port & Logistics", "Shipbuilding", "LNG"], opportunities: [{ id: "lo-1", title: "Ust-Luga Port Development", sector: "Port", description: "Russia's largest Baltic port. Container and LNG terminals.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" }], keyProjects: [], advantages: [{ icon: "logistics", title: "Baltic Gateway", description: "Ust-Luga - Russia's largest Baltic port." }], contactInfo: { investmentAgency: "Leningrad Oblast Investment Agency", website: "https://investinlenobl.ru" } },
+  "Irkutsk Oblast": {
+    name: "Irkutsk Oblast",
+    nameRu: "Иркутская область",
+    nameZh: "伊尔库茨克州",
+    gdp: "$34 Billion",
+    population: "2.4 Million",
+    industries: ["Mining", "Forestry", "Hydropower", "Chemicals"],
+    sezCount: 1,
+    taxBenefits: ["Resource extraction benefits", "Baikal tourism incentives", "Energy cluster support"],
+    majorCities: [
+      { id: "irkutsk", name: "Irkutsk", population: "0.6M", image: "https://images.unsplash.com/photo-1551845041-63e8e76836ea?w=1920&q=80", description: "Gateway to Lake Baikal and historic Siberian trading city. Rich architectural heritage from merchants' era. Major university center and tourism hub for Chinese visitors.", opportunities: [
+        { id: "irk-1", title: "Lake Baikal Eco-Tourism", sector: "Tourism", description: "Premium eco-lodges and adventure tourism on world's deepest lake. Growing Chinese visitor segment.", investmentRange: "$15M - $120M", timeline: "2-4 years", status: "priority" },
+        { id: "irk-2", title: "Baikal Chinese Tourism Services", sector: "Tourism", description: "Hotels, restaurants, and tour services for 200,000+ Chinese visitors annually.", investmentRange: "$8M - $60M", timeline: "1-3 years", status: "active" },
+        { id: "irk-3", title: "Irkutsk Aviation Hub", sector: "Aviation", description: "Aircraft manufacturing and maintenance. Irkutsk Aircraft Corporation (MC-21 components).", investmentRange: "$20M - $180M", timeline: "3-5 years", status: "active" }
+      ]},
+      { id: "bratsk", name: "Bratsk", population: "0.2M", image: "https://images.unsplash.com/photo-1597473322203-2c4f0e36e1c3?w=1920&q=80", description: "Major industrial city built around one of world's largest hydroelectric dams. Home to RUSAL Bratsk aluminum smelter - world's lowest-cost aluminum.", opportunities: [
+        { id: "brt-1", title: "RUSAL Aluminum Partnership", sector: "Aluminum", description: "World's lowest-cost aluminum production using hydro power. Processing and export.", investmentRange: "$40M - $350M", timeline: "3-5 years", status: "priority" },
+        { id: "brt-2", title: "Bratsk Wood Processing", sector: "Forestry", description: "Value-added timber processing. Sustainable forestry for China export.", investmentRange: "$15M - $100M", timeline: "2-4 years", status: "active" }
+      ]},
+      { id: "angarsk", name: "Angarsk", population: "0.2M", image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1920&q=80", description: "Petrochemical and nuclear fuel center. Angarsk Petrochemical Company and uranium enrichment facility.", opportunities: [
+        { id: "ang-1", title: "Angarsk Petrochemical JV", sector: "Petrochemicals", description: "Downstream oil processing and specialty chemicals. Integration with East Siberia crude.", investmentRange: "$50M - $400M", timeline: "4-6 years", status: "active" }
+      ]}
+    ],
+    overview: "Eastern Siberia gateway to Lake Baikal. Major aluminum (RUSAL Bratsk), hydropower, and forestry. Growing Chinese tourism to Baikal.",
+    targetSectors: ["Aluminum", "Hydropower", "Tourism", "Forestry", "Mining"],
+    opportunities: [
+      { id: "ir-1", title: "Baikal Tourism Development", sector: "Tourism", description: "Lake Baikal eco-tourism for Chinese visitors. Hotels and infrastructure.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" },
+      { id: "ir-2", title: "RUSAL Bratsk Partnership", sector: "Aluminum", description: "Aluminum smelting using cheap hydropower.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "active" }
+    ],
+    keyProjects: [
+      { id: "ir-p1", name: "Baikal Tourism Infrastructure", value: "$300 Million", sector: "Tourism", description: "Hotels, roads, and visitor facilities for Lake Baikal.", completionYear: "2028" }
+    ],
+    advantages: [
+      { icon: "infrastructure", title: "Baikal Gateway", description: "UNESCO World Heritage Lake Baikal. Growing Chinese tourism." },
+      { icon: "resources", title: "Cheap Energy", description: "Massive hydropower provides lowest-cost electricity in Russia." }
+    ],
+    contactInfo: { investmentAgency: "Irkutsk Oblast Investment Agency", website: "https://investinirkutsk.ru", email: "info@investinirkutsk.ru" }
+  },
+  "Voronezh Oblast": { name: "Voronezh Oblast", nameRu: "Воронежская область", nameZh: "沃罗涅日州", gdp: "$20 Billion", population: "2.3 Million", industries: ["Agriculture", "Food Processing", "Electronics", "Aerospace"], sezCount: 1, taxBenefits: ["Agricultural processing benefits", "Electronics cluster support", "Investment incentives"], majorCities: [{ id: "voronezh", name: "Voronezh", population: "1.1M" }, { id: "rossosh", name: "Rossosh", population: "0.06M" }, { id: "borisoglebsk", name: "Borisoglebsk", population: "0.06M" }], overview: "Major agricultural and aerospace region in Central Russia. Aircraft engine manufacturing. Growing electronics and food processing.", targetSectors: ["Agriculture", "Aerospace", "Electronics", "Food Processing"], opportunities: [{ id: "vr-1", title: "Voronezh Agricultural Processing", sector: "Food", description: "Sugar, grain, and oilseed processing for China export.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }], keyProjects: [], advantages: [{ icon: "resources", title: "Agricultural Hub", description: "Major grain and sugar beet production." }], contactInfo: { investmentAgency: "Voronezh Oblast Investment Agency", website: "https://investinvoronezh.ru" } },
+};
+
+export function getRegionData(regionName: string, country: 'CN' | 'RU'): RegionData | null {
+  const data = country === 'CN' ? CHINA_REGIONS : RUSSIA_REGIONS;
+  
+  if (data[regionName]) return data[regionName];
+  
+  const urlStyleToNormalized = regionName.toLowerCase().replace(/-/g, ' ');
+  for (const key of Object.keys(data)) {
+    if (key.toLowerCase() === urlStyleToNormalized) {
+      return data[key];
+    }
+  }
+  
+  return null;
+}
+`;
+}
+
+function generateCurrencyConverter(): string {
+  return `"use client";
+
+import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
+import { motion } from 'framer-motion';
+import { ArrowLeftRight, RefreshCw } from 'lucide-react';
+
+const CURRENCIES = ['USD', 'CNY', 'RUB'] as const;
+type Currency = typeof CURRENCIES[number];
+
+const CURRENCY_SYMBOLS: Record<Currency, string> = {
+  USD: '$',
+  CNY: '¥',
+  RUB: '₽',
+};
+
+const CURRENCY_NAMES: Record<string, Record<Currency, string>> = {
+  en: { USD: 'US Dollar', CNY: 'Chinese Yuan', RUB: 'Russian Ruble' },
+  ru: { USD: 'Доллар США', CNY: 'Китайский юань', RUB: 'Российский рубль' },
+  zh: { USD: '美元', CNY: '人民币', RUB: '俄罗斯卢布' },
+};
+
+export function CurrencyConverter() {
+  const t = useTranslations('widgets');
+  const [amount, setAmount] = useState<string>('1000');
+  const [fromCurrency, setFromCurrency] = useState<Currency>('USD');
+  const [toCurrency, setToCurrency] = useState<Currency>('CNY');
+  const [rates, setRates] = useState<Record<Currency, number>>({ USD: 1, CNY: 7.25, RUB: 92.5 });
+  const [loading, setLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  const fetchRates = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+      const data = await response.json();
+      setRates({
+        USD: 1,
+        CNY: data.rates.CNY || 7.25,
+        RUB: data.rates.RUB || 92.5,
+      });
+      setLastUpdated(new Date());
+    } catch {
+      console.info('Using fallback rates');
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchRates();
+  }, []);
+
+  const convert = (value: number, from: Currency, to: Currency): number => {
+    const inUSD = value / rates[from];
+    return inUSD * rates[to];
+  };
+
+  const result = convert(parseFloat(amount) || 0, fromCurrency, toCurrency);
+
+  const swapCurrencies = () => {
+    setFromCurrency(toCurrency);
+    setToCurrency(fromCurrency);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-white">{t('currencyConverter')}</h3>
+        <button
+          onClick={fetchRates}
+          disabled={loading}
+          className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+        >
+          <RefreshCw className={\`w-4 h-4 \${loading ? 'animate-spin' : ''}\`} />
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm text-slate-400 mb-1">{t('amount')}</label>
+          <input
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <label className="block text-sm text-slate-400 mb-1">{t('from')}</label>
+            <select
+              value={fromCurrency}
+              onChange={(e) => setFromCurrency(e.target.value as Currency)}
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              {CURRENCIES.map((curr) => (
+                <option key={curr} value={curr}>
+                  {CURRENCY_SYMBOLS[curr]} {curr}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={swapCurrencies}
+            className="mt-6 p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+          >
+            <ArrowLeftRight className="w-5 h-5" />
+          </button>
+
+          <div className="flex-1">
+            <label className="block text-sm text-slate-400 mb-1">{t('to')}</label>
+            <select
+              value={toCurrency}
+              onChange={(e) => setToCurrency(e.target.value as Currency)}
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              {CURRENCIES.map((curr) => (
+                <option key={curr} value={curr}>
+                  {CURRENCY_SYMBOLS[curr]} {curr}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="bg-slate-700/50 rounded-lg p-4">
+          <div className="text-sm text-slate-400">{t('result')}</div>
+          <div className="text-2xl font-bold text-white">
+            {CURRENCY_SYMBOLS[toCurrency]} {result.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </div>
+          <div className="text-xs text-slate-500 mt-1">
+            1 {fromCurrency} = {convert(1, fromCurrency, toCurrency).toFixed(4)} {toCurrency}
+          </div>
+        </div>
+
+        {lastUpdated && (
+          <div className="text-xs text-slate-500 text-center">
+            {t('lastUpdated')}: {lastUpdated.toLocaleTimeString()}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+`;
+}
+
+function generateNewsletterSignup(): string {
+  return `"use client";
+
+import { useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { motion } from 'framer-motion';
+import { Mail, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+
+export function NewsletterSignup() {
+  const t = useTranslations('widgets');
+  const [email, setEmail] = useState('');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+
+    setStatus('loading');
+    try {
+      const response = await fetch('/api/newsletter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      if (response.ok) {
+        setStatus('success');
+        setEmail('');
+      } else {
+        setStatus('error');
+      }
+    } catch {
+      setStatus('error');
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-gradient-to-br from-primary/20 to-secondary/20 rounded-2xl p-6 border border-primary/30"
+    >
+      <div className="flex items-center gap-3 mb-4">
+        <div className="p-2 bg-primary/20 rounded-lg">
+          <Mail className="w-5 h-5 text-primary" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-white">{t('newsletter')}</h3>
+          <p className="text-sm text-slate-400">{t('newsletterDesc')}</p>
+        </div>
+      </div>
+
+      {status === 'success' ? (
+        <div className="flex items-center gap-2 text-green-400 bg-green-400/10 rounded-lg p-4">
+          <CheckCircle className="w-5 h-5" />
+          <span>{t('subscribed')}</span>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder={t('emailPlaceholder')}
+            className="w-full bg-slate-800/50 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary"
+            required
+          />
+          <button
+            type="submit"
+            disabled={status === 'loading'}
+            className="w-full bg-primary hover:bg-primary/90 text-white font-medium py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            {status === 'loading' ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              t('subscribe')
+            )}
+          </button>
+          {status === 'error' && (
+            <div className="flex items-center gap-2 text-red-400 text-sm">
+              <AlertCircle className="w-4 h-4" />
+              <span>{t('subscribeError')}</span>
+            </div>
+          )}
+        </form>
+      )}
+    </motion.div>
+  );
+}
+`;
+}
+
+function generateSocialShare(): string {
+  return `"use client";
+
+import { useTranslations } from 'next-intl';
+import { Share2 } from 'lucide-react';
+
+interface SocialShareProps {
+  title: string;
+  url?: string;
+}
+
+export function SocialShare({ title, url }: SocialShareProps) {
+  const t = useTranslations('widgets');
+  const shareUrl = url || (typeof window !== 'undefined' ? window.location.href : '');
+  const encodedUrl = encodeURIComponent(shareUrl);
+  const encodedTitle = encodeURIComponent(title);
+
+  const platforms = [
+    {
+      name: 'Telegram',
+      icon: (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+        </svg>
+      ),
+      href: \`https://t.me/share/url?url=\${encodedUrl}&text=\${encodedTitle}\`,
+      color: 'hover:bg-[#0088cc]',
+    },
+    {
+      name: 'WeChat',
+      icon: (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.72-1.78 6.22.942 2.453 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.49.49 0 0 1 .176-.554c1.522-1.12 2.484-2.773 2.484-4.628 0-3.222-3.004-5.879-6.829-6.049-.065-.002-.13-.003-.194-.003-.065-.003-.13-.007-.196-.007l.177-.056zm-2.853 2.928c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.84 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z"/>
+        </svg>
+      ),
+      href: \`weixin://dl/posts?url=\${encodedUrl}\`,
+      color: 'hover:bg-[#07C160]',
+    },
+    {
+      name: 'VK',
+      icon: (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M15.684 0H8.316C1.592 0 0 1.592 0 8.316v7.368C0 22.408 1.592 24 8.316 24h7.368C22.408 24 24 22.408 24 15.684V8.316C24 1.592 22.408 0 15.684 0zm3.692 17.123h-1.744c-.66 0-.864-.525-2.05-1.727-1.033-1-1.49-1.135-1.744-1.135-.356 0-.458.102-.458.593v1.575c0 .424-.135.678-1.253.678-1.846 0-3.896-1.118-5.335-3.202C4.624 10.857 4 8.684 4 8.217c0-.254.102-.491.593-.491h1.744c.44 0 .61.203.78.678.847 2.455 2.27 4.607 2.858 4.607.22 0 .322-.102.322-.66V9.721c-.068-1.186-.695-1.287-.695-1.71 0-.203.17-.407.44-.407h2.744c.373 0 .508.203.508.644v3.168c0 .373.17.508.271.508.22 0 .407-.135.813-.542 1.27-1.422 2.18-3.608 2.18-3.608.119-.254.322-.491.763-.491h1.744c.525 0 .644.27.525.644-.22 1.017-2.354 4.031-2.354 4.031-.186.305-.254.44 0 .78.186.254.796.779 1.203 1.253.745.847 1.32 1.558 1.473 2.05.17.49-.085.744-.576.744z"/>
+        </svg>
+      ),
+      href: \`https://vk.com/share.php?url=\${encodedUrl}&title=\${encodedTitle}\`,
+      color: 'hover:bg-[#4680C2]',
+    },
+    {
+      name: 'LinkedIn',
+      icon: (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+        </svg>
+      ),
+      href: \`https://www.linkedin.com/sharing/share-offsite/?url=\${encodedUrl}\`,
+      color: 'hover:bg-[#0077B5]',
+    },
+    {
+      name: 'WhatsApp',
+      icon: (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+        </svg>
+      ),
+      href: \`https://wa.me/?text=\${encodedTitle}%20\${encodedUrl}\`,
+      color: 'hover:bg-[#25D366]',
+    },
+  ];
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+    } catch {
+      console.info('Clipboard not available');
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-slate-400 flex items-center gap-1">
+        <Share2 className="w-4 h-4" />
+        {t('share')}:
+      </span>
+      {platforms.map((platform) => (
+        <a
+          key={platform.name}
+          href={platform.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={\`p-2 bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors \${platform.color}\`}
+          title={platform.name}
+        >
+          {platform.icon}
+        </a>
+      ))}
+      <button
+        onClick={copyToClipboard}
+        className="p-2 bg-slate-700 rounded-lg text-slate-400 hover:text-white hover:bg-slate-600 transition-colors"
+        title={t('copyLink')}
+      >
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+        </svg>
+      </button>
+    </div>
+  );
+}
+`;
+}
+
+function generateBackToTop(): string {
+  return `"use client";
+
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowUp } from 'lucide-react';
+
+export function BackToTop() {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const toggleVisibility = () => {
+      if (window.scrollY > 300) {
+        setIsVisible(true);
+      } else {
+        setIsVisible(false);
+      }
+    };
+
+    window.addEventListener('scroll', toggleVisibility);
+    return () => window.removeEventListener('scroll', toggleVisibility);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
+  };
+
+  return (
+    <AnimatePresence>
+      {isVisible && (
+        <motion.button
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.8 }}
+          onClick={scrollToTop}
+          className="fixed bottom-8 right-8 z-50 p-3 bg-primary hover:bg-primary/90 text-white rounded-full shadow-lg shadow-primary/25 transition-colors"
+          aria-label="Back to top"
+        >
+          <ArrowUp className="w-5 h-5" />
+        </motion.button>
+      )}
+    </AnimatePresence>
+  );
+}
+`;
+}
+
+function generateBreadcrumbs(): string {
+  return `"use client";
+
+import Link from 'next/link';
+import { useParams, usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
+import { ChevronRight, Home } from 'lucide-react';
+
+interface BreadcrumbItem {
+  label: string;
+  href?: string;
+}
+
+interface BreadcrumbsProps {
+  items?: BreadcrumbItem[];
+}
+
+export function Breadcrumbs({ items }: BreadcrumbsProps) {
+  const t = useTranslations('nav');
+  const params = useParams();
+  const pathname = usePathname();
+  const locale = params.locale as string;
+
+  const generateBreadcrumbs = (): BreadcrumbItem[] => {
+    if (items) return items;
+
+    const paths = pathname.split('/').filter(Boolean);
+    const breadcrumbs: BreadcrumbItem[] = [];
+
+    paths.forEach((path, index) => {
+      if (path === locale) return;
+      
+      const href = '/' + paths.slice(0, index + 1).join('/');
+      let label = path.charAt(0).toUpperCase() + path.slice(1);
+      
+      const navKeys = ['home', 'laws', 'calendar', 'organizations', 'news', 'invest', 'contact'] as const;
+      if (navKeys.includes(path as typeof navKeys[number])) {
+        const translated = t(path as typeof navKeys[number]);
+        if (translated) label = translated;
+      } else {
+        label = decodeURIComponent(path).replace(/-/g, ' ').replace(/\\b\\w/g, c => c.toUpperCase());
+      }
+
+      breadcrumbs.push({ label, href: index < paths.length - 1 ? href : undefined });
+    });
+
+    return breadcrumbs;
+  };
+
+  const breadcrumbs = generateBreadcrumbs();
+
+  if (breadcrumbs.length === 0) return null;
+
+  return (
+    <nav className="flex items-center gap-2 text-sm text-slate-400 mb-6 flex-wrap">
+      <Link
+        href={\`/\${locale}\`}
+        className="flex items-center gap-1 hover:text-white transition-colors"
+      >
+        <Home className="w-4 h-4" />
+      </Link>
+      {breadcrumbs.map((item, index) => (
+        <span key={index} className="flex items-center gap-2">
+          <ChevronRight className="w-4 h-4 text-slate-600" />
+          {item.href ? (
+            <Link href={item.href} className="hover:text-white transition-colors">
+              {item.label}
+            </Link>
+          ) : (
+            <span className="text-white">{item.label}</span>
+          )}
+        </span>
+      ))}
+    </nav>
+  );
+}
+`;
+}
+
+function generateLoadingSkeleton(): string {
+  return `"use client";
+
+import { motion } from 'framer-motion';
+
+interface SkeletonProps {
+  className?: string;
+}
+
+export function Skeleton({ className = '' }: SkeletonProps) {
+  return (
+    <motion.div
+      className={\`bg-slate-700/50 rounded-lg \${className}\`}
+      animate={{ opacity: [0.5, 1, 0.5] }}
+      transition={{ duration: 1.5, repeat: Infinity }}
+    />
+  );
+}
+
+export function CardSkeleton() {
+  return (
+    <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700">
+      <Skeleton className="h-48 mb-4" />
+      <Skeleton className="h-6 w-3/4 mb-2" />
+      <Skeleton className="h-4 w-1/2 mb-4" />
+      <div className="flex gap-2">
+        <Skeleton className="h-6 w-16" />
+        <Skeleton className="h-6 w-16" />
+        <Skeleton className="h-6 w-16" />
+      </div>
+    </div>
+  );
+}
+
+export function RegionCardSkeleton() {
+  return (
+    <div className="bg-slate-800/50 rounded-2xl overflow-hidden border border-slate-700">
+      <Skeleton className="h-40" />
+      <div className="p-6">
+        <Skeleton className="h-6 w-3/4 mb-2" />
+        <Skeleton className="h-4 w-1/2 mb-4" />
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <Skeleton className="h-4 w-12 mb-1" />
+            <Skeleton className="h-5 w-20" />
+          </div>
+          <div>
+            <Skeleton className="h-4 w-16 mb-1" />
+            <Skeleton className="h-5 w-16" />
+          </div>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <Skeleton className="h-6 w-20" />
+          <Skeleton className="h-6 w-24" />
+          <Skeleton className="h-6 w-16" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ListSkeleton({ count = 5 }: { count?: number }) {
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="flex items-center gap-4">
+          <Skeleton className="h-12 w-12 rounded-full" />
+          <div className="flex-1">
+            <Skeleton className="h-4 w-3/4 mb-2" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-4">
+        {Array.from({ length: cols }).map((_, i) => (
+          <Skeleton key={i} className="h-8 flex-1" />
+        ))}
+      </div>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex gap-4">
+          {Array.from({ length: cols }).map((_, j) => (
+            <Skeleton key={j} className="h-6 flex-1" />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+`;
+}
+
+function generateRelatedRegions(): string {
+  return `"use client";
+
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
+import { motion } from 'framer-motion';
+import { ArrowRight, TrendingUp } from 'lucide-react';
+import type { RegionData } from '@/data/regionData';
+
+interface RelatedRegionsProps {
+  currentRegion: RegionData;
+  allRegions: Record<string, RegionData>;
+  maxItems?: number;
+}
+
+export function RelatedRegions({ currentRegion, allRegions, maxItems = 3 }: RelatedRegionsProps) {
+  const t = useTranslations('invest');
+  const params = useParams();
+  const locale = params.locale as string;
+
+  const findRelated = (): RegionData[] => {
+    const currentIndustries = new Set(currentRegion.industries || []);
+    const scored: { region: RegionData; score: number }[] = [];
+
+    Object.values(allRegions).forEach((region) => {
+      if (region.name === currentRegion.name) return;
+
+      let score = 0;
+      (region.industries || []).forEach((industry) => {
+        if (currentIndustries.has(industry)) score += 2;
+      });
+
+      if (region.sezCount && region.sezCount > 0) score += 1;
+      if ((region.opportunities?.length || 0) > 0) score += 1;
+
+      if (score > 0) {
+        scored.push({ region, score });
+      }
+    });
+
+    return scored
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxItems)
+      .map((s) => s.region);
+  };
+
+  const related = findRelated();
+
+  if (related.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mt-12"
+    >
+      <h3 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
+        <TrendingUp className="w-5 h-5 text-primary" />
+        {t('relatedRegions')}
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {related.map((region, index) => {
+          const regionId = region.name.toLowerCase().replace(/\\s+/g, '-');
+          const displayName = locale === 'ru' ? (region.nameRu || region.name) : locale === 'zh' ? (region.nameZh || region.name) : region.name;
+          
+          return (
+            <motion.div
+              key={region.name}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+            >
+              <Link
+                href={\`/\${locale}/invest/\${regionId}\`}
+                className="block bg-slate-800/50 hover:bg-slate-700/50 rounded-xl p-4 border border-slate-700 hover:border-primary/50 transition-all group"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-medium text-white group-hover:text-primary transition-colors">
+                    {displayName}
+                  </h4>
+                  <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                </div>
+                <div className="text-sm text-slate-400 mb-3">
+                  {region.gdp} • {region.population}
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {(region.industries || []).slice(0, 3).map((industry) => (
+                    <span
+                      key={industry}
+                      className="px-2 py-0.5 bg-slate-700/50 text-slate-300 text-xs rounded-full"
+                    >
+                      {industry}
+                    </span>
+                  ))}
+                </div>
+              </Link>
+            </motion.div>
+          );
+        })}
+      </div>
+    </motion.div>
+  );
+}
+`;
+}
+
+function generateSearchDialog(): string {
+  return `"use client";
+
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, X, MapPin, Building2, FileText, Calendar } from 'lucide-react';
+import { CHINA_REGIONS, RUSSIA_REGIONS } from '@/data/regionData';
+import { getTargetCountry } from '@/lib/i18n/config';
+import type { Locale } from '@/lib/i18n/config';
+
+interface SearchResult {
+  type: 'region' | 'city' | 'opportunity';
+  title: string;
+  subtitle: string;
+  href: string;
+  icon: typeof MapPin;
+}
+
+export function SearchDialog() {
+  const t = useTranslations('widgets');
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+  const params = useParams();
+  const locale = params.locale as Locale;
+  const targetCountry = getTargetCountry(locale);
+
+  const search = useCallback((searchQuery: string): SearchResult[] => {
+    if (!searchQuery.trim()) return [];
+
+    const q = searchQuery.toLowerCase();
+    const searchResults: SearchResult[] = [];
+    const regions = targetCountry === 'CN' ? CHINA_REGIONS : RUSSIA_REGIONS;
+
+    Object.entries(regions).forEach(([_, region]) => {
+      const regionId = region.name.toLowerCase().replace(/\\s+/g, '-');
+      const displayName = locale === 'ru' ? (region.nameRu || region.name) : locale === 'zh' ? (region.nameZh || region.name) : region.name;
+
+      if (
+        region.name.toLowerCase().includes(q) ||
+        (region.nameRu && region.nameRu.toLowerCase().includes(q)) ||
+        (region.nameZh && region.nameZh.includes(q)) ||
+        (region.industries || []).some(i => i.toLowerCase().includes(q))
+      ) {
+        searchResults.push({
+          type: 'region',
+          title: displayName,
+          subtitle: (region.industries || []).slice(0, 3).join(', '),
+          href: \`/\${locale}/invest/\${regionId}\`,
+          icon: MapPin,
+        });
+      }
+
+      (region.majorCities || []).forEach((city) => {
+        if (city.name.toLowerCase().includes(q)) {
+          searchResults.push({
+            type: 'city',
+            title: city.name,
+            subtitle: displayName,
+            href: \`/\${locale}/invest/\${regionId}/\${city.id}\`,
+            icon: Building2,
+          });
+        }
+      });
+
+      (region.opportunities || []).forEach((opp) => {
+        if (
+          opp.title.toLowerCase().includes(q) ||
+          opp.sector.toLowerCase().includes(q) ||
+          opp.description.toLowerCase().includes(q)
+        ) {
+          searchResults.push({
+            type: 'opportunity',
+            title: opp.title,
+            subtitle: \`\${opp.sector} • \${opp.investmentRange}\`,
+            href: \`/\${locale}/invest/\${regionId}\`,
+            icon: FileText,
+          });
+        }
+      });
+    });
+
+    return searchResults.slice(0, 10);
+  }, [locale, targetCountry]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsOpen(true);
+      }
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      inputRef.current?.focus();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    setResults(search(query));
+  }, [query, search]);
+
+  const handleSelect = (href: string) => {
+    setIsOpen(false);
+    setQuery('');
+    router.push(href);
+  };
+
+  return (
+    <>
+      <button
+        onClick={() => setIsOpen(true)}
+        className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors"
+      >
+        <Search className="w-4 h-4" />
+        <span className="text-sm hidden sm:inline">{t('search')}</span>
+        <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 bg-slate-700 rounded text-xs">
+          <span className="text-xs">⌘</span>K
+        </kbd>
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsOpen(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="fixed top-[20%] left-1/2 -translate-x-1/2 w-full max-w-xl bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl z-50 overflow-hidden"
+            >
+              <div className="flex items-center gap-3 p-4 border-b border-slate-700">
+                <Search className="w-5 h-5 text-slate-400" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={t('searchPlaceholder')}
+                  className="flex-1 bg-transparent text-white placeholder-slate-500 focus:outline-none"
+                />
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="p-1 text-slate-400 hover:text-white"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="max-h-96 overflow-y-auto">
+                {results.length > 0 ? (
+                  <div className="p-2">
+                    {results.map((result, index) => (
+                      <button
+                        key={\`\${result.type}-\${index}\`}
+                        onClick={() => handleSelect(result.href)}
+                        className="w-full flex items-center gap-3 p-3 hover:bg-slate-700/50 rounded-lg transition-colors text-left"
+                      >
+                        <div className="p-2 bg-slate-700 rounded-lg">
+                          <result.icon className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-white font-medium truncate">{result.title}</div>
+                          <div className="text-sm text-slate-400 truncate">{result.subtitle}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : query ? (
+                  <div className="p-8 text-center text-slate-500">
+                    {t('noResults')}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-slate-500">
+                    {t('searchHint')}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+`;
+}
+
+function generateContactPage(): string {
+  return `import { useTranslations } from 'next-intl';
+import { ContactForm } from '@/features/contact/ContactForm';
+import { Breadcrumbs } from '@/components/widgets/Breadcrumbs';
+
+export default function ContactPage() {
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-12">
+      <Breadcrumbs />
+      <ContactForm />
+    </div>
+  );
+}
+`;
+}
+
+function generateContactForm(): string {
+  return `"use client";
+
+import { useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { motion } from 'framer-motion';
+import { Send, CheckCircle, AlertCircle, Loader2, Building2, Mail, User, MessageSquare } from 'lucide-react';
+
+type FormStatus = 'idle' | 'loading' | 'success' | 'error';
+
+interface FormData {
+  name: string;
+  email: string;
+  company: string;
+  subject: string;
+  message: string;
+  investmentRange: string;
+}
+
+export function ContactForm() {
+  const t = useTranslations('contact');
+  const [status, setStatus] = useState<FormStatus>('idle');
+  const [formData, setFormData] = useState<FormData>({
+    name: '',
+    email: '',
+    company: '',
+    subject: '',
+    message: '',
+    investmentRange: '',
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus('loading');
+
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        setStatus('success');
+        setFormData({
+          name: '',
+          email: '',
+          company: '',
+          subject: '',
+          message: '',
+          investmentRange: '',
+        });
+      } else {
+        setStatus('error');
+      }
+    } catch {
+      setStatus('error');
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  if (status === 'success') {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-green-500/10 border border-green-500/30 rounded-2xl p-8 text-center"
+      >
+        <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold text-white mb-2">{t('successTitle')}</h2>
+        <p className="text-slate-400">{t('successMessage')}</p>
+        <button
+          onClick={() => setStatus('idle')}
+          className="mt-6 px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+        >
+          {t('sendAnother')}
+        </button>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      <div className="text-center mb-8">
+        <h1 className="text-3xl md:text-4xl font-bold text-white mb-4">{t('title')}</h1>
+        <p className="text-slate-400 max-w-2xl mx-auto">{t('subtitle')}</p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="bg-slate-800/50 rounded-2xl p-8 border border-slate-700 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              <User className="w-4 h-4 inline mr-2" />
+              {t('name')} *
+            </label>
+            <input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              required
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary"
+              placeholder={t('namePlaceholder')}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              <Mail className="w-4 h-4 inline mr-2" />
+              {t('email')} *
+            </label>
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              required
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary"
+              placeholder={t('emailPlaceholder')}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              <Building2 className="w-4 h-4 inline mr-2" />
+              {t('company')}
+            </label>
+            <input
+              type="text"
+              name="company"
+              value={formData.company}
+              onChange={handleChange}
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary"
+              placeholder={t('companyPlaceholder')}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              {t('investmentRange')}
+            </label>
+            <select
+              name="investmentRange"
+              value={formData.investmentRange}
+              onChange={handleChange}
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">{t('selectRange')}</option>
+              <option value="<1M">{"< $1 Million"}</option>
+              <option value="1-10M">$1 - $10 Million</option>
+              <option value="10-50M">$10 - $50 Million</option>
+              <option value="50-100M">$50 - $100 Million</option>
+              <option value=">100M">{"> $100 Million"}</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">
+            {t('subject')} *
+          </label>
+          <input
+            type="text"
+            name="subject"
+            value={formData.subject}
+            onChange={handleChange}
+            required
+            className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder={t('subjectPlaceholder')}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">
+            <MessageSquare className="w-4 h-4 inline mr-2" />
+            {t('message')} *
+          </label>
+          <textarea
+            name="message"
+            value={formData.message}
+            onChange={handleChange}
+            required
+            rows={5}
+            className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+            placeholder={t('messagePlaceholder')}
+          />
+        </div>
+
+        {status === 'error' && (
+          <div className="flex items-center gap-2 text-red-400 bg-red-400/10 rounded-lg p-4">
+            <AlertCircle className="w-5 h-5" />
+            <span>{t('errorMessage')}</span>
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={status === 'loading'}
+          className="w-full bg-primary hover:bg-primary/90 text-white font-medium py-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+        >
+          {status === 'loading' ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <>
+              <Send className="w-5 h-5" />
+              {t('submit')}
+            </>
+          )}
+        </button>
+      </form>
+    </motion.div>
+  );
+}
+`;
+}
+
+function generateContactApiRoute(): string {
+  return `import { NextResponse } from 'next/server';
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { name, email, company, subject, message, investmentRange } = body;
+
+    if (!name || !email || !subject || !message) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    console.info('Contact form submission:', {
+      name,
+      email,
+      company,
+      subject,
+      investmentRange,
+      message: message.substring(0, 100) + '...',
+      timestamp: new Date().toISOString(),
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Contact form error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+`;
+}
+
+function generateNewsletterApiRoute(): string {
+  return `import { NextResponse } from 'next/server';
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { email } = body;
+
+    if (!email || !email.includes('@')) {
+      return NextResponse.json(
+        { error: 'Invalid email address' },
+        { status: 400 }
+      );
+    }
+
+    console.info('Newsletter subscription:', {
+      email,
+      timestamp: new Date().toISOString(),
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Newsletter subscription error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+`;
+}
+
+function generateReadme(
+  name: string,
+  countryPair: PortalScaffoldConfig["countryPair"]
+): string {
+  return `# ${name}
+
+Bilingual business portal for ${countryPair.countryA}-${countryPair.countryB} trade and investment.
+
+## Features
+
+- 🌐 Bilingual support (${countryPair.locales.join(", ")})
+- 🗺️ Interactive 3D globe and regional maps
+- 📜 Laws and regulations guide
+- 📅 Business event calendar
+- 🏢 Organization directory
+- 📰 News aggregator (RSS)
+- 💰 Investment opportunity explorer
+
+## Getting Started
+
+\`\`\`bash
+# Install dependencies
+pnpm install
+
+# Set up environment
+cp .env.example .env.local
+# Edit .env.local with your database URL
+
+# Push database schema
+pnpm db:push
+
+# Seed initial data
+pnpm db:seed
+
+# Start development server
+pnpm dev
+\`\`\`
+
+## Tech Stack
+
+- Next.js 14 (App Router)
+- next-intl (i18n)
+- globe.gl (3D visualization)
+- react-simple-maps (2D maps)
+- Framer Motion (animations)
+- Drizzle ORM (database)
+- Tailwind CSS (styling)
+
+## Project Structure
+
+\`\`\`
+src/
+├── app/[locale]/     # Pages (laws, calendar, organizations, news, invest)
+├── components/       # Shared components (globe, map, layout)
+├── features/         # Feature-specific components
+├── lib/              # Utilities (i18n, db, rss)
+└── content/          # Static content files
+\`\`\`
+`;
+}

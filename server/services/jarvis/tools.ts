@@ -6,6 +6,7 @@
 import { exec } from "child_process";
 import { promisify } from "util";
 import * as fs from "fs/promises";
+import * as fsSync from "fs";
 import * as path from "path";
 import { generateImage } from "../../_core/imageGeneration";
 import { SSHConnectionManager } from "../../ssh";
@@ -15,6 +16,23 @@ import { eq, and } from "drizzle-orm";
 import { getCachedResult, setCachedResult } from "../knowledgeCache";
 import * as crypto from "crypto";
 import { scaffoldProject, type ScaffoldConfig } from "../webApp/scaffolder";
+import {
+  scaffoldRegionalMapProject,
+  type RegionalMapConfig,
+} from "../webApp/regionalMapScaffolder";
+import {
+  scaffoldBusinessPortal,
+  type ScaffoldResult as PortalScaffoldResult,
+} from "../webApp/portalScaffolder";
+import {
+  createChinaRussiaConfig,
+  createBilateralConfig,
+  COUNTRY_INFO,
+  GEOJSON_SOURCES,
+  RSS_SOURCES_BY_COUNTRY,
+  type PortalScaffoldConfig,
+  type CountryCode,
+} from "../webApp/portalConfig";
 import type { UILibrary } from "../webApp/uiComponents";
 import { generateSchemaFromDescription } from "../webApp/schemaGenerator";
 import {
@@ -105,6 +123,7 @@ import {
 } from "../selfEvolution/toolGenerator";
 import { getDesktopDaemon, parseAction, type Action } from "../desktop";
 import { runVisionLoop, type VisionLoopConfig } from "../vision";
+import { daemonClient } from "./daemonClient";
 
 const execAsync = promisify(exec);
 const USE_DOCKER_SANDBOX = process.env.USE_SANDBOX !== "false";
@@ -273,6 +292,7 @@ let activeDebugSession: string | null = null;
 const SONAR_API_KEY = process.env.SONAR_API_KEY || "";
 
 const JARVIS_SANDBOX = process.env.JARVIS_SANDBOX || "/tmp/jarvis-workspace";
+const JARVIS_PROJECTS = `${JARVIS_SANDBOX}/projects`;
 
 async function ensureSandbox(): Promise<void> {
   try {
@@ -372,6 +392,83 @@ async function directHttpSearch(query: string): Promise<string> {
     : text;
 }
 
+/**
+ * DuckDuckGo HTML Search - Another free search fallback
+ * Uses DDG's HTML-only interface which is more scraping-friendly
+ */
+async function duckDuckGoSearch(query: string): Promise<string> {
+  const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+
+  const response = await fetch(searchUrl, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.5",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`DuckDuckGo search failed: ${response.status}`);
+  }
+
+  const html = await response.text();
+
+  // Extract search results from DDG HTML
+  const results: Array<{ title: string; url: string; snippet: string }> = [];
+  const resultRegex =
+    /<a class="result__a"[^>]*href="([^"]+)"[^>]*>([^<]+)<\/a>[\s\S]*?<a class="result__snippet"[^>]*>([^<]*(?:<[^>]+>[^<]*)*)<\/a>/gi;
+
+  let match;
+  while ((match = resultRegex.exec(html)) !== null && results.length < 10) {
+    const url = match[1]
+      .replace(/\/\/duckduckgo\.com\/l\/\?uddg=/, "")
+      .replace(/&rut=.*$/, "");
+    const title = match[2].trim();
+    const snippet = match[3]
+      .replace(/<[^>]+>/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (url && title) {
+      try {
+        results.push({
+          title,
+          url: decodeURIComponent(url),
+          snippet,
+        });
+      } catch {
+        results.push({ title, url, snippet });
+      }
+    }
+  }
+
+  // Fallback: try simpler extraction if regex fails
+  if (results.length === 0) {
+    const linkRegex = /<a class="result__a"[^>]*>([^<]+)<\/a>/gi;
+    while ((match = linkRegex.exec(html)) !== null && results.length < 10) {
+      results.push({
+        title: match[1].trim(),
+        url: "",
+        snippet: "",
+      });
+    }
+  }
+
+  if (results.length === 0) {
+    throw new Error("DuckDuckGo returned no extractable results");
+  }
+
+  const formatted = results
+    .map(
+      (r, i) =>
+        `${i + 1}. ${r.title}${r.url ? `\n   URL: ${r.url}` : ""}${r.snippet ? `\n   ${r.snippet}` : ""}`
+    )
+    .join("\n\n");
+
+  return `Found ${results.length} results from DuckDuckGo:\n\n${formatted}`;
+}
+
 export async function webSearch(query: string): Promise<string> {
   const cached = await getCachedResult(query, "web_search", 24);
   if (cached) {
@@ -382,6 +479,7 @@ export async function webSearch(query: string): Promise<string> {
     () => perplexitySearch(query),
     [
       { name: "SearXNG", fn: () => searxngSearch(query) },
+      { name: "DuckDuckGo", fn: () => duckDuckGoSearch(query) },
       { name: "DirectHTTP", fn: () => directHttpSearch(query) },
     ],
     1
@@ -973,9 +1071,25 @@ export async function runShell(command: string): Promise<string> {
   }
 
   try {
+    // Ensure system PATH includes common package manager locations
+    const systemPath = process.env.PATH || "";
+    const additionalPaths = [
+      "/usr/bin",
+      "/usr/local/bin",
+      "/home/josh/.local/share/pnpm",
+      "/home/josh/.nvm/versions/node/v22.14.0/bin",
+    ].filter(p => !systemPath.includes(p));
+    const enhancedPath = [...additionalPaths, systemPath].join(":");
+
     const { stdout, stderr } = await execAsync(
       `cd ${JARVIS_SANDBOX} && timeout 60 ${command}`,
-      { maxBuffer: 1024 * 1024 * 5 }
+      {
+        maxBuffer: 1024 * 1024 * 5,
+        env: {
+          ...process.env,
+          PATH: enhancedPath,
+        },
+      }
     );
 
     const output = stdout + (stderr ? `\nStderr: ${stderr}` : "");
@@ -1721,6 +1835,341 @@ except Exception as e:
   } catch (error) {
     return `Calculation error: ${error instanceof Error ? error.message : String(error)}`;
   }
+}
+
+/**
+ * Get Weather - fetches weather with multiple fallback APIs and beautiful formatting
+ */
+export async function getWeather(location: string): Promise<string> {
+  const normalizedLocation = location.trim();
+  const encodedLocation = encodeURIComponent(normalizedLocation);
+
+  interface WeatherData {
+    location: string;
+    country: string;
+    temperature: number;
+    feelsLike: number;
+    humidity: number;
+    windSpeed: number;
+    windDirection: string;
+    condition: string;
+    conditionIcon: string;
+    pressure: number;
+    visibility: number;
+    uvIndex: number;
+    cloudCover: number;
+    precipitation: number;
+    sunrise?: string;
+    sunset?: string;
+    forecast?: Array<{
+      date: string;
+      maxTemp: number;
+      minTemp: number;
+      condition: string;
+      icon: string;
+      chanceOfRain: number;
+    }>;
+  }
+
+  const weatherApis = [
+    {
+      name: "wttr.in",
+      url: `https://wttr.in/${encodedLocation}?format=j1`,
+      parse: (data: any): WeatherData | null => {
+        try {
+          const current = data.current_condition?.[0];
+          const area = data.nearest_area?.[0];
+          const astronomy = data.weather?.[0]?.astronomy?.[0];
+          if (!current) return null;
+          return {
+            location: area?.areaName?.[0]?.value || normalizedLocation,
+            country: area?.country?.[0]?.value || "",
+            temperature: parseFloat(current.temp_C),
+            feelsLike: parseFloat(current.FeelsLikeC),
+            humidity: parseFloat(current.humidity),
+            windSpeed: parseFloat(current.windspeedKmph),
+            windDirection: current.winddir16Point || "",
+            condition: current.weatherDesc?.[0]?.value || "Unknown",
+            conditionIcon: getWeatherEmoji(current.weatherCode),
+            pressure: parseFloat(current.pressure),
+            visibility: parseFloat(current.visibility),
+            uvIndex: parseFloat(current.uvIndex),
+            cloudCover: parseFloat(current.cloudcover),
+            precipitation: parseFloat(current.precipMM),
+            sunrise: astronomy?.sunrise,
+            sunset: astronomy?.sunset,
+            forecast: data.weather?.slice(0, 5).map((day: any) => ({
+              date: day.date,
+              maxTemp: parseFloat(day.maxtempC),
+              minTemp: parseFloat(day.mintempC),
+              condition: day.hourly?.[4]?.weatherDesc?.[0]?.value || "Unknown",
+              icon: getWeatherEmoji(day.hourly?.[4]?.weatherCode),
+              chanceOfRain: parseFloat(day.hourly?.[4]?.chanceofrain || 0),
+            })),
+          };
+        } catch {
+          return null;
+        }
+      },
+    },
+    {
+      name: "Open-Meteo",
+      url: `https://geocoding-api.open-meteo.com/v1/search?name=${encodedLocation}&count=1`,
+      fetchWeather: async (): Promise<WeatherData | null> => {
+        try {
+          const geoRes = await fetch(
+            `https://geocoding-api.open-meteo.com/v1/search?name=${encodedLocation}&count=1`
+          );
+          const geoData = await geoRes.json();
+          if (!geoData.results?.[0]) return null;
+          const { latitude, longitude, name, country } = geoData.results[0];
+
+          const weatherRes = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto`
+          );
+          const weather = await weatherRes.json();
+          const current = weather.current;
+          if (!current) return null;
+
+          return {
+            location: name,
+            country: country || "",
+            temperature: current.temperature_2m,
+            feelsLike: current.apparent_temperature,
+            humidity: current.relative_humidity_2m,
+            windSpeed: current.wind_speed_10m,
+            windDirection: degreesToCompass(current.wind_direction_10m),
+            condition: wmoCodeToCondition(current.weather_code),
+            conditionIcon: wmoCodeToEmoji(current.weather_code),
+            pressure: current.pressure_msl,
+            visibility: 10,
+            uvIndex: 0,
+            cloudCover: current.cloud_cover,
+            precipitation: current.precipitation,
+            forecast: weather.daily?.time
+              ?.slice(0, 5)
+              .map((date: string, i: number) => ({
+                date,
+                maxTemp: weather.daily.temperature_2m_max[i],
+                minTemp: weather.daily.temperature_2m_min[i],
+                condition: wmoCodeToCondition(weather.daily.weather_code[i]),
+                icon: wmoCodeToEmoji(weather.daily.weather_code[i]),
+                chanceOfRain:
+                  weather.daily.precipitation_probability_max?.[i] || 0,
+              })),
+          };
+        } catch {
+          return null;
+        }
+      },
+    },
+    {
+      name: "WeatherAPI.com (free tier)",
+      url: `https://api.weatherapi.com/v1/forecast.json?key=demo&q=${encodedLocation}&days=5`,
+      parse: (data: any): WeatherData | null => {
+        try {
+          const current = data.current;
+          const loc = data.location;
+          if (!current || !loc) return null;
+          return {
+            location: loc.name,
+            country: loc.country,
+            temperature: current.temp_c,
+            feelsLike: current.feelslike_c,
+            humidity: current.humidity,
+            windSpeed: current.wind_kph,
+            windDirection: current.wind_dir,
+            condition: current.condition?.text || "Unknown",
+            conditionIcon: getConditionEmoji(current.condition?.text),
+            pressure: current.pressure_mb,
+            visibility: current.vis_km,
+            uvIndex: current.uv,
+            cloudCover: current.cloud,
+            precipitation: current.precip_mm,
+            forecast: data.forecast?.forecastday?.map((day: any) => ({
+              date: day.date,
+              maxTemp: day.day.maxtemp_c,
+              minTemp: day.day.mintemp_c,
+              condition: day.day.condition?.text || "Unknown",
+              icon: getConditionEmoji(day.day.condition?.text),
+              chanceOfRain: day.day.daily_chance_of_rain || 0,
+            })),
+          };
+        } catch {
+          return null;
+        }
+      },
+    },
+  ];
+
+  function getWeatherEmoji(code: string): string {
+    const c = parseInt(code);
+    if (c === 113) return "☀️";
+    if (c === 116) return "⛅";
+    if (c === 119 || c === 122) return "☁️";
+    if (c >= 176 && c <= 185) return "🌧️";
+    if (c >= 200 && c <= 232) return "⛈️";
+    if (c >= 248 && c <= 260) return "🌫️";
+    if (c >= 263 && c <= 296) return "🌦️";
+    if (c >= 299 && c <= 356) return "🌧️";
+    if (c >= 359 && c <= 395) return "🌨️";
+    return "🌡️";
+  }
+
+  function getConditionEmoji(condition: string): string {
+    const c = condition?.toLowerCase() || "";
+    if (c.includes("sun") || c.includes("clear")) return "☀️";
+    if (c.includes("cloud") && c.includes("part")) return "⛅";
+    if (c.includes("cloud") || c.includes("overcast")) return "☁️";
+    if (c.includes("rain") && c.includes("light")) return "🌦️";
+    if (c.includes("rain") || c.includes("drizzle")) return "🌧️";
+    if (c.includes("thunder") || c.includes("storm")) return "⛈️";
+    if (c.includes("snow") || c.includes("sleet") || c.includes("ice"))
+      return "🌨️";
+    if (c.includes("fog") || c.includes("mist") || c.includes("haze"))
+      return "🌫️";
+    if (c.includes("wind")) return "💨";
+    return "🌡️";
+  }
+
+  function wmoCodeToCondition(code: number): string {
+    const conditions: Record<number, string> = {
+      0: "Clear sky",
+      1: "Mainly clear",
+      2: "Partly cloudy",
+      3: "Overcast",
+      45: "Fog",
+      48: "Depositing rime fog",
+      51: "Light drizzle",
+      53: "Moderate drizzle",
+      55: "Dense drizzle",
+      61: "Slight rain",
+      63: "Moderate rain",
+      65: "Heavy rain",
+      71: "Slight snow",
+      73: "Moderate snow",
+      75: "Heavy snow",
+      80: "Slight rain showers",
+      81: "Moderate rain showers",
+      82: "Violent rain showers",
+      95: "Thunderstorm",
+      96: "Thunderstorm with hail",
+      99: "Thunderstorm with heavy hail",
+    };
+    return conditions[code] || "Unknown";
+  }
+
+  function wmoCodeToEmoji(code: number): string {
+    if (code === 0) return "☀️";
+    if (code <= 2) return "⛅";
+    if (code === 3) return "☁️";
+    if (code <= 48) return "🌫️";
+    if (code <= 55) return "🌦️";
+    if (code <= 65) return "🌧️";
+    if (code <= 75) return "🌨️";
+    if (code <= 82) return "🌧️";
+    if (code >= 95) return "⛈️";
+    return "🌡️";
+  }
+
+  function degreesToCompass(deg: number): string {
+    const dirs = [
+      "N",
+      "NNE",
+      "NE",
+      "ENE",
+      "E",
+      "ESE",
+      "SE",
+      "SSE",
+      "S",
+      "SSW",
+      "SW",
+      "WSW",
+      "W",
+      "WNW",
+      "NW",
+      "NNW",
+    ];
+    return dirs[Math.round(deg / 22.5) % 16];
+  }
+
+  let weatherData: WeatherData | null = null;
+  let lastError = "";
+
+  for (const api of weatherApis) {
+    try {
+      console.log(`[Weather] Trying ${api.name} for ${normalizedLocation}...`);
+
+      if (api.fetchWeather) {
+        weatherData = await api.fetchWeather();
+      } else {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+
+        const response = await fetch(api.url, {
+          signal: controller.signal,
+          headers: { "User-Agent": "JARVIS-Weather/1.0" },
+        });
+        clearTimeout(timeout);
+
+        if (response.ok) {
+          const data = await response.json();
+          weatherData = api.parse!(data);
+        }
+      }
+
+      if (weatherData) {
+        console.log(`[Weather] Success with ${api.name}`);
+        break;
+      }
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+      console.log(`[Weather] ${api.name} failed: ${lastError}`);
+      continue;
+    }
+  }
+
+  if (!weatherData) {
+    return `Unable to fetch weather for "${normalizedLocation}" after trying ${weatherApis.length} services. Last error: ${lastError}\n\nPlease check the location spelling or try a nearby major city.`;
+  }
+
+  // Return structured JSON for rich card rendering
+  const result = {
+    __type: "weather" as const,
+    location: weatherData.location,
+    country: weatherData.country,
+    current: {
+      temperature: Math.round(weatherData.temperature),
+      feelsLike: Math.round(weatherData.feelsLike),
+      condition: weatherData.condition,
+      conditionIcon: weatherData.conditionIcon,
+      humidity: weatherData.humidity,
+      windSpeed: Math.round(weatherData.windSpeed),
+      windDirection: weatherData.windDirection,
+      pressure: Math.round(weatherData.pressure),
+      visibility: weatherData.visibility,
+      uvIndex: weatherData.uvIndex,
+      cloudCover: weatherData.cloudCover,
+      precipitation: weatherData.precipitation,
+      sunrise: weatherData.sunrise,
+      sunset: weatherData.sunset,
+    },
+    forecast:
+      weatherData.forecast?.map(f => ({
+        date: f.date,
+        dayName: new Date(f.date).toLocaleDateString("en-US", {
+          weekday: "short",
+        }),
+        maxTemp: Math.round(f.maxTemp),
+        minTemp: Math.round(f.minTemp),
+        condition: f.condition,
+        icon: f.icon,
+        chanceOfRain: f.chanceOfRain,
+      })) || [],
+  };
+
+  return JSON.stringify(result);
 }
 
 /**
@@ -5339,7 +5788,7 @@ async function scaffoldProjectTool(
   const config: ScaffoldConfig = {
     projectName,
     projectType: projectType as ScaffoldConfig["projectType"],
-    outputPath: outputPath || "/tmp/jarvis-projects",
+    outputPath: outputPath || JARVIS_PROJECTS,
     database: database as ScaffoldConfig["database"],
     authentication: authentication as ScaffoldConfig["authentication"],
     features,
@@ -5403,6 +5852,838 @@ Next steps:
 3. npm run dev${testing ? "\n4. npm test (to run tests)" : ""}${docker ? "\n5. docker-compose up --build (to run in container)" : ""}`;
 
   return output;
+}
+
+async function scaffoldRegionalMapTool(
+  projectName: string,
+  outputPath?: string,
+  database?: string,
+  colorScheme?: string,
+  countries?: string[]
+): Promise<string> {
+  const validDatabases = ["postgresql", "mysql", "sqlite"];
+  const db = (database || "postgresql") as RegionalMapConfig["database"];
+  if (database && !validDatabases.includes(database)) {
+    return `Error: Invalid database type. Must be one of: ${validDatabases.join(", ")}`;
+  }
+
+  const countryList = countries || ["china", "russia"];
+
+  const countryCodeMap: Record<string, CountryCode> = {
+    china: "CN",
+    cn: "CN",
+    russia: "RU",
+    ru: "RU",
+    india: "IN",
+    in: "IN",
+    japan: "JP",
+    jp: "JP",
+    germany: "DE",
+    de: "DE",
+    france: "FR",
+    fr: "FR",
+    brazil: "BR",
+    br: "BR",
+    uae: "AE",
+    ae: "AE",
+  };
+
+  const resolvedCountries = countryList.map(
+    c => countryCodeMap[c.toLowerCase()] || c.toUpperCase()
+  );
+
+  if (
+    resolvedCountries.length === 2 &&
+    resolvedCountries.every(c => Object.keys(COUNTRY_INFO).includes(c))
+  ) {
+    console.log(
+      `[scaffoldRegionalMapTool] Using full business portal scaffolder for ${resolvedCountries.join("-")}`
+    );
+    return scaffoldBusinessPortalTool(
+      projectName,
+      outputPath || JARVIS_PROJECTS,
+      db,
+      undefined,
+      undefined,
+      true,
+      true,
+      resolvedCountries[0],
+      resolvedCountries[1]
+    );
+  }
+
+  const validColors = ["blue", "green", "orange", "purple"];
+  const color = (colorScheme || "blue") as RegionalMapConfig["colorScheme"];
+  if (colorScheme && !validColors.includes(colorScheme)) {
+    return `Error: Invalid color scheme. Must be one of: ${validColors.join(", ")}`;
+  }
+
+  const validCountries = ["china", "russia"];
+  for (const c of countryList) {
+    if (!validCountries.includes(c.toLowerCase())) {
+      return `Error: Invalid country. Must be one of: ${validCountries.join(", ")}. For full portal with more countries, use scaffold_business_portal with countryA and countryB.`;
+    }
+  }
+
+  const config: RegionalMapConfig = {
+    projectName,
+    outputPath: outputPath || JARVIS_PROJECTS,
+    database: db,
+    colorScheme: color,
+    countries: countryList.map(c =>
+      c.toLowerCase()
+    ) as RegionalMapConfig["countries"],
+  };
+
+  const result = await scaffoldRegionalMapProject(config);
+
+  if (!result.success) {
+    return `Error creating regional map project: ${result.error}`;
+  }
+
+  return `Regional Map Project "${projectName}" created successfully!
+
+Location: ${result.projectPath}
+Files created: ${result.filesCreated.length}
+
+Features:
+- Interactive clickable maps for ${countryList.join(" and ")}
+- Database schema with regions, opportunities, sectors, and inquiries
+- API routes for all data operations
+- Region detail pages with opportunity listings
+- Seed script with sample China provinces and Russia regions
+
+Files:
+${result.filesCreated
+  .slice(0, 20)
+  .map(f => `  - ${f}`)
+  .join("\n")}
+${result.filesCreated.length > 20 ? `  ... and ${result.filesCreated.length - 20} more` : ""}
+
+Next steps:
+1. cd ${result.projectPath}
+2. npm install
+3. cp .env.example .env
+4. Update DATABASE_URL in .env with your ${db} connection string
+5. npm run db:push
+6. npm run db:seed
+7. npm run dev
+
+Open http://localhost:3000 to see your regional map site!`;
+}
+
+async function scaffoldBusinessPortalTool(
+  projectName: string,
+  outputPath?: string,
+  database?: string,
+  primaryColor?: string,
+  secondaryColor?: string,
+  enable3DGlobe?: boolean,
+  enableRssFeed?: boolean,
+  countryA?: string,
+  countryB?: string
+): Promise<string> {
+  console.log(
+    "[scaffoldBusinessPortalTool] Called with:",
+    JSON.stringify({ projectName, outputPath, countryA, countryB })
+  );
+
+  const validDatabases = ["postgresql", "mysql", "sqlite"];
+  const db = (database || "postgresql") as PortalScaffoldConfig["database"];
+  if (database && !validDatabases.includes(database)) {
+    return `Error: Invalid database type. Must be one of: ${validDatabases.join(", ")}`;
+  }
+
+  const validCountryCodes = Object.keys(COUNTRY_INFO);
+
+  let config: PortalScaffoldConfig;
+
+  if (countryA && countryB) {
+    if (!validCountryCodes.includes(countryA)) {
+      return `Error: Invalid countryA code "${countryA}". Valid codes: ${validCountryCodes.join(", ")}`;
+    }
+    if (!validCountryCodes.includes(countryB)) {
+      return `Error: Invalid countryB code "${countryB}". Valid codes: ${validCountryCodes.join(", ")}`;
+    }
+
+    const infoA = COUNTRY_INFO[countryA as CountryCode];
+    const infoB = COUNTRY_INFO[countryB as CountryCode];
+
+    // Use JARVIS_PROJECTS for consistency with other JARVIS tools
+    const effectiveOutputPath = outputPath?.startsWith(JARVIS_SANDBOX)
+      ? outputPath
+      : JARVIS_PROJECTS;
+
+    config = createBilateralConfig(
+      projectName,
+      effectiveOutputPath,
+      countryA as CountryCode,
+      countryB as CountryCode,
+      {
+        database: db,
+        branding: {
+          name: projectName,
+          primaryColor: primaryColor || "#1E40AF",
+          secondaryColor: secondaryColor || "#3B82F6",
+          accentColor: "#F59E0B",
+        },
+        features: {
+          enable3DGlobe: enable3DGlobe !== false,
+          enableRssFeed: enableRssFeed !== false,
+          enableCalendar: true,
+          enableOrganizations: true,
+          enableLaws: true,
+          enableInvestMap: true,
+          enableAnimations: true,
+        },
+      }
+    );
+
+    console.log(
+      "[scaffoldBusinessPortalTool] Calling scaffoldBusinessPortal with config"
+    );
+    const result = await scaffoldBusinessPortal(config);
+    console.log(
+      "[scaffoldBusinessPortalTool] Result:",
+      JSON.stringify({
+        success: result.success,
+        filesCreated: result.filesCreated?.length,
+        error: result.error,
+      })
+    );
+
+    if (!result.success) {
+      return `Error creating business portal: ${result.error}`;
+    }
+
+    const hasGeoA = !!GEOJSON_SOURCES[countryA as CountryCode];
+    const hasGeoB = !!GEOJSON_SOURCES[countryB as CountryCode];
+    const hasRssA =
+      (RSS_SOURCES_BY_COUNTRY[countryA as CountryCode] || []).length > 0;
+    const hasRssB =
+      (RSS_SOURCES_BY_COUNTRY[countryB as CountryCode] || []).length > 0;
+
+    return `Bilateral Business Portal "${projectName}" created successfully!
+
+Countries: ${infoA.flag} ${infoA.name} ↔ ${infoB.flag} ${infoB.name}
+Location: ${result.projectPath}
+Files created: ${result.filesCreated.length}
+
+Data Sources:
+- ${infoA.name} GeoJSON: ${hasGeoA ? "✅ Available" : "⚠️ Not available (map will show placeholder)"}
+- ${infoB.name} GeoJSON: ${hasGeoB ? "✅ Available" : "⚠️ Not available (map will show placeholder)"}
+- ${infoA.name} RSS feeds: ${hasRssA ? "✅ Available" : "⚠️ Not available"}
+- ${infoB.name} RSS feeds: ${hasRssB ? "✅ Available" : "⚠️ Not available"}
+
+Features:
+- 🌐 Multilingual support (${config.countryPair.locales.join(", ")})
+- 🗺️ Interactive 3D globe visualization
+- 📍 Regional maps with drill-down
+- 📜 Laws & regulations section
+- 📅 Business event calendar
+- 🏢 Organization directory
+- 📰 News aggregator (RSS feeds)
+- 💰 Investment opportunity explorer
+- 💱 Currency converter (${infoA.currency}/${infoB.currency})
+
+Next steps:
+1. cd ${result.projectPath}
+2. npm install
+3. npm run build
+4. Deploy with: npx vercel --prod --yes
+
+Or run locally:
+1. npm run dev
+2. Open http://localhost:3000`;
+  }
+
+  config = createChinaRussiaConfig(projectName, outputPath || JARVIS_PROJECTS, {
+    database: db,
+    branding: {
+      name: projectName,
+      primaryColor: primaryColor || "#DC2626",
+      secondaryColor: secondaryColor || "#FBBF24",
+      accentColor: "#1E40AF",
+    },
+    features: {
+      enable3DGlobe: enable3DGlobe !== false,
+      enableRssFeed: enableRssFeed !== false,
+      enableCalendar: true,
+      enableOrganizations: true,
+      enableLaws: true,
+      enableInvestMap: true,
+      enableAnimations: true,
+    },
+  });
+
+  const result = await scaffoldBusinessPortal(config);
+
+  if (!result.success) {
+    return `Error creating business portal: ${result.error}`;
+  }
+
+  return `Business Portal "${projectName}" created successfully!
+
+Location: ${result.projectPath}
+Files created: ${result.filesCreated.length}
+
+Features:
+- 🌐 Bilingual support (Russian & Chinese)
+- 🗺️ Interactive 3D globe visualization (globe.gl)
+- 📍 Regional maps with drill-down (country → region → city)
+- 📜 Laws & regulations section
+- 📅 Business event calendar
+- 🏢 Organization directory
+- 📰 News aggregator (RSS feeds)
+- 💰 Investment opportunity explorer
+- ✨ Smooth animations (Framer Motion)
+
+Pages:
+- /[locale]/ - Home with 3D globe
+- /[locale]/laws - Trade agreements, visas, legal entities
+- /[locale]/calendar - Business events
+- /[locale]/organizations - Trade promotion orgs
+- /[locale]/news - RSS news feed
+- /[locale]/invest - Interactive investment map
+- /[locale]/invest/[regionId] - Region detail
+- /[locale]/invest/[regionId]/[cityId] - City detail
+
+Files:
+${result.filesCreated
+  .slice(0, 25)
+  .map(f => `  - ${f}`)
+  .join("\n")}
+${result.filesCreated.length > 25 ? `  ... and ${result.filesCreated.length - 25} more` : ""}
+
+Next steps:
+1. cd ${result.projectPath}
+2. pnpm install (or npm install)
+3. cp .env.example .env.local
+4. Update DATABASE_URL in .env.local
+5. pnpm db:push
+6. pnpm db:seed
+7. pnpm dev
+
+Open http://localhost:3000/ru (Russian) or http://localhost:3000/zh (Chinese)`;
+}
+
+async function deployToVercel(
+  projectPath: string,
+  production?: boolean
+): Promise<string> {
+  const resolvedPath = path.resolve(projectPath);
+
+  if (!fsSync.existsSync(resolvedPath)) {
+    return `Error: Project path does not exist: ${resolvedPath}`;
+  }
+
+  const packageJsonPath = path.join(resolvedPath, "package.json");
+  if (!fsSync.existsSync(packageJsonPath)) {
+    return `Error: No package.json found in ${resolvedPath}. Is this a valid project?`;
+  }
+
+  try {
+    const nodeModulesPath = path.join(resolvedPath, "node_modules");
+    if (!fsSync.existsSync(nodeModulesPath)) {
+      console.log("[Deploy] Installing dependencies...");
+      const installResult = await execAsync("npm install", {
+        cwd: resolvedPath,
+        timeout: 120000,
+      });
+      if (installResult.stderr && !installResult.stderr.includes("npm warn")) {
+        console.warn("[Deploy] npm install warnings:", installResult.stderr);
+      }
+    }
+
+    console.log("[Deploy] Deploying to Vercel...");
+    const vercelToken = process.env.VERCEL_TOKEN;
+    const tokenFlag = vercelToken ? ` --token ${vercelToken}` : "";
+    const deployCmd = production
+      ? `npx vercel --yes --prod${tokenFlag}`
+      : `npx vercel --yes${tokenFlag}`;
+
+    const result = await execAsync(deployCmd, {
+      cwd: resolvedPath,
+      timeout: 300000,
+      env: {
+        ...process.env,
+        VERCEL_TOKEN: vercelToken,
+      },
+    });
+
+    const output = result.stdout + result.stderr;
+    const urlMatch = output.match(/https:\/\/[^\s]+\.vercel\.app/);
+    const url = urlMatch ? urlMatch[0] : null;
+
+    if (url) {
+      return `Deployment successful!
+
+URL: ${url}
+Type: ${production ? "Production" : "Preview"}
+Project: ${resolvedPath}
+
+The site is now live and accessible at the URL above.
+${!production ? "\nNote: This is a preview deployment. Use production=true for a production deploy." : ""}`;
+    }
+
+    return `Deployment completed but couldn't extract URL from output:
+
+${output.slice(0, 1000)}
+
+Check your Vercel dashboard for the deployment URL.`;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+
+    if (
+      errorMsg.includes("VERCEL_TOKEN") ||
+      errorMsg.includes("not logged in")
+    ) {
+      return `Vercel authentication required.
+
+To enable automatic deployments, set the VERCEL_TOKEN environment variable:
+1. Go to https://vercel.com/account/tokens
+2. Create a new token
+3. Add to your .env: VERCEL_TOKEN=your_token_here
+
+Alternatively, run 'npx vercel login' in the project directory to authenticate interactively.`;
+    }
+
+    return `Deployment failed: ${errorMsg}
+
+Make sure:
+1. The project is a valid Next.js/React app
+2. VERCEL_TOKEN is set (or run 'npx vercel login' first)
+3. The project builds successfully locally (npm run build)`;
+  }
+}
+
+function listSupportedCountries(): string {
+  const countries = Object.entries(COUNTRY_INFO).map(([code, info]) => {
+    const hasGeo = !!GEOJSON_SOURCES[code as CountryCode];
+    const rssCount = (RSS_SOURCES_BY_COUNTRY[code as CountryCode] || []).length;
+    return `${info.flag} **${code}** - ${info.name} (${info.nativeName}) | Locale: ${info.primaryLocale} | Currency: ${info.currency} | Map: ${hasGeo ? "✅" : "❌"} | RSS: ${rssCount > 0 ? `✅ ${rssCount}` : "❌"}`;
+  });
+
+  return `Supported Countries for Bilateral Portals:
+
+${countries.join("\n")}
+
+Usage: scaffold_business_portal with countryA and countryB parameters.
+Example: scaffold_business_portal(projectName="india-uae-trade", countryA="IN", countryB="AE")
+
+Countries with ✅ Map have pre-configured GeoJSON sources for regional maps.
+Countries with ✅ RSS have pre-configured news feed sources.`;
+}
+
+interface EnrichedRegionData {
+  regionName: string;
+  country: string;
+  gdp: string;
+  population: string;
+  industries: string[];
+  investmentOpportunities: Array<{
+    title: string;
+    sector: string;
+    description: string;
+    investmentRange: string;
+  }>;
+  notableEntrepreneurs: Array<{
+    name: string;
+    company: string;
+    industry: string;
+    netWorth?: string;
+  }>;
+  economicHighlights: string[];
+  sources: string[];
+}
+
+async function enrichRegionData(
+  countryCode: string,
+  regionName: string,
+  depth: "basic" | "detailed" = "basic"
+): Promise<string> {
+  const validCountryCodes = Object.keys(COUNTRY_INFO);
+  if (!validCountryCodes.includes(countryCode.toUpperCase())) {
+    return `Error: Invalid country code "${countryCode}". Valid codes: ${validCountryCodes.join(", ")}`;
+  }
+
+  const country = COUNTRY_INFO[countryCode.toUpperCase() as CountryCode];
+  const queries = [
+    `${regionName} ${country.name} GDP population economy 2024`,
+    `${regionName} ${country.name} major industries sectors`,
+    `${regionName} ${country.name} investment opportunities foreign investment`,
+    `${regionName} ${country.name} famous entrepreneurs billionaires business leaders`,
+  ];
+
+  if (depth === "detailed") {
+    queries.push(
+      `${regionName} ${country.name} special economic zones tax incentives`,
+      `${regionName} ${country.name} infrastructure development projects`,
+      `${regionName} ${country.name} trade agreements bilateral relations`
+    );
+  }
+
+  const searchResults: string[] = [];
+  const sources: string[] = [];
+
+  for (const query of queries) {
+    try {
+      const result = await webSearch(query);
+      if (result && !result.startsWith("Error")) {
+        searchResults.push(result);
+        const urlMatches = result.match(/https?:\/\/[^\s\]]+/g) || [];
+        sources.push(...urlMatches.slice(0, 2));
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  if (searchResults.length === 0) {
+    return `Could not find data for ${regionName}, ${country.name}. Try a different region name or check spelling.`;
+  }
+
+  const combinedResults = searchResults.join("\n\n---\n\n");
+
+  const SONAR_API_KEY = process.env.SONAR_API_KEY || "";
+  if (!SONAR_API_KEY) {
+    return `Raw search results for ${regionName}, ${country.name}:\n\n${combinedResults.slice(0, 5000)}\n\nNote: Set SONAR_API_KEY for structured data extraction.`;
+  }
+
+  try {
+    const response = await fetch("https://api.perplexity.ai/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${SONAR_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "sonar-pro",
+        messages: [
+          {
+            role: "system",
+            content: `You are a business intelligence analyst extracting structured data about regions for an investment portal. Return ONLY valid JSON with no markdown formatting.`,
+          },
+          {
+            role: "user",
+            content: `Extract structured data about ${regionName}, ${country.name} from these search results. Return JSON:
+{
+  "regionName": "${regionName}",
+  "country": "${country.name}",
+  "gdp": "GDP figure with currency",
+  "population": "population figure",
+  "industries": ["industry1", "industry2", ...],
+  "investmentOpportunities": [
+    {"title": "opportunity name", "sector": "sector", "description": "brief desc", "investmentRange": "$X - $Y"}
+  ],
+  "notableEntrepreneurs": [
+    {"name": "full name", "company": "company", "industry": "industry", "netWorth": "$X billion"}
+  ],
+  "economicHighlights": ["highlight1", "highlight2", ...]
+}
+
+Search results:
+${combinedResults.slice(0, 8000)}`,
+          },
+        ],
+        max_tokens: 2048,
+      }),
+    });
+
+    if (!response.ok) {
+      return `Raw search results for ${regionName}, ${country.name}:\n\n${combinedResults.slice(0, 3000)}`;
+    }
+
+    const data = (await response.json()) as {
+      choices: Array<{ message: { content: string } }>;
+    };
+    const content = data.choices?.[0]?.message?.content || "";
+
+    let enrichedData: EnrichedRegionData;
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        enrichedData = JSON.parse(jsonMatch[0]) as EnrichedRegionData;
+        enrichedData.sources = Array.from(new Set(sources)).slice(0, 5);
+      } else {
+        return `Extracted information for ${regionName}, ${country.name}:\n\n${content}\n\nSources: ${sources.slice(0, 3).join(", ")}`;
+      }
+    } catch {
+      return `Extracted information for ${regionName}, ${country.name}:\n\n${content}\n\nSources: ${sources.slice(0, 3).join(", ")}`;
+    }
+
+    return `# ${enrichedData.regionName}, ${enrichedData.country}
+
+## Economic Overview
+- **GDP**: ${enrichedData.gdp}
+- **Population**: ${enrichedData.population}
+- **Key Industries**: ${enrichedData.industries.join(", ")}
+
+## Economic Highlights
+${enrichedData.economicHighlights.map(h => `- ${h}`).join("\n")}
+
+## Investment Opportunities
+${enrichedData.investmentOpportunities
+  .map(
+    o => `### ${o.title}
+- **Sector**: ${o.sector}
+- **Investment Range**: ${o.investmentRange}
+- ${o.description}`
+  )
+  .join("\n\n")}
+
+## Notable Entrepreneurs
+${enrichedData.notableEntrepreneurs
+  .map(
+    e =>
+      `- **${e.name}** - ${e.company} (${e.industry})${e.netWorth ? ` - Net Worth: ${e.netWorth}` : ""}`
+  )
+  .join("\n")}
+
+## Sources
+${enrichedData.sources.map(s => `- ${s}`).join("\n")}
+
+---
+*Data enriched via web research. Verify critical figures from official sources.*`;
+  } catch (error) {
+    return `Error enriching data: ${error instanceof Error ? error.message : String(error)}\n\nRaw results:\n${combinedResults.slice(0, 2000)}`;
+  }
+}
+
+const OLLAMA_BASE_URL = "http://localhost:11434";
+const VISION_MODEL = "llama3.2-vision:90b";
+
+async function verifyBuildVisually(
+  url: string,
+  expectedFeatures?: string[],
+  referenceUrl?: string
+): Promise<string> {
+  const { chromium } = await import("playwright");
+  const browser = await chromium.launch({ headless: true });
+
+  try {
+    const context = await browser.newContext({
+      viewport: { width: 1920, height: 1080 },
+    });
+    const page = await context.newPage();
+
+    await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
+    await page.waitForTimeout(2000);
+
+    const screenshotBuffer = await page.screenshot({ fullPage: true });
+    const screenshotBase64 = screenshotBuffer.toString("base64");
+
+    let referenceBase64: string | null = null;
+    if (referenceUrl) {
+      await page.goto(referenceUrl, {
+        waitUntil: "networkidle",
+        timeout: 30000,
+      });
+      await page.waitForTimeout(2000);
+      const refBuffer = await page.screenshot({ fullPage: true });
+      referenceBase64 = refBuffer.toString("base64");
+    }
+
+    await browser.close();
+
+    const modelCheck = await fetch(`${OLLAMA_BASE_URL}/api/tags`);
+    if (!modelCheck.ok) {
+      return `Screenshot captured but Ollama not available for analysis. URL: ${url}`;
+    }
+
+    const models = (await modelCheck.json()) as {
+      models: Array<{ name: string }>;
+    };
+    const hasVision = models.models.some(m => m.name === VISION_MODEL);
+    if (!hasVision) {
+      return `Screenshot captured but vision model ${VISION_MODEL} not available. URL: ${url}`;
+    }
+
+    let analysisPrompt = `Analyze this web page screenshot for a bilateral trade/investment portal. Evaluate:
+
+1. **Layout Quality**: Is the layout professional and well-organized?
+2. **Navigation**: Are there clear navigation elements (menu, links)?
+3. **Visual Design**: Colors, typography, spacing - does it look modern?
+4. **Content Sections**: What main sections are visible?
+5. **Interactive Elements**: Maps, forms, buttons - what's present?
+6. **Issues**: Any broken layouts, missing images, or errors visible?
+7. **Overall Score**: Rate 1-10 for production readiness.`;
+
+    if (expectedFeatures && expectedFeatures.length > 0) {
+      analysisPrompt += `\n\nExpected features to verify:\n${expectedFeatures.map(f => `- ${f}`).join("\n")}\n\nFor each expected feature, state if it's PRESENT, MISSING, or UNCLEAR.`;
+    }
+
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: VISION_MODEL,
+        prompt: analysisPrompt,
+        images: [screenshotBase64],
+        stream: false,
+      }),
+    });
+
+    if (!response.ok) {
+      return `Vision API error: ${response.status}`;
+    }
+
+    const data = (await response.json()) as { response: string };
+    let result = `# Visual Verification Report\n\n**URL**: ${url}\n**Analyzed with**: ${VISION_MODEL}\n\n${data.response}`;
+
+    if (referenceBase64 && referenceUrl) {
+      const comparisonPrompt = `Compare these two web pages:
+1. The BUILT page (first image)
+2. The REFERENCE page (second image)
+
+Identify:
+- What features match between them?
+- What is MISSING from the built page that the reference has?
+- What is EXTRA in the built page?
+- Overall similarity score (1-10)
+- Specific recommendations to make the built page match the reference.`;
+
+      const compResponse = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: VISION_MODEL,
+          prompt: comparisonPrompt,
+          images: [screenshotBase64, referenceBase64],
+          stream: false,
+        }),
+      });
+
+      if (compResponse.ok) {
+        const compData = (await compResponse.json()) as { response: string };
+        result += `\n\n---\n\n# Comparison with Reference\n\n**Reference URL**: ${referenceUrl}\n\n${compData.response}`;
+      }
+    }
+
+    return result;
+  } catch (error) {
+    await browser.close();
+    return `Error during visual verification: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function buildBilateralPortalWithSwarm(
+  projectName: string,
+  countryA: string,
+  countryB: string,
+  userId: number,
+  deployToProduction?: boolean
+): Promise<string> {
+  const validCountryCodes = Object.keys(COUNTRY_INFO);
+
+  if (!validCountryCodes.includes(countryA)) {
+    return `Error: Invalid countryA code "${countryA}". Valid codes: ${validCountryCodes.join(", ")}`;
+  }
+  if (!validCountryCodes.includes(countryB)) {
+    return `Error: Invalid countryB code "${countryB}". Valid codes: ${validCountryCodes.join(", ")}`;
+  }
+
+  const infoA = COUNTRY_INFO[countryA as CountryCode];
+  const infoB = COUNTRY_INFO[countryB as CountryCode];
+
+  const steps: string[] = [];
+  steps.push(
+    `🚀 Starting bilateral portal build: ${infoA.flag} ${infoA.name} ↔ ${infoB.flag} ${infoB.name}`
+  );
+
+  try {
+    steps.push("\n📊 Step 1: Forming swarm team for portal construction...");
+    const team = await formAgentTeam(
+      userId,
+      `Build a bilateral trade and investment portal for ${infoA.name} and ${infoB.name}`,
+      ["code", "web", "files"],
+      2,
+      4
+    );
+    steps.push(
+      `   ✅ Team formed: ${team.members.length} agents, Leader ID: ${team.leaderId}`
+    );
+
+    steps.push("\n🏗️ Step 2: Scaffolding portal structure...");
+    const scaffoldResult = await scaffoldBusinessPortalTool(
+      projectName,
+      JARVIS_PROJECTS,
+      "postgresql",
+      undefined,
+      undefined,
+      true,
+      true,
+      countryA,
+      countryB
+    );
+
+    if (scaffoldResult.startsWith("Error")) {
+      return `Portal scaffolding failed:\n${scaffoldResult}`;
+    }
+    steps.push(`   ✅ Portal scaffolded successfully`);
+
+    const projectPath = `${JARVIS_PROJECTS}/${projectName}`;
+
+    steps.push("\n📦 Step 3: Installing dependencies...");
+    try {
+      await execAsync("npm install", { cwd: projectPath, timeout: 180000 });
+      steps.push("   ✅ Dependencies installed");
+    } catch (installError) {
+      steps.push(
+        `   ⚠️ Install warning: ${installError instanceof Error ? installError.message : String(installError)}`
+      );
+    }
+
+    steps.push("\n🔨 Step 4: Building production bundle...");
+    try {
+      await execAsync("npm run build", { cwd: projectPath, timeout: 300000 });
+      steps.push("   ✅ Build successful");
+    } catch (buildError) {
+      const errorMsg =
+        buildError instanceof Error ? buildError.message : String(buildError);
+      steps.push(`   ❌ Build failed: ${errorMsg.slice(0, 200)}`);
+      return (
+        steps.join("\n") +
+        "\n\nBuild failed. Please check the error above and fix any issues."
+      );
+    }
+
+    if (deployToProduction) {
+      steps.push("\n🚀 Step 5: Deploying to Vercel...");
+      const deployResult = await deployToVercel(projectPath, true);
+
+      if (deployResult.includes("Deployment successful")) {
+        const urlMatch = deployResult.match(/https:\/\/[^\s]+\.vercel\.app/);
+        steps.push(`   ✅ Deployed successfully!`);
+        if (urlMatch) {
+          steps.push(`   🌐 Live URL: ${urlMatch[0]}`);
+        }
+      } else {
+        steps.push(`   ⚠️ Deployment result: ${deployResult.slice(0, 200)}`);
+      }
+    } else {
+      steps.push("\n📋 Step 5: Skipping deployment (deployToProduction=false)");
+      steps.push(`   To deploy later: npx vercel --prod --yes`);
+    }
+
+    steps.push("\n" + "=".repeat(60));
+    steps.push(`✅ PORTAL BUILD COMPLETE`);
+    steps.push("=".repeat(60));
+    steps.push(`\nProject: ${projectName}`);
+    steps.push(
+      `Countries: ${infoA.flag} ${infoA.name} ↔ ${infoB.flag} ${infoB.name}`
+    );
+    steps.push(`Location: ${projectPath}`);
+    steps.push(
+      `Languages: English + ${infoA.primaryLocale !== "en" ? infoA.nativeName : ""} ${infoB.primaryLocale !== "en" && infoB.primaryLocale !== infoA.primaryLocale ? "+ " + infoB.nativeName : ""}`
+    );
+
+    return steps.join("\n");
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    steps.push(`\n❌ Error: ${errorMsg}`);
+    return steps.join("\n");
+  }
 }
 
 async function generateSchemaTool(
@@ -7917,6 +9198,48 @@ export async function analyzeImage(
   question: string
 ): Promise<string> {
   try {
+    const { getGlobalPerceptionAdapter } = await import(
+      "./v3/perceptionAdapter"
+    );
+    const perceptionAdapter = await getGlobalPerceptionAdapter();
+    const status = await perceptionAdapter.getStatus();
+
+    if (status.available && status.services.vision) {
+      let base64Image: string;
+
+      if (imagePathOrUrl.startsWith("http")) {
+        const response = await fetch(imagePathOrUrl);
+        const buffer = Buffer.from(await response.arrayBuffer());
+        base64Image = buffer.toString("base64");
+      } else {
+        const imageBuffer = await fs.readFile(imagePathOrUrl);
+        base64Image = imageBuffer.toString("base64");
+      }
+
+      const result = await perceptionAdapter.analyzeImage(
+        base64Image,
+        question
+      );
+      const elementsDesc =
+        result.elements.length > 0
+          ? `\n\nDetected UI elements:\n${result.elements
+              .map(
+                el =>
+                  `- ${el.type}: ${el.label || "unlabeled"} (${Math.round(el.confidence * 100)}%)`
+              )
+              .join("\n")}`
+          : "";
+
+      return `${result.description}${elementsDesc}`;
+    }
+  } catch (perceptionError) {
+    console.warn(
+      "[V3] Local perception unavailable, falling back to cloud:",
+      perceptionError
+    );
+  }
+
+  try {
     const { invokeLLM } = await import("../../_core/llm");
 
     let imageContent: { type: "image_url"; image_url: { url: string } };
@@ -8409,6 +9732,307 @@ export async function generateSpeech(
   }
 }
 
+async function executeDaemonScreenshot(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const available = await daemonClient.isDaemonAvailable();
+    if (!available) {
+      return "Daemon not available. Start jarvis-daemon on the target machine.";
+    }
+    const result = await daemonClient.screenshot({
+      displayId: input.displayId as number | undefined,
+      region: input.region as
+        | { x: number; y: number; width: number; height: number }
+        | undefined,
+      format: input.format as string | undefined,
+      quality: input.quality as number | undefined,
+    });
+
+    const analyze = input.analyze as boolean | undefined;
+    const analyzePrompt =
+      (input.analyzePrompt as string) ||
+      "Describe this screenshot. Identify all UI elements, buttons, text, and interactive components.";
+
+    if (analyze) {
+      try {
+        const { getGlobalPerceptionAdapter } = await import(
+          "./v3/perceptionAdapter"
+        );
+        const perceptionAdapter = await getGlobalPerceptionAdapter();
+        const status = await perceptionAdapter.getStatus();
+
+        if (status.available && status.services.vision) {
+          const analysisResult = await perceptionAdapter.analyzeImage(
+            result.imageData,
+            analyzePrompt
+          );
+
+          const elementsDesc =
+            analysisResult.elements.length > 0
+              ? `\n\nDetected UI elements:\n${analysisResult.elements
+                  .map(
+                    el =>
+                      `- ${el.type}: ${el.label || "unlabeled"} (${Math.round(el.confidence * 100)}%)`
+                  )
+                  .join("\n")}`
+              : "";
+
+          return `Screenshot captured at ${new Date(result.timestampMs).toISOString()}\n\nAnalysis (via local GPU):\n${analysisResult.description}${elementsDesc}`;
+        }
+      } catch (perceptionError) {
+        console.warn("[V3] Local perception unavailable:", perceptionError);
+      }
+
+      const analysisResult = await analyzeImage(
+        `data:image/png;base64,${result.imageData}`,
+        analyzePrompt
+      );
+      return `Screenshot captured at ${new Date(result.timestampMs).toISOString()}\n\nAnalysis:\n${analysisResult}`;
+    }
+
+    return `Screenshot captured at ${new Date(result.timestampMs).toISOString()}\nImage data: ${result.imageData.length} bytes (base64)`;
+  } catch (error) {
+    return `Daemon screenshot error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeDaemonMouseMove(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const available = await daemonClient.isDaemonAvailable();
+    if (!available) {
+      return "Daemon not available. Start jarvis-daemon on the target machine.";
+    }
+    const result = await daemonClient.mouseMove(
+      input.x as number,
+      input.y as number,
+      {
+        displayId: input.displayId as number | undefined,
+        relative: input.relative as boolean | undefined,
+        durationMs: input.durationMs as number | undefined,
+      }
+    );
+    return result.success
+      ? `Mouse moved to (${input.x}, ${input.y})`
+      : `Mouse move failed: ${result.message}`;
+  } catch (error) {
+    return `Daemon mouse move error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeDaemonMouseClick(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const available = await daemonClient.isDaemonAvailable();
+    if (!available) {
+      return "Daemon not available. Start jarvis-daemon on the target machine.";
+    }
+    const button = (input.button as string) || "left";
+    const action = (input.action as string) || "click";
+    const result = await daemonClient.mouseButton(
+      button as "left" | "right" | "middle",
+      action as "press" | "release" | "click" | "double_click",
+      input.position as { x: number; y: number } | undefined,
+      input.displayId as number | undefined
+    );
+    return result.success
+      ? `Mouse ${action} (${button} button)`
+      : `Mouse click failed: ${result.message}`;
+  } catch (error) {
+    return `Daemon mouse click error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeDaemonKeyboardType(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const available = await daemonClient.isDaemonAvailable();
+    if (!available) {
+      return "Daemon not available. Start jarvis-daemon on the target machine.";
+    }
+    const result = await daemonClient.keyboardType(
+      input.text as string,
+      input.delayMs as number | undefined
+    );
+    return result.success
+      ? `Typed: "${input.text}"`
+      : `Keyboard type failed: ${result.message}`;
+  } catch (error) {
+    return `Daemon keyboard type error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeDaemonKeyboardKey(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const available = await daemonClient.isDaemonAvailable();
+    if (!available) {
+      return "Daemon not available. Start jarvis-daemon on the target machine.";
+    }
+    const action = (input.action as string) || "tap";
+    const result = await daemonClient.keyboardKey(
+      input.key as string,
+      action as "press" | "release" | "tap",
+      input.modifiers as string[] | undefined
+    );
+    return result.success
+      ? `Key ${action}: ${input.key}`
+      : `Keyboard key failed: ${result.message}`;
+  } catch (error) {
+    return `Daemon keyboard key error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeDaemonListWindows(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const available = await daemonClient.isDaemonAvailable();
+    if (!available) {
+      return "Daemon not available. Start jarvis-daemon on the target machine.";
+    }
+    const windows = await daemonClient.listWindows({
+      includeMinimized: input.includeMinimized as boolean | undefined,
+      includeHidden: input.includeHidden as boolean | undefined,
+      filterApp: input.filterApp as string | undefined,
+    });
+    if (windows.length === 0) {
+      return "No windows found";
+    }
+    return `Found ${windows.length} windows:\n${windows.map(w => `- [${w.id}] "${w.title}" (${w.appName}) - ${w.focused ? "FOCUSED" : ""}`).join("\n")}`;
+  } catch (error) {
+    return `Daemon list windows error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeDaemonFocusWindow(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const available = await daemonClient.isDaemonAvailable();
+    if (!available) {
+      return "Daemon not available. Start jarvis-daemon on the target machine.";
+    }
+    const result = await daemonClient.focusWindow(input.windowId as string);
+    return result.success
+      ? `Focused window: ${input.windowId}`
+      : `Focus window failed: ${result.message}`;
+  } catch (error) {
+    return `Daemon focus window error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeDaemonShellExec(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const available = await daemonClient.isDaemonAvailable();
+    if (!available) {
+      return "Daemon not available. Start jarvis-daemon on the target machine.";
+    }
+    const result = await daemonClient.shellExec(input.command as string, {
+      workingDir: input.workingDir as string | undefined,
+      env: input.env as Record<string, string> | undefined,
+      timeoutSeconds: input.timeoutSeconds as number | undefined,
+    });
+    return `Exit code: ${result.exitCode}\nDuration: ${result.durationMs}ms\nStdout:\n${result.stdout}\nStderr:\n${result.stderr}`;
+  } catch (error) {
+    return `Daemon shell exec error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeDaemonStartProcess(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const available = await daemonClient.isDaemonAvailable();
+    if (!available) {
+      return "Daemon not available. Start jarvis-daemon on the target machine.";
+    }
+    const result = await daemonClient.startProcess(input.command as string, {
+      args: input.args as string[] | undefined,
+      workingDir: input.workingDir as string | undefined,
+      env: input.env as Record<string, string> | undefined,
+      detached: input.detached as boolean | undefined,
+    });
+    return `Started process with PID: ${result.pid}`;
+  } catch (error) {
+    return `Daemon start process error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeDaemonListProcesses(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const available = await daemonClient.isDaemonAvailable();
+    if (!available) {
+      return "Daemon not available. Start jarvis-daemon on the target machine.";
+    }
+    const processes = await daemonClient.listProcesses({
+      filterName: input.filterName as string | undefined,
+      filterUser: input.filterUser as string | undefined,
+    });
+    if (processes.length === 0) {
+      return "No processes found";
+    }
+    return `Found ${processes.length} processes:\n${processes
+      .slice(0, 50)
+      .map(
+        p =>
+          `- [${p.pid}] ${p.name} (${p.user}) - CPU: ${p.cpuPercent.toFixed(1)}%, Mem: ${(p.memoryBytes / 1024 / 1024).toFixed(1)}MB`
+      )
+      .join(
+        "\n"
+      )}${processes.length > 50 ? `\n... and ${processes.length - 50} more` : ""}`;
+  } catch (error) {
+    return `Daemon list processes error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeDaemonGetClipboard(): Promise<string> {
+  try {
+    const available = await daemonClient.isDaemonAvailable();
+    if (!available) {
+      return "Daemon not available. Start jarvis-daemon on the target machine.";
+    }
+    const result = await daemonClient.getClipboard();
+    if (result.text) {
+      return `Clipboard text: "${result.text}"`;
+    } else if (result.image) {
+      return `Clipboard contains image (${result.mimeType}): ${result.image.length} bytes`;
+    }
+    return "Clipboard is empty";
+  } catch (error) {
+    return `Daemon get clipboard error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeDaemonSetClipboard(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const available = await daemonClient.isDaemonAvailable();
+    if (!available) {
+      return "Daemon not available. Start jarvis-daemon on the target machine.";
+    }
+    const result = await daemonClient.setClipboard(
+      input.text as string | undefined,
+      input.image as string | undefined
+    );
+    return result.success
+      ? "Clipboard updated"
+      : `Set clipboard failed: ${result.message}`;
+  } catch (error) {
+    return `Daemon set clipboard error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 async function executeDesktopAction(
   actionInput: Action | string,
   taskId: number,
@@ -8868,6 +10492,8 @@ export async function executeTool(
         input.headers as Record<string, string>,
         input.body as string
       );
+    case "get_weather":
+      return getWeather(input.location as string);
     case "generate_image":
       return generateImageTool(input.prompt as string);
     case "create_rich_report":
@@ -9164,7 +10790,7 @@ export async function executeTool(
       return scaffoldProjectTool(
         (input.projectName || input.name) as string,
         (input.projectType || input.template || input.type) as string,
-        (input.outputPath || input.path || "/tmp/jarvis-projects") as string,
+        (input.outputPath || input.path || JARVIS_PROJECTS) as string,
         input.database as string | undefined,
         input.authentication as string | undefined,
         input.features as string[] | undefined,
@@ -9176,6 +10802,53 @@ export async function executeTool(
         input.docker as boolean | undefined,
         input.dockerCompose as boolean | undefined,
         input.dockerServices as string[] | undefined
+      );
+    case "scaffold_regional_map":
+      return scaffoldRegionalMapTool(
+        (input.projectName || input.name) as string,
+        (input.outputPath || input.path) as string | undefined,
+        input.database as string | undefined,
+        input.colorScheme as string | undefined,
+        input.countries as string[] | undefined
+      );
+    case "scaffold_business_portal":
+      return scaffoldBusinessPortalTool(
+        (input.projectName || input.name) as string,
+        (input.outputPath || input.path) as string | undefined,
+        input.database as string | undefined,
+        input.primaryColor as string | undefined,
+        input.secondaryColor as string | undefined,
+        input.enable3DGlobe as boolean | undefined,
+        input.enableRssFeed as boolean | undefined,
+        input.countryA as string | undefined,
+        input.countryB as string | undefined
+      );
+    case "deploy_to_vercel":
+      return deployToVercel(
+        (input.projectPath || input.path) as string,
+        input.production as boolean | undefined
+      );
+    case "list_supported_countries":
+      return listSupportedCountries();
+    case "enrich_region_data":
+      return enrichRegionData(
+        input.countryCode as string,
+        input.regionName as string,
+        (input.depth as "basic" | "detailed") || "basic"
+      );
+    case "verify_build_visually":
+      return verifyBuildVisually(
+        input.url as string,
+        input.expectedFeatures as string[] | undefined,
+        input.referenceUrl as string | undefined
+      );
+    case "build_bilateral_portal_swarm":
+      return buildBilateralPortalWithSwarm(
+        input.projectName as string,
+        input.countryA as string,
+        input.countryB as string,
+        (input.userId || 1) as number,
+        input.deployToProduction as boolean | undefined
       );
     case "generate_schema":
       return generateSchemaTool(
@@ -9265,6 +10938,30 @@ export async function executeTool(
         input.sessionId as string,
         input.maxIterations as number | undefined
       );
+    case "daemon_screenshot":
+      return executeDaemonScreenshot(input);
+    case "daemon_mouse_move":
+      return executeDaemonMouseMove(input);
+    case "daemon_mouse_click":
+      return executeDaemonMouseClick(input);
+    case "daemon_keyboard_type":
+      return executeDaemonKeyboardType(input);
+    case "daemon_keyboard_key":
+      return executeDaemonKeyboardKey(input);
+    case "daemon_list_windows":
+      return executeDaemonListWindows(input);
+    case "daemon_focus_window":
+      return executeDaemonFocusWindow(input);
+    case "daemon_shell_exec":
+      return executeDaemonShellExec(input);
+    case "daemon_start_process":
+      return executeDaemonStartProcess(input);
+    case "daemon_list_processes":
+      return executeDaemonListProcesses(input);
+    case "daemon_get_clipboard":
+      return executeDaemonGetClipboard();
+    case "daemon_set_clipboard":
+      return executeDaemonSetClipboard(input);
     default:
       if (name.startsWith("self_")) {
         return executeSelfEvolutionTool(name, input, input.userId as number);
@@ -9631,6 +11328,19 @@ export function getAvailableTools(): Array<{
       },
     },
     {
+      name: "get_weather",
+      description:
+        "Get current weather and 5-day forecast for any location. ALWAYS use this for weather queries - it has multiple fallback APIs and retries automatically. Returns a beautifully formatted weather card.",
+      parameters: {
+        location: {
+          type: "string",
+          description:
+            "City name, optionally with country (e.g., 'Paris', 'Tokyo, Japan', 'New York, USA')",
+          required: true,
+        },
+      },
+    },
+    {
       name: "http_request",
       description: "Make an HTTP request to an API endpoint.",
       parameters: {
@@ -9738,12 +11448,25 @@ export function getAvailableTools(): Array<{
       parameters: {
         operation: {
           type: "string",
-          description: "'parse' or 'stringify'",
+          description: "Operation: parse or stringify",
           required: true,
         },
         data: {
           type: "string",
           description: "The JSON string to process",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "get_weather",
+      description:
+        "Get current weather and 5-day forecast for any location. ALWAYS use this for weather queries - it has multiple fallback APIs and retries automatically. Returns a beautifully formatted weather card that MUST BE DISPLAYED EXACTLY AS RETURNED - do NOT summarize or rephrase the output, show the formatted card verbatim to the user.",
+      parameters: {
+        location: {
+          type: "string",
+          description:
+            "City name, optionally with country (e.g., 'Paris', 'Tokyo, Japan', 'New York, USA')",
           required: true,
         },
       },
@@ -9978,1598 +11701,362 @@ export function getAvailableTools(): Array<{
         },
       },
     },
-    // === DATABASE SCHEMA TOOLS ===
+    // === DAEMON DESKTOP AUTOMATION (Rust gRPC) ===
     {
-      name: "generate_schema",
+      name: "daemon_screenshot",
       description:
-        "Generate a Drizzle ORM database schema from a natural language description. Analyzes the description using AI to extract entities, fields, and relationships, then generates TypeScript code compatible with Drizzle ORM.",
+        "Take a screenshot using the JARVIS desktop daemon. Requires jarvis-daemon running on the target machine. Can optionally analyze the screenshot using local GPU vision (LLaVA) or cloud fallback.",
       parameters: {
-        description: {
-          type: "string",
-          description:
-            "Natural language description of the data model (e.g., 'A blog platform with users, posts, comments, and tags. Users can author multiple posts. Posts can have many comments. Posts can have multiple tags.')",
-          required: true,
-        },
-        databaseType: {
-          type: "string",
-          description:
-            "Target database type: 'mysql', 'postgresql', or 'sqlite' (default: mysql)",
-          required: false,
-        },
-        outputPath: {
-          type: "string",
-          description:
-            "Optional file path to write the schema. If not provided, returns the schema as text.",
-          required: false,
-        },
-      },
-    },
-    ...getSelfEvolutionTools(),
-    // === GIT TOOLS ===
-    {
-      name: "git_status",
-      description:
-        "Get the git status of a project, showing modified, staged, and untracked files.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the git repository",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "git_diff",
-      description:
-        "Show git diff for a project. Can compare staged, unstaged, or specific commits.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the git repository",
-          required: true,
-        },
-        staged: {
-          type: "boolean",
-          description: "Show staged changes only (default: false)",
-          required: false,
-        },
-        file: {
-          type: "string",
-          description: "Specific file to diff",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "git_branch",
-      description: "List, create, or switch git branches.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the git repository",
-          required: true,
-        },
-        action: {
-          type: "string",
-          description: "'list', 'create', 'checkout', or 'delete'",
-          required: true,
-        },
-        branchName: {
-          type: "string",
-          description: "Branch name (required for create/checkout/delete)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "git_commit",
-      description: "Create a git commit with all staged changes.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the git repository",
-          required: true,
-        },
-        message: {
-          type: "string",
-          description: "Commit message",
-          required: true,
-        },
-        addAll: {
-          type: "boolean",
-          description: "Stage all changes before committing (default: false)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "git_log",
-      description: "Show git commit history.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the git repository",
-          required: true,
-        },
-        limit: {
+        displayId: {
           type: "number",
-          description: "Number of commits to show (default: 10)",
+          description: "Display ID (default: primary display)",
           required: false,
         },
-      },
-    },
-    {
-      name: "git_push",
-      description: "Push commits to a remote repository.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the git repository",
-          required: true,
-        },
-        remote: {
-          type: "string",
-          description: "Remote name (default: origin)",
-          required: false,
-        },
-        branch: {
-          type: "string",
-          description: "Branch to push (default: current branch)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "git_pull",
-      description: "Pull changes from a remote repository.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the git repository",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "git_stash",
-      description: "Stash or restore uncommitted changes.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the git repository",
-          required: true,
-        },
-        action: {
-          type: "string",
-          description: "'save', 'pop', 'list', or 'drop'",
-          required: true,
-        },
-        message: {
-          type: "string",
-          description: "Stash message (for save action)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "git_clone",
-      description: "Clone a git repository.",
-      parameters: {
-        repoUrl: {
-          type: "string",
-          description: "URL of the repository to clone",
-          required: true,
-        },
-        targetPath: {
-          type: "string",
-          description: "Local path to clone into",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "git_init",
-      description: "Initialize a new git repository.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to initialize as a git repository",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "git_create_pr",
-      description: "Create a GitHub pull request using the gh CLI.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the git repository",
-          required: true,
-        },
-        title: {
-          type: "string",
-          description: "PR title",
-          required: true,
-        },
-        body: {
-          type: "string",
-          description: "PR description",
-          required: true,
-        },
-        base: {
-          type: "string",
-          description: "Base branch (default: main)",
-          required: false,
-        },
-      },
-    },
-    // === DEPLOYMENT TOOLS ===
-    {
-      name: "deploy_vercel",
-      description: "Deploy a project to Vercel. Requires VERCEL_TOKEN env var.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project to deploy",
-          required: true,
-        },
-        prod: {
-          type: "boolean",
-          description:
-            "Deploy to production (default: false, deploys to preview)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "deploy_railway",
-      description:
-        "Deploy a project to Railway. Requires RAILWAY_TOKEN env var.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project to deploy",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "docker_build",
-      description: "Build a Docker image from a Dockerfile.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project with Dockerfile",
-          required: true,
-        },
-        imageName: {
-          type: "string",
-          description: "Name for the Docker image",
-          required: true,
-        },
-        tag: {
-          type: "string",
-          description: "Image tag (default: latest)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "docker_push",
-      description: "Push a Docker image to a registry.",
-      parameters: {
-        imageName: {
-          type: "string",
-          description:
-            "Full image name including registry (e.g., docker.io/user/app:tag)",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "docker_compose",
-      description: "Run docker-compose commands (up, down, logs, ps).",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project with docker-compose.yml",
-          required: true,
-        },
-        action: {
-          type: "string",
-          description: "'up', 'down', 'logs', 'ps', or 'restart'",
-          required: true,
-        },
-        detach: {
-          type: "boolean",
-          description: "Run in detached mode for 'up' (default: true)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "generate_dockerfile",
-      description:
-        "Generate a Dockerfile for a project based on its framework/language.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project",
-          required: true,
-        },
-        framework: {
-          type: "string",
-          description:
-            "Framework: 'node', 'python', 'react', 'nextjs', 'express', 'fastapi'",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "check_deployment_health",
-      description: "Check the health of a deployed application by URL.",
-      parameters: {
-        url: {
-          type: "string",
-          description: "URL of the deployed application",
-          required: true,
-        },
-        expectedStatus: {
-          type: "number",
-          description: "Expected HTTP status code (default: 200)",
-          required: false,
-        },
-      },
-    },
-    // === DEV TOOLS ===
-    {
-      name: "run_build",
-      description:
-        "Run the build command for a project (npm run build, pnpm build, etc.).",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "run_tests",
-      description: "Run tests for a project (npm test, pytest, etc.).",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project",
-          required: true,
-        },
-        testFile: {
-          type: "string",
-          description: "Specific test file to run",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "run_typecheck",
-      description: "Run TypeScript type checking on a project.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "run_lint",
-      description: "Run linting (ESLint, Prettier) on a project.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "start_dev_server",
-      description:
-        "Start a development server for a project in the background.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project",
-          required: true,
-        },
-        port: {
-          type: "number",
-          description: "Port to run on (default: auto-detect)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "check_dev_server",
-      description: "Check if a dev server is running on a port.",
-      parameters: {
-        port: {
-          type: "number",
-          description: "Port to check (default: 5173)",
-          required: false,
-        },
-      },
-    },
-    // === BROWSER AUTOMATION TOOLS ===
-    {
-      name: "browser_session_start",
-      description:
-        "Start a new browser automation session. Returns a session ID for subsequent operations.",
-      parameters: {
-        url: {
-          type: "string",
-          description: "Initial URL to navigate to",
-          required: true,
-        },
-        headless: {
-          type: "boolean",
-          description: "Run in headless mode (default: true)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "browser_click",
-      description: "Click an element in the browser session.",
-      parameters: {
-        sessionId: {
-          type: "string",
-          description: "Browser session ID",
-          required: true,
-        },
-        selector: {
-          type: "string",
-          description: "CSS selector or text content to click",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "browser_fill",
-      description: "Fill a form field in the browser session.",
-      parameters: {
-        sessionId: {
-          type: "string",
-          description: "Browser session ID",
-          required: true,
-        },
-        selector: {
-          type: "string",
-          description: "CSS selector for the input field",
-          required: true,
-        },
-        value: {
-          type: "string",
-          description: "Value to fill",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "browser_navigate",
-      description: "Navigate to a URL in the browser session.",
-      parameters: {
-        sessionId: {
-          type: "string",
-          description: "Browser session ID",
-          required: true,
-        },
-        url: {
-          type: "string",
-          description: "URL to navigate to",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "browser_screenshot",
-      description: "Take a screenshot of the current page.",
-      parameters: {
-        sessionId: {
-          type: "string",
-          description: "Browser session ID",
-          required: true,
-        },
-        fullPage: {
-          type: "boolean",
-          description: "Capture full page (default: false, viewport only)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "browser_get_content",
-      description: "Get the text content of the current page.",
-      parameters: {
-        sessionId: {
-          type: "string",
-          description: "Browser session ID",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "browser_wait_for",
-      description: "Wait for an element to appear on the page.",
-      parameters: {
-        sessionId: {
-          type: "string",
-          description: "Browser session ID",
-          required: true,
-        },
-        selector: {
-          type: "string",
-          description: "CSS selector to wait for",
-          required: true,
-        },
-        timeout: {
-          type: "number",
-          description: "Timeout in milliseconds (default: 30000)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "browser_session_end",
-      description: "End a browser automation session and clean up resources.",
-      parameters: {
-        sessionId: {
-          type: "string",
-          description: "Browser session ID to close",
-          required: true,
-        },
-      },
-    },
-    // === DATABASE TOOL ===
-    {
-      name: "database_query",
-      description:
-        "Execute a SQL query on the application database. Use with caution - prefer SELECT queries.",
-      parameters: {
-        query: {
-          type: "string",
-          description: "SQL query to execute",
-          required: true,
-        },
-        params: {
-          type: "array",
-          items: { type: "string" },
-          description: "Query parameters for prepared statements",
-          required: false,
-        },
-      },
-    },
-    // === INTEGRATION TOOLS ===
-    {
-      name: "slack_message",
-      description:
-        "Send a message to a Slack channel. Requires SLACK_WEBHOOK_URL env var.",
-      parameters: {
-        channel: {
-          type: "string",
-          description: "Slack channel name (e.g., #general)",
-          required: true,
-        },
-        message: {
-          type: "string",
-          description: "Message to send",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "github_create_issue",
-      description: "Create a GitHub issue. Requires GITHUB_TOKEN env var.",
-      parameters: {
-        repo: {
-          type: "string",
-          description: "Repository in format owner/repo",
-          required: true,
-        },
-        title: {
-          type: "string",
-          description: "Issue title",
-          required: true,
-        },
-        body: {
-          type: "string",
-          description: "Issue body/description",
-          required: true,
-        },
-        labels: {
-          type: "array",
-          items: { type: "string" },
-          description: "Labels to add to the issue",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "github_create_pr",
-      description:
-        "Create a GitHub pull request. Requires GITHUB_TOKEN env var.",
-      parameters: {
-        repo: {
-          type: "string",
-          description: "Repository in format owner/repo",
-          required: true,
-        },
-        title: {
-          type: "string",
-          description: "PR title",
-          required: true,
-        },
-        body: {
-          type: "string",
-          description: "PR description",
-          required: true,
-        },
-        head: {
-          type: "string",
-          description: "Branch containing changes",
-          required: true,
-        },
-        base: {
-          type: "string",
-          description: "Base branch to merge into (default: main)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "github_api",
-      description: "Make a GitHub API request. Requires GITHUB_TOKEN env var.",
-      parameters: {
-        endpoint: {
-          type: "string",
-          description: "API endpoint (e.g., /repos/owner/repo/issues)",
-          required: true,
-        },
-        method: {
-          type: "string",
-          description: "HTTP method (default: GET)",
-          required: false,
-        },
-        body: {
+        region: {
           type: "object",
-          description: "Request body for POST/PUT/PATCH",
+          description: "Region to capture: {x, y, width, height}",
+          required: false,
+        },
+        format: {
+          type: "string",
+          description: "Image format: 'png' or 'jpeg' (default: png)",
+          required: false,
+        },
+        quality: {
+          type: "number",
+          description: "JPEG quality 1-100 (default: 90)",
+          required: false,
+        },
+        analyze: {
+          type: "boolean",
+          description:
+            "Analyze screenshot with vision model (uses local GPU if available, falls back to cloud)",
+          required: false,
+        },
+        analyzePrompt: {
+          type: "string",
+          description:
+            "Custom prompt for analysis (default: describe UI elements)",
           required: false,
         },
       },
     },
-    // === BACKGROUND/TMUX TOOLS ===
     {
-      name: "tmux_start",
+      name: "daemon_mouse_move",
       description:
-        "Start a long-running process in a tmux session (e.g., dev servers, watchers).",
+        "Move the mouse cursor using the JARVIS desktop daemon. Supports absolute and relative positioning.",
       parameters: {
-        sessionName: {
-          type: "string",
-          description: "Name for the tmux session",
+        x: {
+          type: "number",
+          description: "X coordinate",
           required: true,
         },
+        y: {
+          type: "number",
+          description: "Y coordinate",
+          required: true,
+        },
+        relative: {
+          type: "boolean",
+          description: "Move relative to current position (default: false)",
+          required: false,
+        },
+        durationMs: {
+          type: "number",
+          description: "Animation duration in ms for smooth movement",
+          required: false,
+        },
+        displayId: {
+          type: "number",
+          description: "Target display ID",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "daemon_mouse_click",
+      description:
+        "Click mouse button using the JARVIS desktop daemon. Supports left/right/middle buttons and various actions.",
+      parameters: {
+        button: {
+          type: "string",
+          description: "Button: 'left', 'right', 'middle' (default: left)",
+          required: false,
+        },
+        action: {
+          type: "string",
+          description:
+            "Action: 'click', 'double_click', 'press', 'release' (default: click)",
+          required: false,
+        },
+        position: {
+          type: "object",
+          description:
+            "Click position: {x, y}. If omitted, clicks at current cursor.",
+          required: false,
+        },
+        displayId: {
+          type: "number",
+          description: "Target display ID",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "daemon_keyboard_type",
+      description:
+        "Type text using the JARVIS desktop daemon. Simulates keyboard input.",
+      parameters: {
+        text: {
+          type: "string",
+          description: "Text to type",
+          required: true,
+        },
+        delayMs: {
+          type: "number",
+          description: "Delay between keystrokes in ms",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "daemon_keyboard_key",
+      description:
+        "Press a keyboard key using the JARVIS desktop daemon. Supports modifiers.",
+      parameters: {
+        key: {
+          type: "string",
+          description:
+            "Key to press (e.g., 'Return', 'Escape', 'Tab', 'a', 'F1')",
+          required: true,
+        },
+        action: {
+          type: "string",
+          description: "Action: 'tap', 'press', 'release' (default: tap)",
+          required: false,
+        },
+        modifiers: {
+          type: "array",
+          description: "Modifier keys: ['ctrl', 'alt', 'shift', 'super']",
+          required: false,
+          items: { type: "string" },
+        },
+      },
+    },
+    {
+      name: "daemon_list_windows",
+      description:
+        "List all windows using the JARVIS desktop daemon. Returns window IDs, titles, apps, and focus state.",
+      parameters: {
+        includeMinimized: {
+          type: "boolean",
+          description: "Include minimized windows (default: false)",
+          required: false,
+        },
+        includeHidden: {
+          type: "boolean",
+          description: "Include hidden windows (default: false)",
+          required: false,
+        },
+        filterApp: {
+          type: "string",
+          description: "Filter by application name",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "daemon_focus_window",
+      description:
+        "Focus a window by ID using the JARVIS desktop daemon. Use daemon_list_windows to get IDs.",
+      parameters: {
+        windowId: {
+          type: "string",
+          description: "Window ID from daemon_list_windows",
+          required: true,
+        },
+      },
+    },
+    {
+      name: "daemon_shell_exec",
+      description:
+        "Execute a shell command on the daemon machine. Returns stdout, stderr, and exit code.",
+      parameters: {
         command: {
           type: "string",
-          description: "Command to run",
+          description: "Shell command to execute",
           required: true,
         },
-        workingDirectory: {
+        workingDir: {
           type: "string",
           description: "Working directory for the command",
           required: false,
         },
-      },
-    },
-    {
-      name: "tmux_output",
-      description: "Get the recent output from a tmux session.",
-      parameters: {
-        sessionName: {
-          type: "string",
-          description: "Name of the tmux session",
-          required: true,
-        },
-        lines: {
-          type: "number",
-          description: "Number of lines to retrieve (default: 50)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "tmux_send",
-      description: "Send input to a running tmux session.",
-      parameters: {
-        sessionName: {
-          type: "string",
-          description: "Name of the tmux session",
-          required: true,
-        },
-        input: {
-          type: "string",
-          description: "Input to send",
-          required: true,
-        },
-        pressEnter: {
-          type: "boolean",
-          description: "Press Enter after input (default: true)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "tmux_stop",
-      description: "Stop and kill a tmux session.",
-      parameters: {
-        sessionName: {
-          type: "string",
-          description: "Name of the tmux session to stop",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "tmux_list",
-      description: "List all active tmux sessions.",
-      parameters: {},
-    },
-    // === AGENT TEAMS ===
-    {
-      name: "spawn_agent_team",
-      description:
-        "Spawn a team of specialized AI agents to work on a complex task in parallel. Use for tasks that benefit from multiple perspectives or parallel execution.",
-      parameters: {
-        task: {
-          type: "string",
-          description: "The task to delegate to the agent team",
-          required: true,
-        },
-        teamSize: {
-          type: "number",
-          description: "Number of agents in the team (default: 3, max: 5)",
-          required: false,
-        },
-        agentTypes: {
-          type: "array",
-          items: { type: "string" },
-          description:
-            "Types of agents to include: 'code', 'research', 'sysadmin', 'data', 'reviewer'",
-          required: false,
-        },
-      },
-    },
-    // === EVENT/MACRO TOOLS ===
-    {
-      name: "create_event_trigger",
-      description:
-        "Create an event trigger that runs a JARVIS task when conditions are met.",
-      parameters: {
-        name: {
-          type: "string",
-          description: "Name of the trigger",
-          required: true,
-        },
-        triggerType: {
-          type: "string",
-          description: "'webhook', 'cron', or 'condition'",
-          required: true,
-        },
-        condition: {
-          type: "string",
-          description: "Cron expression or condition definition",
-          required: true,
-        },
-        taskPrompt: {
-          type: "string",
-          description: "The JARVIS task to run when triggered",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "define_macro",
-      description:
-        "Define a reusable macro (sequence of tool calls) that can be executed later.",
-      parameters: {
-        name: {
-          type: "string",
-          description: "Name of the macro",
-          required: true,
-        },
-        description: {
-          type: "string",
-          description: "What the macro does",
-          required: true,
-        },
-        steps: {
-          type: "array",
-          items: { type: "object" },
-          description: "Array of tool calls to execute in sequence",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "execute_macro",
-      description: "Execute a previously defined macro.",
-      parameters: {
-        name: {
-          type: "string",
-          description: "Name of the macro to execute",
-          required: true,
-        },
-        params: {
+        env: {
           type: "object",
-          description: "Parameters to pass to the macro",
+          description: "Environment variables as key-value pairs",
+          required: false,
+        },
+        timeoutSeconds: {
+          type: "number",
+          description: "Command timeout in seconds",
           required: false,
         },
       },
     },
     {
-      name: "list_macros",
-      description: "List all defined macros for the current user.",
-      parameters: {},
-    },
-    {
-      name: "list_event_triggers",
-      description: "List all event triggers for the current user.",
-      parameters: {},
-    },
-    {
-      name: "search_memory",
+      name: "daemon_start_process",
       description:
-        "Search your persistent memory for relevant experiences, knowledge, or procedures. Use this to recall past learnings.",
+        "Start a new process on the daemon machine. Can run detached (background).",
       parameters: {
-        query: {
-          type: "string",
-          description: "What to search for in memory",
-          required: true,
-        },
-        memoryTypes: {
-          type: "array",
-          items: { type: "string" },
-          description:
-            "Types of memory to search: episodic (experiences), semantic (facts), procedural (how-to)",
-          required: false,
-        },
-        limit: {
-          type: "number",
-          description: "Maximum results to return (default: 10)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "store_memory",
-      description:
-        "Store important information in persistent memory for future recall. Accepts simple text or structured objects.",
-      parameters: {
-        memoryType: {
-          type: "string",
-          description:
-            "Type: episodic (experience/event), semantic (fact like 'X is Y'), procedural (how-to steps)",
-          required: true,
-        },
-        content: {
-          type: "string",
-          description:
-            "Memory content. Can be plain text like 'The capital of France is Paris' (auto-parsed) or JSON object with fields: {subject, predicate, object} for semantic, {title, description} for episodic, {name, steps} for procedural",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "get_memory_stats",
-      description: "Get statistics about your persistent memory system.",
-      parameters: {},
-    },
-    {
-      name: "get_predicted_tasks",
-      description:
-        "Get predicted/suggested tasks based on user patterns and history. Analyzes past tasks to predict what the user might want to do next.",
-      parameters: {},
-    },
-    {
-      name: "get_task_patterns",
-      description:
-        "Analyze and display detected patterns in user task history. Shows frequency, intervals, and keywords for recurring task types.",
-      parameters: {},
-    },
-    {
-      name: "get_proactive_monitor_status",
-      description:
-        "Get the current status of the proactive monitoring system. Shows if it's running, configuration settings, and statistics.",
-      parameters: {},
-    },
-    {
-      name: "configure_proactive_monitor",
-      description:
-        "Configure the proactive monitoring system. Can enable/disable monitoring, set thresholds for auto-triggering tasks, and configure quiet hours.",
-      parameters: {
-        config: {
-          type: "object",
-          description:
-            "Configuration object with: enabled (bool), checkIntervalMs (number), autoTriggerThreshold (0-1), alertThreshold (0-1), maxAutoTriggersPerDay (number), quietHoursStart (0-23), quietHoursEnd (0-23)",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "get_proactive_alerts",
-      description:
-        "Get proactive alerts generated by the monitoring system. Shows tasks that were auto-triggered, notified, or suggested based on predictions.",
-      parameters: {
-        userId: {
-          type: "number",
-          description: "Filter alerts by user ID (optional)",
-          required: false,
-        },
-        limit: {
-          type: "number",
-          description: "Maximum number of alerts to return (default: 20)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "get_user_insights",
-      description:
-        "Get comprehensive insights about a user's task patterns, predictions, and monitoring status. Useful for understanding user behavior and proactive assistance.",
-      parameters: {
-        userId: {
-          type: "number",
-          description: "The user ID to get insights for",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "negotiate_task",
-      description:
-        "Initiate a task negotiation among available agents. Agents bid based on their capabilities, availability, and experience. Returns ranked bids.",
-      parameters: {
-        userId: {
-          type: "number",
-          description: "User ID for agent lookup",
-          required: true,
-        },
-        taskId: {
-          type: "number",
-          description: "Unique task identifier",
-          required: true,
-        },
-        taskDescription: {
-          type: "string",
-          description: "Description of the task to be assigned",
-          required: true,
-        },
-        requiredCapabilities: {
-          type: "array",
-          items: { type: "string" },
-          description:
-            "Required capabilities: 'code', 'web', 'ssh', 'files', 'images', 'infrastructure'",
-          required: false,
-        },
-        priority: {
-          type: "string",
-          description: "Task priority: 'low', 'normal', 'high', 'urgent'",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "accept_negotiation_bid",
-      description:
-        "Accept the best bid from a task negotiation and assign the task to the winning agent.",
-      parameters: {
-        taskId: {
-          type: "number",
-          description: "Task ID from the negotiation",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "form_swarm_team",
-      description:
-        "Dynamically form a team of agents for a complex task. Automatically selects best agents and assigns a leader.",
-      parameters: {
-        userId: {
-          type: "number",
-          description: "User ID for agent lookup",
-          required: true,
-        },
-        taskDescription: {
-          type: "string",
-          description: "Description of the task the team will work on",
-          required: true,
-        },
-        requiredCapabilities: {
-          type: "array",
-          items: { type: "string" },
-          description: "Capabilities needed for the task",
-          required: false,
-        },
-        minAgents: {
-          type: "number",
-          description: "Minimum number of agents (default: 2)",
-          required: false,
-        },
-        maxAgents: {
-          type: "number",
-          description: "Maximum number of agents (default: 5)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "run_swarm_consensus",
-      description:
-        "Run a consensus vote among available agents on a question or proposal. Each agent votes based on their expertise.",
-      parameters: {
-        userId: {
-          type: "number",
-          description: "User ID for agent lookup",
-          required: true,
-        },
-        question: {
-          type: "string",
-          description: "Question or proposal for agents to vote on",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "get_active_swarm_teams",
-      description: "List all active swarm teams for a user.",
-      parameters: {
-        userId: {
-          type: "number",
-          description: "User ID to list teams for",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "disband_swarm_team",
-      description: "Disband a swarm team and return all agents to idle status.",
-      parameters: {
-        teamId: {
-          type: "string",
-          description: "Team ID to disband",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "broadcast_to_team",
-      description: "Broadcast a message to all members of a swarm team.",
-      parameters: {
-        teamId: {
-          type: "string",
-          description: "Team ID to broadcast to",
-          required: true,
-        },
-        fromAgentId: {
-          type: "number",
-          description: "Agent ID sending the message",
-          required: true,
-        },
-        message: {
-          type: "string",
-          description: "Message to broadcast",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "connect_mcp_server",
-      description:
-        "Connect to an MCP (Model Context Protocol) server to access external tools like Slack, Jira, databases, etc.",
-      parameters: {
-        name: {
-          type: "string",
-          description: "Unique name for this server connection",
-          required: true,
-        },
         command: {
           type: "string",
-          description:
-            "Command to start the MCP server (e.g., npx, uvx, docker)",
+          description: "Command/executable to run",
           required: true,
         },
         args: {
           type: "array",
-          items: { type: "string" },
           description: "Command arguments",
+          required: false,
+          items: { type: "string" },
+        },
+        workingDir: {
+          type: "string",
+          description: "Working directory",
           required: false,
         },
         env: {
           type: "object",
-          description: "Environment variables for the server",
+          description: "Environment variables",
+          required: false,
+        },
+        detached: {
+          type: "boolean",
+          description: "Run detached from daemon (default: false)",
           required: false,
         },
       },
     },
     {
-      name: "call_mcp_tool",
-      description: "Call a tool from a connected MCP server.",
+      name: "daemon_list_processes",
+      description:
+        "List running processes on the daemon machine. Shows PID, name, CPU, memory.",
       parameters: {
-        server: {
+        filterName: {
           type: "string",
-          description: "Name of the connected MCP server",
-          required: true,
+          description: "Filter by process name",
+          required: false,
         },
-        tool: {
+        filterUser: {
           type: "string",
-          description: "Name of the tool to call",
-          required: true,
-        },
-        arguments: {
-          type: "object",
-          description: "Arguments to pass to the tool",
-          required: true,
+          description: "Filter by user",
+          required: false,
         },
       },
     },
     {
-      name: "list_mcp_tools",
-      description: "List all available tools from connected MCP servers.",
+      name: "daemon_get_clipboard",
+      description: "Get clipboard contents from the daemon machine.",
       parameters: {},
     },
     {
-      name: "list_mcp_servers",
-      description: "List all connected MCP servers and their status.",
-      parameters: {},
-    },
-    {
-      name: "spawn_agent",
-      description:
-        "Spawn a specialized agent to work on a specific task. Use for complex work requiring expertise.",
-      parameters: {
-        type: {
-          type: "string",
-          description:
-            "Agent type: code (programming), research (web research), sysadmin (servers), data (analysis), worker (general)",
-          required: true,
-        },
-        name: {
-          type: "string",
-          description:
-            "Unique name for this agent instance (e.g., 'DataFinder', 'CodeReviewer')",
-          required: true,
-        },
-        task: {
-          type: "string",
-          description: "The task for the agent to complete",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "list_agents",
-      description:
-        "List all active agents and their status for the current user.",
-      parameters: {},
-    },
-    {
-      name: "delegate_to_agent",
-      description:
-        "Quickly delegate a task to a specialized agent. The agent runs and terminates after completing.",
-      parameters: {
-        agentType: {
-          type: "string",
-          description: "Type: code, research, sysadmin, data, worker",
-          required: true,
-        },
-        task: {
-          type: "string",
-          description: "The task to delegate",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "self_review",
-      description:
-        "Review your own response before delivering. Use for complex or important tasks to ensure quality.",
-      parameters: {
-        originalTask: {
-          type: "string",
-          description: "The original user task/question",
-          required: true,
-        },
-        proposedResponse: {
-          type: "string",
-          description: "Your proposed response to review",
-          required: true,
-        },
-        toolsUsed: {
-          type: "array",
-          items: { type: "string" },
-          description: "List of tool names used during the task",
-          required: true,
-        },
-        results: {
-          type: "array",
-          items: { type: "string" },
-          description: "List of results/outputs from each tool",
-          required: true,
-        },
-      },
-    },
-    // === SECURITY TOOLS ===
-    {
-      name: "npm_audit",
-      description:
-        "Run npm audit to check for security vulnerabilities in dependencies.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "security_analysis",
-      description:
-        "Run a security analysis on a project checking for common vulnerabilities.",
-      parameters: {
-        projectPath: {
-          type: "string",
-          description: "Path to the project to analyze",
-          required: true,
-        },
-      },
-    },
-    // === VISION/IMAGE ANALYSIS TOOLS ===
-    {
-      name: "analyze_image",
-      description:
-        "Analyze an image using AI vision capabilities. Can describe images, extract text (OCR), identify objects, analyze UI screenshots, read charts/graphs, and answer questions about visual content.",
-      parameters: {
-        imagePathOrUrl: {
-          type: "string",
-          description: "Path to local image file or URL of image to analyze",
-          required: true,
-        },
-        question: {
-          type: "string",
-          description:
-            "Question to ask about the image (e.g., 'What text is in this image?', 'Describe this UI', 'What are the values in this chart?')",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "compare_images",
-      description:
-        "Compare two images and describe the differences. Useful for visual regression testing, before/after comparisons, and change detection.",
-      parameters: {
-        image1: {
-          type: "string",
-          description: "Path or URL of the first image",
-          required: true,
-        },
-        image2: {
-          type: "string",
-          description: "Path or URL of the second image",
-          required: true,
-        },
-        focusArea: {
-          type: "string",
-          description:
-            "Specific aspect to focus on (e.g., 'layout', 'colors', 'text', 'overall')",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "extract_text_from_image",
-      description:
-        "Extract all text content from an image using OCR (Optical Character Recognition). Returns structured text found in the image.",
-      parameters: {
-        imagePath: {
-          type: "string",
-          description: "Path to the image file",
-          required: true,
-        },
-      },
-    },
-    // === PDF/DOCUMENT PROCESSING TOOLS ===
-    {
-      name: "read_pdf",
-      description:
-        "Extract text content from a PDF file. Can optionally extract from specific pages.",
-      parameters: {
-        pdfPath: {
-          type: "string",
-          description: "Path to the PDF file",
-          required: true,
-        },
-        pages: {
-          type: "string",
-          description:
-            "Page range to extract (e.g., '1-5', '1,3,5', 'all'). Default: all",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "analyze_document",
-      description:
-        "Analyze a document (PDF, image, or text file) and answer questions about its content. Uses vision for PDFs with images/charts.",
-      parameters: {
-        documentPath: {
-          type: "string",
-          description: "Path to the document",
-          required: true,
-        },
-        question: {
-          type: "string",
-          description: "Question to answer about the document",
-          required: true,
-        },
-      },
-    },
-    {
-      name: "convert_document",
-      description:
-        "Convert a document between formats (PDF to text, Markdown to HTML, etc.).",
-      parameters: {
-        inputPath: {
-          type: "string",
-          description: "Path to the input document",
-          required: true,
-        },
-        outputFormat: {
-          type: "string",
-          description: "Output format: 'text', 'markdown', 'html', 'json'",
-          required: true,
-        },
-        outputPath: {
-          type: "string",
-          description:
-            "Path for the output file (optional, returns content if not provided)",
-          required: false,
-        },
-      },
-    },
-    // === AUDIO/VIDEO PROCESSING TOOLS ===
-    {
-      name: "transcribe_audio",
-      description:
-        "Transcribe audio from a file to text using speech-to-text. Supports common audio formats (mp3, wav, m4a, webm, ogg).",
-      parameters: {
-        audioPath: {
-          type: "string",
-          description: "Path to the audio file",
-          required: true,
-        },
-        language: {
-          type: "string",
-          description:
-            "Language code (e.g., 'en', 'es', 'ja'). Default: auto-detect",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "extract_audio_from_video",
-      description:
-        "Extract the audio track from a video file for transcription or processing.",
-      parameters: {
-        videoPath: {
-          type: "string",
-          description: "Path to the video file",
-          required: true,
-        },
-        outputPath: {
-          type: "string",
-          description:
-            "Path for the output audio file (default: same name with .mp3)",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "generate_speech",
-      description:
-        "Convert text to speech audio using text-to-speech. Creates an audio file from text input.",
+      name: "daemon_set_clipboard",
+      description: "Set clipboard contents on the daemon machine.",
       parameters: {
         text: {
           type: "string",
-          description: "Text to convert to speech",
-          required: true,
+          description: "Text to copy to clipboard",
+          required: false,
         },
-        outputPath: {
+        image: {
           type: "string",
-          description: "Path for the output audio file",
-          required: true,
-        },
-        voice: {
-          type: "string",
-          description:
-            "Voice to use (default: 'alloy'). Options: alloy, echo, fable, onyx, nova, shimmer",
+          description: "Base64-encoded image to copy",
           required: false,
         },
       },
     },
+    // === DATABASE SCHEMA TOOLS ===
     {
-      name: "deep_research",
+      name: "enrich_region_data",
       description:
-        "Perform multi-source deep research on a topic. Runs multiple search queries, tracks citations with URLs, scores source credibility, and identifies conflicting information. Use this for comprehensive research tasks instead of single web_search calls.",
+        "Research and enrich region data with real economic information. Uses web search to find actual GDP, population, industries, investment opportunities, and notable entrepreneurs for a specific region. Use this to populate portal data with real figures instead of placeholders.",
       parameters: {
-        topic: {
+        countryCode: {
           type: "string",
-          description: "The research topic or question",
+          description: "ISO country code (CN, RU, IN, JP, DE, FR, BR, etc.)",
+          required: true,
+        },
+        regionName: {
+          type: "string",
+          description:
+            "Name of the region/province/state (e.g., 'Beijing', 'Moscow Oblast', 'Bavaria')",
           required: true,
         },
         depth: {
-          type: "number",
+          type: "string",
           description:
-            "Research depth (1=quick, 2=standard, 3=thorough). Default: 2",
+            "'basic' for quick overview, 'detailed' for comprehensive research including SEZs and infrastructure",
           required: false,
         },
       },
     },
     {
-      name: "query_consensus",
+      name: "verify_build_visually",
       description:
-        "Query multiple frontier AI models (GPT-5, Claude, Gemini, Grok, etc.) in parallel and get a synthesized consensus answer. Use this when you need diverse perspectives, want to verify accuracy across models, or when the question is complex/controversial. Returns individual model responses plus an agreement percentage and unified summary.",
+        "Screenshot a URL and analyze it with local GPU vision model (llama3.2-vision:90b). Use this to verify a deployed site looks correct, check for layout issues, and optionally compare against a reference URL. Returns detailed analysis of layout, navigation, design, and production readiness score.",
       parameters: {
-        query: {
-          type: "string",
-          description: "The question or topic to get consensus on",
-          required: true,
-        },
-        speed_tier: {
+        url: {
           type: "string",
           description:
-            "Speed/quality tier: 'fast' (Gemini Flash, Cerebras), 'normal' (GPT-5, Claude Sonnet, Grok), or 'max' (GPT-5.2 Pro, Claude Opus, Gemini Pro). Default: 'normal'",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "query_synthesis",
-      description:
-        "Run a comprehensive 5-stage synthesis pipeline: (1) web search for current data, (2) parallel model queries, (3) information extraction, (4) gap detection, (5) meta-synthesis. Use this for research questions requiring thorough analysis, current information, and identification of knowledge gaps. More comprehensive than deep_research or query_consensus alone.",
-      parameters: {
-        query: {
-          type: "string",
-          description: "The research question or topic for synthesis",
+            "URL of the site to verify (e.g., https://my-site.vercel.app)",
           required: true,
         },
-        speed_tier: {
-          type: "string",
-          description:
-            "Speed/quality tier: 'fast', 'normal', or 'max'. Higher tiers use more capable models. Default: 'normal'",
-          required: false,
-        },
-      },
-    },
-    {
-      name: "task_complete",
-      description:
-        "Signal that the task is complete. Call this when you have finished the requested task and want to provide a final summary. IMPORTANT: You MUST call this tool when the task is done.",
-      parameters: {
-        summary: {
-          type: "string",
-          description:
-            "A comprehensive summary of what was accomplished, including key results and any files created",
-          required: true,
-        },
-        artifacts: {
+        expectedFeatures: {
           type: "array",
+          items: { type: "string" },
           description:
-            "Optional array of artifact objects (files, outputs) created during the task",
+            "List of features to verify are present (e.g., ['3D globe', 'contact form', 'navigation menu'])",
           required: false,
-          items: { type: "object" },
+        },
+        referenceUrl: {
+          type: "string",
+          description:
+            "Optional reference URL to compare against (e.g., https://silk-road-portal.vercel.app/en)",
+          required: false,
         },
       },
     },
-    // === PROJECT SCAFFOLDING TOOLS ===
     {
-      name: "scaffold_project",
+      name: "build_bilateral_portal_swarm",
       description:
-        "Scaffold a new web application project with production-ready structure. Supports React, Next.js, Vue, Svelte, Express, FastAPI, and Rails. Optionally includes database setup, authentication, and UI component libraries (shadcn/ui, Radix, Headless UI).",
+        "Build a complete bilateral trade/investment portal using swarm intelligence. This tool orchestrates multiple agents to: scaffold the portal, install dependencies, build it, and optionally deploy to Vercel. Use this for end-to-end automated portal creation between any two supported countries.",
       parameters: {
         projectName: {
           type: "string",
-          description: "Name of the project (used for directory name)",
+          description: "Name of the project (used for directory and branding)",
           required: true,
         },
-        projectType: {
+        countryA: {
           type: "string",
           description:
-            "Framework type: 'react', 'nextjs', 'vue', 'svelte', 'express', 'fastapi', or 'rails'",
+            "First country code (e.g., 'IN' for India, 'JP' for Japan). Use list_supported_countries to see all options.",
           required: true,
         },
-        outputPath: {
+        countryB: {
           type: "string",
           description:
-            "Parent directory for the project (default: /tmp/jarvis-projects)",
-          required: false,
+            "Second country code (e.g., 'AE' for UAE, 'VN' for Vietnam). Must be different from countryA.",
+          required: true,
         },
-        database: {
-          type: "string",
-          description:
-            "Database to set up: 'postgresql', 'mysql', 'mongodb', or 'sqlite'",
-          required: false,
-        },
-        authentication: {
-          type: "string",
-          description: "Auth system to include: 'jwt', 'oauth', or 'session'",
-          required: false,
-        },
-        features: {
-          type: "array",
-          items: { type: "string" },
-          description:
-            "Additional features to include (e.g., 'testing', 'docker', 'ci')",
-          required: false,
-        },
-        uiLibrary: {
-          type: "string",
-          description:
-            "UI component library: 'shadcn' (shadcn/ui with Tailwind), 'radix' (Radix UI primitives), 'headless' (Headless UI), or 'none'. Default: none",
-          required: false,
-        },
-        uiTheme: {
-          type: "string",
-          description:
-            "UI theme mode: 'light', 'dark', or 'system'. Default: system",
-          required: false,
-        },
-        uiComponents: {
-          type: "array",
-          items: { type: "string" },
-          description:
-            "Specific UI components to include (for shadcn: 'button', 'card', 'input', 'label', 'badge', etc.)",
-          required: false,
-        },
-        testing: {
+        deployToProduction: {
           type: "boolean",
           description:
-            "Include test setup with sample tests. Sets up vitest (React/Vue/Svelte), jest (Next.js/Express), pytest (FastAPI), or minitest (Rails).",
+            "Whether to deploy to Vercel production after building. Default: false",
           required: false,
         },
-        testCoverage: {
-          type: "boolean",
-          description:
-            "Include test coverage configuration (requires testing: true).",
-          required: false,
-        },
-        docker: {
-          type: "boolean",
-          description:
-            "Include Docker containerization (Dockerfile, .dockerignore). Generates production-ready multi-stage builds for each framework.",
-          required: false,
-        },
-        dockerCompose: {
-          type: "boolean",
-          description:
-            "Include docker-compose.yml for orchestration (requires docker: true). Default: true when docker is enabled.",
-          required: false,
-        },
-        dockerServices: {
-          type: "array",
-          items: { type: "string" },
-          description:
-            "Additional Docker services to include in docker-compose: 'postgres', 'mysql', 'redis', 'mongodb'",
+        userId: {
+          type: "number",
+          description: "User ID for swarm team formation. Default: 1",
           required: false,
         },
       },

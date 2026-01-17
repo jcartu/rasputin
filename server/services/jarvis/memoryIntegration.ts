@@ -342,9 +342,19 @@ export async function attemptProcedureReplay(
 
 /**
  * Generate procedure replay guidance for the LLM
+ * NOTE: Disabled for scaffold tasks because models hallucinate success without calling tools
  */
-export function generateProcedureGuidance(procedure: ProceduralMemory): string {
+export function generateProcedureGuidance(
+  procedure: ProceduralMemory,
+  task?: string
+): string {
   if (!procedure || !procedure.steps || procedure.steps.length === 0) {
+    return "";
+  }
+
+  const scaffoldKeywords =
+    /\b(scaffold|portal|bilateral.*trade|trade.*portal|business.*portal)\b/i;
+  if (task && scaffoldKeywords.test(task)) {
     return "";
   }
 
@@ -362,7 +372,9 @@ Success rate: ${procedure.successRate}% (executed ${procedure.executionCount} ti
 RECOMMENDED STEPS:
 ${stepsText}
 
-This procedure has worked before for similar tasks. Consider following these steps, but adapt as needed for the current context.
+CRITICAL: This is guidance only - you MUST STILL CALL THE ACTUAL TOOLS. Do NOT generate fake tool outputs.
+The tools create real files/effects - you cannot simulate or skip them.
+Follow these steps but ALWAYS execute the real tools to produce actual results.
 `;
 }
 

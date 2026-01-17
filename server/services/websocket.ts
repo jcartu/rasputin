@@ -13,8 +13,35 @@ import {
   runOrchestrator,
   type ToolCall,
   type ToolResult,
+  MAX_TOOL_DURATION_MS,
 } from "./jarvis/orchestrator";
 import { executeTool } from "./jarvis/tools";
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  toolName: string
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(
+        new Error(
+          `Tool '${toolName}' timed out after ${Math.round(timeoutMs / 1000)}s`
+        )
+      );
+    }, timeoutMs);
+
+    promise
+      .then(result => {
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch(error => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
 import {
   getPreTaskContext,
   findMatchingProcedure,
@@ -82,6 +109,7 @@ interface ClientToServerEvents {
   "query:cancel": (data: { chatId: number }) => void;
   "jarvis:start": (data: JarvisRequest) => void;
   "jarvis:cancel": (data: { taskId?: number }) => void;
+  "jarvis:rejoin": (data: { userId: number }) => void;
 }
 
 interface ServerToClientEvents {
@@ -161,6 +189,14 @@ interface ServerToClientEvents {
     taskId?: number;
     error: string;
     timestamp: number;
+  }) => void;
+  "jarvis:rejoin_state": (data: {
+    taskId: number;
+    query: string;
+    steps: StreamingStep[];
+    currentIteration: number;
+    maxIterations: number;
+    startedAt: number;
   }) => void;
   "approval:new": (data: {
     id: number;
@@ -325,6 +361,94 @@ let io: Server<ClientToServerEvents, ServerToClientEvents> | null = null;
 // Track active queries to support cancellation
 const activeQueries = new Map<string, { cancelled: boolean }>();
 
+// ============================================================================
+// Active Task Streaming State (for session reconnection)
+// ============================================================================
+
+interface StreamingStep {
+  id: string;
+  type: "thinking" | "tool";
+  content?: string;
+  tool?: {
+    id: string;
+    name: string;
+    input: Record<string, unknown>;
+    output?: string;
+    isError?: boolean;
+    status: "running" | "completed" | "failed";
+    startTime: number;
+    endTime?: number;
+    durationMs?: number;
+  };
+  timestamp: number;
+}
+
+interface ActiveTaskState {
+  taskId: number;
+  userId: number;
+  query: string;
+  steps: StreamingStep[];
+  currentIteration: number;
+  maxIterations: number;
+  startedAt: number;
+}
+
+// Store active task state by userId (one active task per user)
+const activeTaskStates = new Map<number, ActiveTaskState>();
+
+export function getActiveTaskState(userId: number): ActiveTaskState | null {
+  return activeTaskStates.get(userId) || null;
+}
+
+export function setActiveTaskState(
+  userId: number,
+  state: ActiveTaskState
+): void {
+  activeTaskStates.set(userId, state);
+}
+
+export function updateActiveTaskState(
+  userId: number,
+  update: Partial<ActiveTaskState>
+): void {
+  const current = activeTaskStates.get(userId);
+  if (current) {
+    activeTaskStates.set(userId, { ...current, ...update });
+  }
+}
+
+export function addStepToActiveTask(userId: number, step: StreamingStep): void {
+  const current = activeTaskStates.get(userId);
+  if (current) {
+    current.steps.push(step);
+  }
+}
+
+export function updateLastToolStep(
+  userId: number,
+  toolName: string,
+  update: Partial<StreamingStep["tool"]>
+): void {
+  const current = activeTaskStates.get(userId);
+  if (!current) return;
+
+  for (let i = current.steps.length - 1; i >= 0; i--) {
+    const step = current.steps[i];
+    if (
+      step.type === "tool" &&
+      step.tool?.name === toolName &&
+      step.tool?.status === "running"
+    ) {
+      step.tool = { ...step.tool, ...update };
+      break;
+    }
+  }
+}
+
+export function clearActiveTaskState(userId: number): void {
+  activeTaskStates.delete(userId);
+}
+
 export function initializeWebSocket(httpServer: HttpServer): Server {
   io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
     cors: {
@@ -387,6 +511,23 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
             query.cancelled = true;
           }
         });
+      });
+
+      socket.on("jarvis:rejoin", (data: { userId: number }) => {
+        const activeState = getActiveTaskState(data.userId);
+        if (activeState) {
+          console.log(
+            `[WebSocket] Client rejoining task ${activeState.taskId} for user ${data.userId}`
+          );
+          socket.emit("jarvis:rejoin_state", {
+            taskId: activeState.taskId,
+            query: activeState.query,
+            steps: activeState.steps,
+            currentIteration: activeState.currentIteration,
+            maxIterations: activeState.maxIterations,
+            startedAt: activeState.startedAt,
+          });
+        }
       });
 
       socket.on("disconnect", () => {
@@ -662,6 +803,16 @@ async function handleJarvisTask(
   });
   const taskId = dbTask.id;
 
+  setActiveTaskState(userId, {
+    taskId,
+    userId,
+    query: task,
+    steps: [],
+    currentIteration: 0,
+    maxIterations: 25,
+    startedAt: startTime,
+  });
+
   await db.incrementUsage(userId, today, "agentTaskCount");
   await db.createAgentMessage({ taskId, role: "user", content: task });
 
@@ -682,8 +833,14 @@ async function handleJarvisTask(
         `[JARVIS WS] Procedure match found: "${matchedProcedure.name}" (${matchedProcedure.successRate}% success rate)`
       );
       if (matchedProcedure.successRate >= 70) {
-        procedureGuidance = generateProcedureGuidance(matchedProcedure);
-        console.info("[JARVIS WS] Using procedure guidance");
+        procedureGuidance = generateProcedureGuidance(matchedProcedure, task);
+        if (procedureGuidance) {
+          console.info("[JARVIS WS] Using procedure guidance");
+        } else {
+          console.info(
+            "[JARVIS WS] Procedure guidance disabled for this task type"
+          );
+        }
       }
     } else {
       console.info(`[JARVIS WS] No procedure match found for task`);
@@ -703,24 +860,56 @@ async function handleJarvisTask(
       {
         onThinking: (thought: string) => {
           if (activeQueries.get(queryKey)?.cancelled) return;
+          const timestamp = Date.now();
+          addStepToActiveTask(userId, {
+            id: crypto.randomUUID(),
+            type: "thinking",
+            content: thought,
+            timestamp,
+          });
           socket.emit("jarvis:thinking", {
             taskId,
             content: thought,
-            timestamp: Date.now(),
+            timestamp,
           });
         },
         onThinkingChunk: (chunk: string) => {
           if (activeQueries.get(queryKey)?.cancelled) return;
-          console.info("[JARVIS WS] Streaming chunk:", chunk.slice(0, 50));
+          const timestamp = Date.now();
+          const state = getActiveTaskState(userId);
+          if (state && state.steps.length > 0) {
+            const lastStep = state.steps[state.steps.length - 1];
+            if (lastStep.type === "thinking") {
+              lastStep.content = (lastStep.content || "") + chunk;
+            } else {
+              addStepToActiveTask(userId, {
+                id: crypto.randomUUID(),
+                type: "thinking",
+                content: chunk,
+                timestamp,
+              });
+            }
+          } else {
+            addStepToActiveTask(userId, {
+              id: crypto.randomUUID(),
+              type: "thinking",
+              content: chunk,
+              timestamp,
+            });
+          }
           socket.emit("jarvis:thinking_chunk", {
             taskId,
             chunk,
-            timestamp: Date.now(),
+            timestamp,
           });
         },
         onIteration: (iteration: number, maxIterations: number) => {
           if (activeQueries.get(queryKey)?.cancelled) return;
           iterationCount = iteration;
+          updateActiveTaskState(userId, {
+            currentIteration: iteration,
+            maxIterations,
+          });
           socket.emit("jarvis:iteration", {
             taskId,
             iteration,
@@ -730,33 +919,58 @@ async function handleJarvisTask(
         },
         onToolCall: (toolCall: ToolCall) => {
           if (activeQueries.get(queryKey)?.cancelled) return;
+          const timestamp = Date.now();
           toolsUsed.push(toolCall.name);
-          toolStartTimes.set(toolCall.id, Date.now());
+          toolStartTimes.set(toolCall.id, timestamp);
           toolCallNames.set(toolCall.id, toolCall.name);
+
+          addStepToActiveTask(userId, {
+            id: crypto.randomUUID(),
+            type: "tool",
+            tool: {
+              id: toolCall.id,
+              name: toolCall.name,
+              input: toolCall.input,
+              status: "running",
+              startTime: timestamp,
+            },
+            timestamp,
+          });
 
           socket.emit("jarvis:tool_start", {
             taskId,
             toolName: toolCall.name,
             input: toolCall.input,
-            timestamp: Date.now(),
+            timestamp,
           });
         },
         onToolResult: (result: ToolResult) => {
           if (activeQueries.get(queryKey)?.cancelled) return;
-          const startTs = toolStartTimes.get(result.toolCallId) || Date.now();
+          const timestamp = Date.now();
+          const startTs = toolStartTimes.get(result.toolCallId) || timestamp;
           const toolName = toolCallNames.get(result.toolCallId) || "unknown";
+          const durationMs = timestamp - startTs;
+
+          updateLastToolStep(userId, toolName, {
+            output: result.output,
+            isError: result.isError,
+            status: result.isError ? "failed" : "completed",
+            endTime: timestamp,
+            durationMs,
+          });
+
           socket.emit("jarvis:tool_end", {
             taskId,
             toolName,
             output: result.output,
             isError: result.isError,
-            durationMs: Date.now() - startTs,
-            timestamp: Date.now(),
+            durationMs,
+            timestamp,
           });
         },
         onComplete: (summary: string) => {
           finalResult = summary;
-          // Emit complete immediately so UI updates in sync with actual completion
+          clearActiveTaskState(userId);
           const completeDurationMs = Date.now() - startTime;
           socket.emit("jarvis:complete", {
             taskId,
@@ -776,6 +990,7 @@ async function handleJarvisTask(
         onError: (error: string) => {
           hasError = true;
           finalResult = error;
+          clearActiveTaskState(userId);
           socket.emit("jarvis:error", {
             taskId,
             error,
@@ -794,7 +1009,11 @@ async function handleJarvisTask(
         const toolStartTime = Date.now();
         try {
           const enrichedInput = { ...toolInput, userId, taskId };
-          const result = await executeTool(toolName, enrichedInput);
+          const result = await withTimeout(
+            executeTool(toolName, enrichedInput),
+            MAX_TOOL_DURATION_MS,
+            toolName
+          );
           // Non-blocking DB logging - don't let logging failures break tool execution
           db.incrementUsage(userId, today, "totalApiCalls").catch(e =>
             console.warn("[WebSocket] Failed to increment usage:", e)

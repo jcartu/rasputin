@@ -20,6 +20,32 @@ import {
   SearchContext,
 } from "./searchPreStep";
 
+const SEARCH_PRESTEP_TIMEOUT_MS = 15_000;
+const SYNTHESIS_TIMEOUT_MS = 30_000;
+
+// ============================================================================
+// Timeout Utility
+// ============================================================================
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  fallback: T
+): Promise<T> {
+  let timeoutId: NodeJS.Timeout;
+  const timeoutPromise = new Promise<T>(resolve => {
+    timeoutId = setTimeout(() => resolve(fallback), ms);
+  });
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    clearTimeout(timeoutId!);
+    return result;
+  } catch {
+    clearTimeout(timeoutId!);
+    return fallback;
+  }
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -117,25 +143,33 @@ export async function generateConsensus(
     onSearchComplete,
   } = options;
 
-  // Get models based on tier or selection
   let models: ModelConfig[];
   if (selectedModels && selectedModels.length > 0) {
     models = FRONTIER_MODELS.filter(m => selectedModels.includes(m.id));
   } else {
     models = getModelsForTier(speedTier);
   }
+  models = models.filter(m => m.id !== "sonar-pro");
+  console.log(
+    `[Consensus] Using ${models.length} models: ${models.map(m => m.id).join(", ")}`
+  );
 
-  // Perform search pre-step to get current web information
   let searchContext: SearchContext | null = null;
   if (shouldPerformSearch(query)) {
-    console.log("[Consensus] Performing search pre-step for current data");
+    console.log("[Consensus] Performing search pre-step (15s timeout)");
     onSearchStart?.();
-    searchContext = await performSearchPreStep(query);
+    searchContext = await withTimeout(
+      performSearchPreStep(query),
+      SEARCH_PRESTEP_TIMEOUT_MS,
+      null
+    );
     onSearchComplete?.(searchContext);
     if (searchContext) {
       console.log(
-        `[Consensus] Search completed, ${searchContext.searchResults.length} chars of context`
+        `[Consensus] Search completed, ${searchContext.searchResults.length} chars`
       );
+    } else {
+      console.log("[Consensus] Search timed out or failed, proceeding without");
     }
   }
 
@@ -158,17 +192,27 @@ export async function generateConsensus(
     { role: "user", content: query },
   ];
 
-  // Query all models in parallel
+  console.log(
+    `[Consensus] Querying ${models.length} models (45s timeout each)`
+  );
   const modelResponses = await queryModelsInParallel(
     models,
     { messages, stream: true },
     onModelUpdate
   );
 
-  // Filter successful responses
   const successfulResponses = modelResponses.filter(
     r => r.status === "completed" && r.content
   );
+
+  console.log(
+    `[Consensus] Results: ${modelResponses.length} total, ${successfulResponses.length} successful`
+  );
+  modelResponses.forEach(r => {
+    console.log(
+      `[Consensus]   ${r.modelId}: ${r.status} ${r.errorMessage || ""} (${r.content?.length || 0} chars)`
+    );
+  });
 
   if (successfulResponses.length === 0) {
     throw new Error("All models failed to respond");
@@ -190,10 +234,22 @@ export async function generateConsensus(
     { role: "user", content: synthesisPrompt },
   ];
 
-  const synthesisResponse = await queryModel(synthesizer, {
-    messages: synthesisMessages,
-    stream: false,
-  });
+  console.log(
+    `[Consensus] Running synthesis (${SYNTHESIS_TIMEOUT_MS / 1000}s timeout)`
+  );
+  const synthesisResponse = await withTimeout(
+    queryModel(synthesizer, {
+      messages: synthesisMessages,
+      stream: false,
+    }),
+    SYNTHESIS_TIMEOUT_MS,
+    {
+      modelId: synthesizer.id,
+      modelName: synthesizer.name,
+      content: `Synthesis timed out. Based on ${successfulResponses.length} model responses, key points: ${successfulResponses.map(r => r.content?.slice(0, 200)).join(" | ")}`,
+      status: "completed" as const,
+    }
+  );
 
   // Parse agreement percentage from synthesis
   const agreementPercentage = parseAgreementPercentage(

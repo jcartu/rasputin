@@ -383,11 +383,11 @@ class SwarmIntelligenceService {
       participantCount: agents.length,
     });
 
-    for (const agent of agents) {
-      const vote = await this.getAgentVote(agent, proposalId, question);
-      const votes = this.pendingVotes.get(proposalId)!;
-      votes.push(vote);
-    }
+    const votePromises = agents.map(agent =>
+      this.getAgentVote(agent, proposalId, question)
+    );
+    const votes = await Promise.all(votePromises);
+    this.pendingVotes.set(proposalId, votes);
 
     return proposalId;
   }

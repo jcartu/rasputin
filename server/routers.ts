@@ -24,6 +24,20 @@ import {
 } from "./services/jarvis/memoryIntegration";
 import { createSelfReflectionSystem } from "./services/memory/selfReflection";
 import * as ssh from "./ssh";
+import {
+  getRegistryStats,
+  getToolsForAgentV3,
+  isToolHighRisk,
+  getToolCategory,
+  analyzeTask,
+  AGENT_DESCRIPTIONS,
+  getGlobalMemoryClient,
+  getGlobalSwarmOrchestrator,
+  getGlobalPerceptionAdapter,
+  getGlobalFrontierAdapter,
+  getAllAgentReasoningConfigs,
+  getV3Status,
+} from "./services/jarvis/v3";
 
 // ============================================================================
 // Utilities
@@ -531,6 +545,9 @@ export const appRouter = router({
           iterationCount: task.iterationCount,
           errorMessage: task.errorMessage,
           summary: task.result,
+          totalTokens: task.totalTokens,
+          totalCost: task.totalCost,
+          durationMs: task.durationMs,
           createdAt: task.createdAt,
           updatedAt: task.updatedAt,
           completedAt: task.completedAt,
@@ -762,11 +779,20 @@ export const appRouter = router({
             console.info(`[JARVIS] No procedure match found for task`);
           }
           if (matchedProcedure && matchedProcedure.successRate >= 70) {
-            procedureGuidance = generateProcedureGuidance(matchedProcedure);
-            console.info(
-              `[JARVIS] Found matching procedure: "${matchedProcedure.name}" ` +
-                `(${matchedProcedure.successRate}% success rate)`
+            procedureGuidance = generateProcedureGuidance(
+              matchedProcedure,
+              input.task
             );
+            if (procedureGuidance) {
+              console.info(
+                `[JARVIS] Found matching procedure: "${matchedProcedure.name}" ` +
+                  `(${matchedProcedure.successRate}% success rate)`
+              );
+            } else {
+              console.info(
+                "[JARVIS] Procedure guidance disabled for this task type"
+              );
+            }
           }
         } catch (error) {
           console.error("[JARVIS] Failed to retrieve memory context:", error);
@@ -1279,6 +1305,152 @@ export const appRouter = router({
           await browser.close();
         }
       }),
+
+    v3GetRegistryStats: protectedProcedure.query(async () => {
+      return getRegistryStats();
+    }),
+
+    v3GetToolsForAgent: protectedProcedure
+      .input(
+        z.object({
+          agentType: z.enum([
+            "planner",
+            "coder",
+            "executor",
+            "verifier",
+            "researcher",
+            "learner",
+            "safety",
+          ]),
+        })
+      )
+      .query(async ({ input }) => {
+        return getToolsForAgentV3(input.agentType);
+      }),
+
+    v3IsToolHighRisk: protectedProcedure
+      .input(z.object({ toolName: z.string() }))
+      .query(async ({ input }) => {
+        return isToolHighRisk(input.toolName);
+      }),
+
+    v3GetToolCategory: protectedProcedure
+      .input(z.object({ toolName: z.string() }))
+      .query(async ({ input }) => {
+        return getToolCategory(input.toolName);
+      }),
+
+    v3AnalyzeTask: protectedProcedure
+      .input(z.object({ task: z.string() }))
+      .query(async ({ input }) => {
+        return analyzeTask(input.task);
+      }),
+
+    v3GetAgentDescriptions: protectedProcedure.query(async () => {
+      return AGENT_DESCRIPTIONS;
+    }),
+
+    v3SearchLearnings: protectedProcedure
+      .input(
+        z.object({
+          query: z.string(),
+          limit: z.number().optional().default(10),
+          agentType: z
+            .enum([
+              "planner",
+              "coder",
+              "executor",
+              "verifier",
+              "researcher",
+              "learner",
+              "safety",
+            ])
+            .optional(),
+        })
+      )
+      .query(async ({ input, ctx }) => {
+        const memoryClient = await getGlobalMemoryClient(ctx.user.id);
+        return memoryClient.searchRelevantLearnings(input.query, {
+          limit: input.limit,
+          agentType: input.agentType,
+        });
+      }),
+
+    v3GetToolStats: protectedProcedure
+      .input(z.object({ toolName: z.string() }))
+      .query(async ({ input, ctx }) => {
+        const memoryClient = await getGlobalMemoryClient(ctx.user.id);
+        return memoryClient.getToolStats(input.toolName);
+      }),
+
+    v3GetSwarmMetrics: protectedProcedure.query(async () => {
+      const swarm = getGlobalSwarmOrchestrator();
+      const metrics = swarm.getAgentMetrics();
+      const metricsObj: Record<
+        string,
+        {
+          tasksCompleted: number;
+          tasksFailed: number;
+          successRate: number;
+          avgDurationMs: number;
+        }
+      > = {};
+      Array.from(metrics.entries()).forEach(([key, value]) => {
+        metricsObj[key] = {
+          tasksCompleted: value.tasksCompleted,
+          tasksFailed: value.tasksFailed,
+          successRate: value.successRate,
+          avgDurationMs: value.averageDurationMs,
+        };
+      });
+      return {
+        agentMetrics: metricsObj,
+        activeAgents: swarm.getActiveAgents(),
+        config: swarm.getConfig(),
+      };
+    }),
+
+    v3GetActiveAgents: protectedProcedure.query(async () => {
+      const swarm = getGlobalSwarmOrchestrator();
+      return swarm.getActiveAgents();
+    }),
+
+    v3GetPerceptionStatus: protectedProcedure.query(async () => {
+      const adapter = await getGlobalPerceptionAdapter();
+      return adapter.getStatus();
+    }),
+
+    v3GetAgentReasoningConfigs: protectedProcedure.query(async () => {
+      return getAllAgentReasoningConfigs();
+    }),
+
+    v3GetAgentModelRecommendation: protectedProcedure
+      .input(
+        z.object({
+          agentType: z.enum([
+            "planner",
+            "coder",
+            "executor",
+            "verifier",
+            "researcher",
+            "learner",
+            "safety",
+          ]),
+        })
+      )
+      .query(async ({ input }) => {
+        const adapter = await getGlobalFrontierAdapter();
+        const config = adapter.getConfig(input.agentType);
+        return {
+          model: config.primaryModel,
+          fallback: config.fallbackModel,
+          reason: `Frontier model for ${input.agentType} agent reasoning`,
+        };
+      }),
+
+    v3Status: protectedProcedure.query(async () => {
+      return getV3Status();
+    }),
   }),
 
   // ============================================================================
@@ -2590,6 +2762,243 @@ export const appRouter = router({
           payload: input.payload,
           result,
           timestamp: new Date().toISOString(),
+        };
+      }),
+  }),
+
+  memory: router({
+    getStats: protectedProcedure.query(async ({ ctx }) => {
+      const { getMemoryService } = await import(
+        "./services/memory/memoryService"
+      );
+      const memoryService = getMemoryService();
+      return memoryService.getStats(ctx.user.id);
+    }),
+
+    getQdrantCollections: protectedProcedure.query(async () => {
+      const vectorStore = await import("./services/memory/vectorStore");
+      const { QdrantClient } = await import("@qdrant/js-client-rest");
+      const client = new QdrantClient({
+        url: process.env.QDRANT_URL || "http://localhost:6333",
+      });
+
+      try {
+        const collections = await client.getCollections();
+        const stats = await Promise.all(
+          collections.collections.map(async c => {
+            try {
+              const info = await client.getCollection(c.name);
+              return {
+                name: c.name,
+                vectorCount: info.points_count || 0,
+                status: info.status,
+              };
+            } catch {
+              return { name: c.name, vectorCount: 0, status: "error" };
+            }
+          })
+        );
+        return { connected: true, collections: stats };
+      } catch (err) {
+        return { connected: false, collections: [], error: String(err) };
+      }
+    }),
+
+    listEpisodic: protectedProcedure
+      .input(
+        z.object({
+          limit: z.number().min(1).max(100).default(20),
+          offset: z.number().min(0).default(0),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const { getDb } = await import("./db");
+        const { episodicMemories } = await import("../drizzle/schema");
+        const { eq, desc, sql } = await import("drizzle-orm");
+        const database = await getDb();
+        if (!database) return { items: [], total: 0 };
+
+        const [items, countResult] = await Promise.all([
+          database
+            .select()
+            .from(episodicMemories)
+            .where(eq(episodicMemories.userId, ctx.user.id))
+            .orderBy(desc(episodicMemories.createdAt))
+            .limit(input.limit)
+            .offset(input.offset),
+          database
+            .select({ count: sql`count(*)` })
+            .from(episodicMemories)
+            .where(eq(episodicMemories.userId, ctx.user.id)),
+        ]);
+
+        return {
+          items: items.map((m: any) => ({
+            id: m.id,
+            memoryType: m.memoryType,
+            title: m.title,
+            description: m.description,
+            context: m.context,
+            outcome: m.outcome,
+            lessons: m.lessons,
+            tags: m.tags,
+            importance: m.importance,
+            createdAt: m.createdAt,
+          })),
+          total: Number(countResult[0]?.count || 0),
+        };
+      }),
+
+    listSemantic: protectedProcedure
+      .input(
+        z.object({
+          limit: z.number().min(1).max(100).default(20),
+          offset: z.number().min(0).default(0),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const { getDb } = await import("./db");
+        const { semanticMemories } = await import("../drizzle/schema");
+        const { eq, desc, sql } = await import("drizzle-orm");
+        const database = await getDb();
+        if (!database) return { items: [], total: 0 };
+
+        const [items, countResult] = await Promise.all([
+          database
+            .select()
+            .from(semanticMemories)
+            .where(eq(semanticMemories.userId, ctx.user.id))
+            .orderBy(desc(semanticMemories.createdAt))
+            .limit(input.limit)
+            .offset(input.offset),
+          database
+            .select({ count: sql`count(*)` })
+            .from(semanticMemories)
+            .where(eq(semanticMemories.userId, ctx.user.id)),
+        ]);
+
+        return {
+          items: items.map((m: any) => ({
+            id: m.id,
+            category: m.category,
+            subject: m.subject,
+            predicate: m.predicate,
+            object: m.object,
+            confidence: m.confidence,
+            source: m.source,
+            isValid: m.isValid === 1,
+            createdAt: m.createdAt,
+          })),
+          total: Number(countResult[0]?.count || 0),
+        };
+      }),
+
+    listProcedural: protectedProcedure
+      .input(
+        z.object({
+          limit: z.number().min(1).max(100).default(20),
+          offset: z.number().min(0).default(0),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const { getDb } = await import("./db");
+        const { proceduralMemories } = await import("../drizzle/schema");
+        const { eq, desc, sql } = await import("drizzle-orm");
+        const database = await getDb();
+        if (!database) return { items: [], total: 0 };
+
+        const [items, countResult] = await Promise.all([
+          database
+            .select()
+            .from(proceduralMemories)
+            .where(eq(proceduralMemories.userId, ctx.user.id))
+            .orderBy(desc(proceduralMemories.createdAt))
+            .limit(input.limit)
+            .offset(input.offset),
+          database
+            .select({ count: sql`count(*)` })
+            .from(proceduralMemories)
+            .where(eq(proceduralMemories.userId, ctx.user.id)),
+        ]);
+
+        return {
+          items: items.map((m: any) => ({
+            id: m.id,
+            name: m.name,
+            description: m.description,
+            triggerConditions: m.triggerConditions,
+            steps: m.steps,
+            successRate: m.successRate,
+            executionCount: m.executionCount,
+            isActive: m.isActive === 1,
+            createdAt: m.createdAt,
+          })),
+          total: Number(countResult[0]?.count || 0),
+        };
+      }),
+
+    search: protectedProcedure
+      .input(
+        z.object({
+          query: z.string().min(1),
+          memoryTypes: z
+            .array(z.enum(["episodic", "semantic", "procedural"]))
+            .optional(),
+          limit: z.number().min(1).max(50).default(10),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const { getMemoryService } = await import(
+          "./services/memory/memoryService"
+        );
+        const memoryService = getMemoryService();
+        return memoryService.search({
+          query: input.query,
+          userId: ctx.user.id,
+          memoryTypes: input.memoryTypes,
+          limit: input.limit,
+        });
+      }),
+
+    listLearningEvents: protectedProcedure
+      .input(
+        z.object({
+          limit: z.number().min(1).max(100).default(20),
+          offset: z.number().min(0).default(0),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const { getDb } = await import("./db");
+        const { learningEvents } = await import("../drizzle/schema");
+        const { eq, desc, sql } = await import("drizzle-orm");
+        const database = await getDb();
+        if (!database) return { items: [], total: 0 };
+
+        const [items, countResult] = await Promise.all([
+          database
+            .select()
+            .from(learningEvents)
+            .where(eq(learningEvents.userId, ctx.user.id))
+            .orderBy(desc(learningEvents.createdAt))
+            .limit(input.limit)
+            .offset(input.offset),
+          database
+            .select({ count: sql`count(*)` })
+            .from(learningEvents)
+            .where(eq(learningEvents.userId, ctx.user.id)),
+        ]);
+
+        return {
+          items: items.map((e: any) => ({
+            id: e.id,
+            eventType: e.eventType,
+            summary: e.summary,
+            confidence: e.confidence,
+            applied: e.applied === 1,
+            impactScore: e.impactScore,
+            createdAt: e.createdAt,
+          })),
+          total: Number(countResult[0]?.count || 0),
         };
       }),
   }),

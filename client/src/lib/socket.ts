@@ -50,6 +50,35 @@ export interface JarvisErrorEvent {
   timestamp: number;
 }
 
+export interface StreamingToolCall {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+  output?: string;
+  isError?: boolean;
+  status: "running" | "completed" | "failed";
+  startTime: number;
+  endTime?: number;
+  durationMs?: number;
+}
+
+export interface StreamingStep {
+  id: string;
+  type: "thinking" | "tool";
+  content?: string;
+  tool?: StreamingToolCall;
+  timestamp: number;
+}
+
+export interface JarvisRejoinStateEvent {
+  taskId: number;
+  query: string;
+  steps: StreamingStep[];
+  currentIteration: number;
+  maxIterations: number;
+  startedAt: number;
+}
+
 export interface VoiceAnnouncementEvent {
   text: string;
   source: "scheduled_task" | "multi_agent" | "jarvis" | "system";

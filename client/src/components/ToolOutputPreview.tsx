@@ -13,7 +13,17 @@ import {
   // FileVideo,
   FileAudio,
   Archive,
+  Cloud,
+  Sun,
+  Moon,
+  Wind,
+  Droplets,
+  Eye,
+  Sunrise,
+  Sunset,
+  Umbrella,
 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -801,11 +811,232 @@ function DocumentWritePreview({
   );
 }
 
+export interface WeatherData {
+  __type: "weather";
+  location: string;
+  country: string;
+  current: {
+    temperature: number;
+    feelsLike: number;
+    condition: string;
+    conditionIcon: string;
+    humidity: number;
+    windSpeed: number;
+    windDirection: string;
+    pressure: number;
+    visibility: number;
+    uvIndex: number;
+    cloudCover: number;
+    precipitation: number;
+    sunrise?: string;
+    sunset?: string;
+  };
+  forecast: Array<{
+    date: string;
+    dayName: string;
+    maxTemp: number;
+    minTemp: number;
+    condition: string;
+    icon: string;
+    chanceOfRain: number;
+  }>;
+}
+
+export function WeatherCard({ data }: { data: WeatherData }) {
+  const isNight =
+    data.current.condition.toLowerCase().includes("night") ||
+    data.current.conditionIcon.includes("🌙") ||
+    data.current.conditionIcon.includes("🌑");
+
+  const bgGradient = isNight
+    ? "bg-gradient-to-br from-[#1e1b4b] via-[#312e81] to-[#4338ca]"
+    : "bg-gradient-to-br from-[#0ea5e9] via-[#3b82f6] to-[#6366f1]";
+
+  return (
+    <div className="w-full max-w-md mx-auto my-6 font-sans">
+      <Card
+        className={`border-0 shadow-2xl overflow-hidden ${bgGradient} text-white ring-1 ring-white/10`}
+      >
+        <CardContent className="p-6 relative z-10">
+          <div className="absolute top-[-50px] right-[-50px] w-32 h-32 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-[-50px] left-[-50px] w-32 h-32 bg-black/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="flex justify-between items-start mb-6">
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight text-shadow-sm">
+                {data.location}
+              </h2>
+              <p className="text-sm font-medium text-white/80">
+                {data.country}
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="inline-block px-2 py-1 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-bold uppercase tracking-wider mb-1">
+                Current
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center justify-center mb-8">
+            <div className="relative z-10">
+              <span
+                className="text-6xl filter drop-shadow-md animate-in zoom-in duration-500"
+                role="img"
+                aria-label={data.current.condition}
+              >
+                {data.current.conditionIcon}
+              </span>
+            </div>
+            <div className="text-7xl font-bold tracking-tighter flex items-start mt-2 text-transparent bg-clip-text bg-gradient-to-b from-white to-white/80 filter drop-shadow-sm">
+              {Math.round(data.current.temperature)}
+              <span className="text-3xl mt-2 text-white/90">°</span>
+            </div>
+            <p className="text-lg font-medium mt-1">{data.current.condition}</p>
+            <p className="text-sm font-medium text-white/70">
+              Feels like {Math.round(data.current.feelsLike)}°
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mb-8 bg-white/10 rounded-xl p-4 backdrop-blur-md border border-white/5 shadow-inner">
+            <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors">
+              <div className="p-1.5 rounded-full bg-white/20">
+                <Wind className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-white/60 uppercase tracking-wide">
+                  Wind
+                </p>
+                <p className="text-sm font-bold">
+                  {data.current.windSpeed} km/h
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors">
+              <div className="p-1.5 rounded-full bg-white/20">
+                <Droplets className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-white/60 uppercase tracking-wide">
+                  Humidity
+                </p>
+                <p className="text-sm font-bold">{data.current.humidity}%</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors">
+              <div className="p-1.5 rounded-full bg-white/20">
+                <Eye className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-white/60 uppercase tracking-wide">
+                  Visibility
+                </p>
+                <p className="text-sm font-bold">
+                  {data.current.visibility} km
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors">
+              <div className="p-1.5 rounded-full bg-white/20">
+                <Sun className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-white/60 uppercase tracking-wide">
+                  UV Index
+                </p>
+                <p className="text-sm font-bold">{data.current.uvIndex}</p>
+              </div>
+            </div>
+            {data.current.sunrise && (
+              <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors">
+                <div className="p-1.5 rounded-full bg-white/20">
+                  <Sunrise className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-white/60 uppercase tracking-wide">
+                    Sunrise
+                  </p>
+                  <p className="text-sm font-bold">{data.current.sunrise}</p>
+                </div>
+              </div>
+            )}
+            {data.current.sunset && (
+              <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors">
+                <div className="p-1.5 rounded-full bg-white/20">
+                  <Sunset className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-white/60 uppercase tracking-wide">
+                    Sunset
+                  </p>
+                  <p className="text-sm font-bold">{data.current.sunset}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h3 className="text-xs font-bold text-white/70 mb-3 uppercase tracking-wider flex items-center gap-2">
+              <Cloud className="w-3.5 h-3.5" /> 5-Day Forecast
+            </h3>
+            <div className="flex justify-between items-stretch gap-2">
+              {data.forecast.map((day, idx) => (
+                <div
+                  key={idx}
+                  className="flex flex-col items-center justify-between gap-2 p-2.5 rounded-lg bg-white/5 hover:bg-white/10 transition-colors backdrop-blur-sm flex-1 min-w-[3.5rem]"
+                >
+                  <span className="text-[10px] font-bold text-white/90">
+                    {idx === 0 ? "Today" : day.dayName.substring(0, 3)}
+                  </span>
+                  <div className="flex flex-col items-center gap-1 my-1">
+                    <span
+                      role="img"
+                      aria-label={day.condition}
+                      className="text-xl filter drop-shadow-sm"
+                    >
+                      {day.icon}
+                    </span>
+                    {day.chanceOfRain > 0 && (
+                      <div className="text-[9px] text-blue-200 font-bold flex items-center bg-blue-500/20 px-1.5 py-0.5 rounded-full">
+                        <Umbrella className="w-2 h-2 mr-0.5" />
+                        {day.chanceOfRain}%
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-center w-full">
+                    <span className="text-sm font-bold">
+                      {Math.round(day.maxTemp)}°
+                    </span>
+                    <div className="w-full h-0.5 bg-white/10 rounded-full my-0.5" />
+                    <span className="text-xs text-white/60">
+                      {Math.round(day.minTemp)}°
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export function ToolOutputPreview({
   toolName,
   output,
   input,
 }: ToolOutputPreviewProps) {
+  if (toolName === "get_weather") {
+    try {
+      const data = JSON.parse(output);
+      if (data.__type === "weather") {
+        return <WeatherCard data={data} />;
+      }
+    } catch {
+      // Fall through to default rendering if JSON parsing fails
+    }
+  }
+
   if (
     toolName === "write_file" &&
     output.toLowerCase().includes("file written")

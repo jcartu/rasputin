@@ -79,6 +79,12 @@ export async function postTaskEvolution(
     }
   }
 
+  if (userId) {
+    extractAndStoreLearnings(outcome, userId).catch(err => {
+      console.warn("[V3] Learning extraction failed:", err);
+    });
+  }
+
   const patterns = detectFailurePatterns();
   for (const pattern of patterns) {
     if (pattern.frequency >= PATTERN_THRESHOLD) {
@@ -91,6 +97,107 @@ export async function postTaskEvolution(
   }
 
   return suggestions;
+}
+
+async function extractAndStoreLearnings(
+  outcome: TaskOutcome,
+  userId: number
+): Promise<void> {
+  try {
+    const { getGlobalMemoryClient } = await import("./v3/memoryIntegration");
+    const { extractLearningFromExecution } = await import(
+      "./v3/learningExtractor"
+    );
+
+    const memoryClient = await getGlobalMemoryClient(userId);
+
+    for (const toolName of outcome.toolsUsed) {
+      const isFailed = outcome.toolsFailed.includes(toolName);
+      const record = {
+        toolName,
+        category: inferCategoryFromToolName(toolName),
+        params: {},
+        result: {
+          success: !isFailed,
+          output: outcome.success ? "Task completed" : outcome.error || "",
+          durationMs: Math.round(outcome.durationMs / outcome.toolsUsed.length),
+        },
+        context: {
+          sessionId: `auto-${Date.now()}`,
+          userId,
+          taskId: Date.now(),
+          params: {},
+          startTime: Date.now() - outcome.durationMs,
+          leaseManager: {
+            acquire: async () => true,
+            release: async () => {},
+            isHeld: async () => false,
+            extend: async () => true,
+          },
+          qdrant: {
+            search: async () => [],
+            upsert: async () => {},
+            delete: async () => {},
+          },
+          redis: {
+            xadd: async () => "0-0",
+            xread: async () => [],
+            get: async () => null,
+            set: async () => {},
+            publish: async () => 0,
+          },
+        },
+      };
+
+      const learning = extractLearningFromExecution(record);
+      await memoryClient.storeLearning(learning);
+    }
+  } catch (error) {
+    console.warn(
+      "[V3] Learning extraction error:",
+      error instanceof Error ? error.message : error
+    );
+  }
+}
+
+function inferCategoryFromToolName(
+  toolName: string
+):
+  | "file"
+  | "code"
+  | "web"
+  | "research"
+  | "git"
+  | "docker"
+  | "ssh"
+  | "database"
+  | "browser"
+  | "scaffold"
+  | "system"
+  | "memory"
+  | "communication"
+  | "multiagent"
+  | "desktop" {
+  if (toolName.includes("git")) return "git";
+  if (toolName.includes("docker")) return "docker";
+  if (toolName.includes("ssh")) return "ssh";
+  if (toolName.includes("database") || toolName.includes("sql"))
+    return "database";
+  if (toolName.includes("browser")) return "browser";
+  if (
+    toolName.includes("file") ||
+    toolName.includes("read") ||
+    toolName.includes("write")
+  )
+    return "file";
+  if (toolName.includes("search") || toolName.includes("research"))
+    return "research";
+  if (toolName.includes("scaffold")) return "scaffold";
+  if (toolName.includes("memory")) return "memory";
+  if (toolName.includes("daemon") || toolName.includes("desktop"))
+    return "desktop";
+  if (toolName.includes("web")) return "web";
+  return "system";
 }
 
 function recordFailure(outcome: TaskOutcome): void {

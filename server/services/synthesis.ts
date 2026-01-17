@@ -20,6 +20,28 @@ import {
 } from "../../shared/rasputin";
 import { queryModel, queryModelsInParallel } from "./aiModels";
 
+const WEB_SEARCH_TIMEOUT_MS = 20_000;
+const STAGE_TIMEOUT_MS = 30_000;
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  fallback: T
+): Promise<T> {
+  let timeoutId: NodeJS.Timeout;
+  const timeoutPromise = new Promise<T>(resolve => {
+    timeoutId = setTimeout(() => resolve(fallback), ms);
+  });
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    clearTimeout(timeoutId!);
+    return result;
+  } catch {
+    clearTimeout(timeoutId!);
+    return fallback;
+  }
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -161,10 +183,20 @@ async function runWebSearch(
       },
     ];
 
-    const response = await queryModel(perplexityModel, {
-      messages,
-      stream: false,
-    });
+    console.log(
+      `[Synthesis] Web search (${WEB_SEARCH_TIMEOUT_MS / 1000}s timeout)`
+    );
+    const response = await withTimeout(
+      queryModel(perplexityModel, { messages, stream: false }),
+      WEB_SEARCH_TIMEOUT_MS,
+      {
+        modelId: perplexityModel.id,
+        modelName: perplexityModel.name,
+        content:
+          "Web search timed out. Proceeding without current web context.",
+        status: "completed" as const,
+      }
+    );
 
     const durationMs = Date.now() - startTime;
     onUpdate?.("completed", response.content);
@@ -233,6 +265,9 @@ async function runParallelProposers(
       { role: "user", content: contextMessage },
     ];
 
+    console.log(
+      `[Synthesis] Querying ${proposerModels.length} models (45s timeout each)`
+    );
     const responses = await queryModelsInParallel(
       proposerModels,
       { messages, stream: true },
@@ -309,7 +344,16 @@ async function runInformationExtraction(
       { role: "user", content: prompt },
     ];
 
-    const response = await queryModel(synthesizer, { messages, stream: false });
+    const response = await withTimeout(
+      queryModel(synthesizer, { messages, stream: false }),
+      STAGE_TIMEOUT_MS,
+      {
+        modelId: synthesizer.id,
+        modelName: synthesizer.name,
+        content: "Extraction timed out. Using raw proposer responses.",
+        status: "completed" as const,
+      }
+    );
 
     const durationMs = Date.now() - startTime;
     onUpdate?.("completed", response.content);
@@ -367,7 +411,16 @@ async function runGapDetection(
       { role: "user", content: prompt },
     ];
 
-    const response = await queryModel(synthesizer, { messages, stream: false });
+    const response = await withTimeout(
+      queryModel(synthesizer, { messages, stream: false }),
+      STAGE_TIMEOUT_MS,
+      {
+        modelId: synthesizer.id,
+        modelName: synthesizer.name,
+        content: "Gap detection timed out. No gaps identified.",
+        status: "completed" as const,
+      }
+    );
 
     const durationMs = Date.now() - startTime;
     onUpdate?.("completed", response.content);
@@ -439,7 +492,16 @@ Create the ultimate synthesis that addresses the query comprehensively.`;
       { role: "user", content: prompt },
     ];
 
-    const response = await queryModel(synthesizer, { messages, stream: false });
+    const response = await withTimeout(
+      queryModel(synthesizer, { messages, stream: false }),
+      STAGE_TIMEOUT_MS,
+      {
+        modelId: synthesizer.id,
+        modelName: synthesizer.name,
+        content: `Based on the available information:\n\n${extractedInfo.slice(0, 2000)}`,
+        status: "completed" as const,
+      }
+    );
 
     const durationMs = Date.now() - startTime;
     onUpdate?.("completed", response.content);

@@ -776,13 +776,33 @@ function getDirectQueryFunction(provider: string) {
 // Parallel Query Function
 // ============================================================================
 
+const MODEL_QUERY_TIMEOUT_MS = 45_000;
+
+async function withModelTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  fallbackFn: () => T
+): Promise<T> {
+  let timeoutId: NodeJS.Timeout;
+  const timeoutPromise = new Promise<T>(resolve => {
+    timeoutId = setTimeout(() => resolve(fallbackFn()), ms);
+  });
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    clearTimeout(timeoutId!);
+    return result;
+  } catch (error) {
+    clearTimeout(timeoutId!);
+    throw error;
+  }
+}
+
 export async function queryModelsInParallel(
   models: ModelConfig[],
   options: QueryOptions,
   onModelUpdate?: (modelId: string, update: Partial<ModelResponseData>) => void
 ): Promise<ModelResponseData[]> {
   const promises = models.map(async model => {
-    // Notify that model is starting
     onModelUpdate?.(model.id, { status: "streaming" });
 
     const callbacks: StreamCallbacks | undefined = onModelUpdate
@@ -790,7 +810,7 @@ export async function queryModelsInParallel(
           onChunk: chunk => {
             onModelUpdate(model.id, {
               status: "streaming",
-              content: chunk, // This will be accumulated on the client
+              content: chunk,
             });
           },
           onComplete: response => {
@@ -806,8 +826,26 @@ export async function queryModelsInParallel(
       : undefined;
 
     try {
-      return await queryModel(model, { ...options, stream: true }, callbacks);
+      return await withModelTimeout(
+        queryModel(model, { ...options, stream: true }, callbacks),
+        MODEL_QUERY_TIMEOUT_MS,
+        () => {
+          console.log(
+            `[AI Models] ${model.id} timed out after ${MODEL_QUERY_TIMEOUT_MS / 1000}s`
+          );
+          const timeoutResult: ModelResponseData = {
+            modelId: model.id,
+            modelName: model.name,
+            content: "",
+            status: "error",
+            errorMessage: `Timed out after ${MODEL_QUERY_TIMEOUT_MS / 1000}s`,
+          };
+          onModelUpdate?.(model.id, timeoutResult);
+          return timeoutResult;
+        }
+      );
     } catch (error) {
+      console.error(`[AI Models] ${model.id} error:`, error);
       const errorResult: ModelResponseData = {
         modelId: model.id,
         modelName: model.name,

@@ -2484,6 +2484,7 @@ export const knowledgeCache = mysqlTable("knowledgeCache", {
     "browse",
     "api",
     "documentation",
+    "llm_response",
   ]).notNull(),
 
   content: text("content").notNull(),

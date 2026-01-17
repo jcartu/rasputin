@@ -82,10 +82,15 @@ import {
   Archive,
   Presentation,
   File as FileIcon,
+  History,
 } from "lucide-react";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { WorkspaceIDE } from "@/components/WorkspaceIDE";
-import { ToolOutputPreview } from "@/components/ToolOutputPreview";
+import {
+  ToolOutputPreview,
+  WeatherCard,
+  type WeatherData,
+} from "@/components/ToolOutputPreview";
 import { HostsManager } from "@/components/HostsManager";
 import { ApprovalBadge, ApprovalWorkflow } from "@/components/ApprovalWorkflow";
 import { ExportMenu } from "@/components/ExportMenu";
@@ -598,6 +603,35 @@ function extractGeneratedImages(steps?: AgentStep[]): GeneratedImage[] {
   return images;
 }
 
+function extractWeatherData(steps?: AgentStep[]): WeatherData | null {
+  if (!steps) return null;
+
+  for (const step of steps) {
+    if (
+      step.tool === "get_weather" &&
+      step.status === "success" &&
+      step.output
+    ) {
+      try {
+        const data = JSON.parse(step.output);
+        if (data.__type === "weather") {
+          return data as WeatherData;
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  return null;
+}
+
+function WeatherDisplay({ steps }: { steps?: AgentStep[] }) {
+  const weatherData = extractWeatherData(steps);
+  if (!weatherData) return null;
+  return <WeatherCard data={weatherData} />;
+}
+
 function GeneratedImagesDisplay({ images }: { images: GeneratedImage[] }) {
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
@@ -973,6 +1007,7 @@ function AgentMessageView({
             <GeneratedImagesDisplay
               images={extractGeneratedImages(message.steps)}
             />
+            <WeatherDisplay steps={message.steps} />
             <HtmlReportPreview steps={message.steps} />
             {message.content && (
               <div className="relative p-4 rounded-lg bg-muted/30 text-foreground prose prose-sm prose-invert max-w-none">
@@ -1058,7 +1093,149 @@ function UsageStats() {
   );
 }
 
-// Workspace tab component
+function TaskHistory() {
+  const { data: tasks, isLoading } = trpc.jarvis.listTasks.useQuery({
+    limit: 100,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-4">
+        <Loader2 className="h-4 w-4 animate-spin" />
+      </div>
+    );
+  }
+
+  const completedTasks = tasks?.filter(
+    t => t.status === "completed" || t.status === "failed"
+  );
+
+  const totalTokens =
+    completedTasks?.reduce((sum, t) => sum + (t.totalTokens || 0), 0) || 0;
+  const totalCost =
+    completedTasks?.reduce(
+      (sum, t) => sum + parseFloat(String(t.totalCost || 0)),
+      0
+    ) || 0;
+
+  const formatDuration = (ms: number | null | undefined) => {
+    if (!ms) return "—";
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${(ms / 60000).toFixed(1)}m`;
+  };
+
+  return (
+    <ScrollArea className="h-[calc(100vh-220px)]">
+      <div className="p-4 space-y-4">
+        <div className="grid grid-cols-3 gap-2 text-xs">
+          <div className="p-2 rounded bg-muted/30">
+            <div className="text-muted-foreground">Total Tasks</div>
+            <div className="text-lg font-bold">
+              {completedTasks?.length || 0}
+            </div>
+          </div>
+          <div className="p-2 rounded bg-muted/30">
+            <div className="text-muted-foreground">Total Tokens</div>
+            <div className="text-lg font-bold">
+              {totalTokens > 1000000
+                ? `${(totalTokens / 1000000).toFixed(1)}M`
+                : totalTokens > 1000
+                  ? `${(totalTokens / 1000).toFixed(1)}K`
+                  : totalTokens}
+            </div>
+          </div>
+          <div className="p-2 rounded bg-muted/30">
+            <div className="text-muted-foreground">Total Cost</div>
+            <div className="text-lg font-bold">${totalCost.toFixed(2)}</div>
+          </div>
+        </div>
+
+        <Separator />
+
+        <div className="space-y-2">
+          {completedTasks?.map(task => (
+            <div
+              key={task.id}
+              className="p-3 rounded-lg bg-muted/30 border border-border/50"
+            >
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-medium text-sm truncate">{task.title}</h4>
+                  {task.summary && (
+                    <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                      {task.summary}
+                    </p>
+                  )}
+                </div>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "shrink-0 text-[10px]",
+                    task.status === "completed" &&
+                      "text-green-400 border-green-400/30",
+                    task.status === "failed" && "text-red-400 border-red-400/30"
+                  )}
+                >
+                  {task.status}
+                </Badge>
+              </div>
+
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {formatDuration(task.durationMs)}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Zap className="h-3 w-3" />
+                  {task.iterationCount} iterations
+                </span>
+                {task.totalTokens > 0 && (
+                  <span className="flex items-center gap-1">
+                    <Activity className="h-3 w-3" />
+                    {task.totalTokens > 1000
+                      ? `${(task.totalTokens / 1000).toFixed(1)}K`
+                      : task.totalTokens}{" "}
+                    tokens
+                  </span>
+                )}
+                {parseFloat(String(task.totalCost || 0)) > 0 && (
+                  <span className="flex items-center gap-1">
+                    <Calculator className="h-3 w-3" />$
+                    {parseFloat(String(task.totalCost)).toFixed(4)}
+                  </span>
+                )}
+                <span>
+                  {new Date(task.createdAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              </div>
+
+              {task.errorMessage && (
+                <div className="mt-2 p-2 rounded bg-red-500/10 border border-red-500/20">
+                  <p className="text-xs text-red-400 line-clamp-2">
+                    {task.errorMessage}
+                  </p>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {(!completedTasks || completedTasks.length === 0) && (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              No completed tasks yet
+            </div>
+          )}
+        </div>
+      </div>
+    </ScrollArea>
+  );
+}
+
 function WorkspaceTab({
   onSelectWorkspace,
 }: {
@@ -1507,6 +1684,7 @@ export default function AgentPage() {
     | "tasks"
     | "templates"
     | "stats"
+    | "history"
     | "workspace"
     | "schedule"
     | "voice"
@@ -1699,6 +1877,13 @@ export default function AgentPage() {
       }
     }
   }, [dbTasks, jarvisStream.loadConversationHistory]);
+
+  // Attempt to rejoin active task on mount
+  useEffect(() => {
+    if (user?.id && !jarvisStream.isStreaming) {
+      jarvisStream.rejoinTask(user.id);
+    }
+  }, [user?.id, jarvisStream.rejoinTask]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -2085,6 +2270,13 @@ export default function AgentPage() {
               Stats
             </TabsTrigger>
             <TabsTrigger
+              value="history"
+              className="text-xs px-2 py-1.5 h-auto data-[state=active]:bg-muted"
+              title="Task History"
+            >
+              <History className="h-3.5 w-3.5" />
+            </TabsTrigger>
+            <TabsTrigger
               value="workspace"
               className="text-xs px-2 py-1.5 h-auto data-[state=active]:bg-muted"
               title="Workspaces"
@@ -2290,6 +2482,10 @@ export default function AgentPage() {
 
           <TabsContent value="stats" className="flex-1 m-0">
             <UsageStats />
+          </TabsContent>
+
+          <TabsContent value="history" className="flex-1 m-0">
+            <TaskHistory />
           </TabsContent>
 
           <TabsContent value="workspace" className="flex-1 m-0">

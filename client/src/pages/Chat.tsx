@@ -45,6 +45,7 @@ import {
   GitBranch,
   Webhook,
   ChevronDown,
+  Brain,
 } from "lucide-react";
 import type {
   QueryMode,
@@ -708,6 +709,10 @@ export default function Chat() {
                 <DropdownMenuItem onClick={() => navigate("/hosts")}>
                   <Server className="h-4 w-4 mr-2" />
                   SSH Hosts
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/memory")}>
+                  <Brain className="h-4 w-4 mr-2" />
+                  Memory
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
