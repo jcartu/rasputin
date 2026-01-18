@@ -2717,6 +2717,31 @@ export default function AgentPage() {
           <ScrollArea className="flex-1 min-h-0 p-4">
             {currentTask ? (
               <div className="max-w-4xl mx-auto space-y-6">
+                {currentTask.status === "idle" &&
+                  currentTask.messages.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-12 gap-4">
+                      <div className="text-center space-y-2">
+                        <h3 className="text-lg font-semibold text-purple-400">
+                          {currentTask.title}
+                        </h3>
+                        <p className="text-sm text-muted-foreground max-w-md">
+                          {currentTask.query}
+                        </p>
+                      </div>
+                      <Button
+                        onClick={() => {
+                          if (currentTask.query && user?.id) {
+                            jarvisStream.startTask(currentTask.query, user.id);
+                          }
+                        }}
+                        className="bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-700 hover:to-cyan-600"
+                        disabled={jarvisStream.isStreaming}
+                      >
+                        <Play className="h-4 w-4 mr-2" />
+                        Start Task
+                      </Button>
+                    </div>
+                  )}
                 {currentTask.messages.map((message, idx) => (
                   <AgentMessageView
                     key={message.id}
