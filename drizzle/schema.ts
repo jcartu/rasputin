@@ -269,7 +269,7 @@ export const agentMessages = mysqlTable("agentMessages", {
   id: int("id").autoincrement().primaryKey(),
 
   /** Parent task */
-  taskId: int("taskId").notNull(),
+  taskId: bigint("taskId", { mode: "number" }).notNull(),
 
   /** Message role */
   role: mysqlEnum("role", ["user", "assistant", "system"]).notNull(),
@@ -307,7 +307,7 @@ export const agentToolCalls = mysqlTable("agentToolCalls", {
   id: int("id").autoincrement().primaryKey(),
 
   /** Parent task */
-  taskId: int("taskId").notNull(),
+  taskId: bigint("taskId", { mode: "number" }).notNull(),
 
   /** Parent message (optional) */
   messageId: int("messageId"),
@@ -385,7 +385,7 @@ export const agentFiles = mysqlTable("agentFiles", {
   id: int("id").autoincrement().primaryKey(),
 
   /** Parent task */
-  taskId: int("taskId").notNull(),
+  taskId: bigint("taskId", { mode: "number" }).notNull(),
 
   /** User ID */
   userId: int("userId").notNull(),
@@ -500,7 +500,7 @@ export const scheduledTaskRuns = mysqlTable("scheduledTaskRuns", {
   scheduledTaskId: int("scheduledTaskId").notNull(),
 
   /** Associated agent task (if created) */
-  agentTaskId: int("agentTaskId"),
+  agentTaskId: bigint("agentTaskId", { mode: "number" }),
 
   /** Run status */
   status: mysqlEnum("status", [
@@ -950,7 +950,7 @@ export const sshAuditLog = mysqlTable("sshAuditLog", {
   userId: int("userId").notNull(),
 
   /** Related agent task (if any) */
-  taskId: int("taskId"),
+  taskId: bigint("taskId", { mode: "number" }),
 
   /** Command that was executed */
   command: text("command").notNull(),
@@ -1018,7 +1018,7 @@ export const pendingApprovals = mysqlTable("pendingApprovals", {
   hostId: int("hostId").notNull(),
 
   /** Related agent task */
-  taskId: int("taskId"),
+  taskId: bigint("taskId", { mode: "number" }),
 
   /** Command awaiting approval */
   command: text("command").notNull(),
@@ -1110,7 +1110,7 @@ export const agentSkills = mysqlTable("agentSkills", {
   isActive: int("isActive").notNull().default(1),
 
   /** Source task ID (where this skill was learned) */
-  sourceTaskId: int("sourceTaskId"),
+  sourceTaskId: bigint("sourceTaskId", { mode: "number" }),
 
   /** Last time this skill was used */
   lastUsedAt: timestamp("lastUsedAt"),
@@ -1201,8 +1201,8 @@ export const episodicMemories = mysqlTable("episodicMemories", {
   /** User context (whose experience this is) */
   userId: int("userId"),
 
-  /** Related task ID (if from a task) */
-  taskId: int("taskId"),
+  /** Related task ID (if from a task) - uses bigint for timestamp-based IDs */
+  taskId: bigint("taskId", { mode: "number" }),
 
   /** Memory type/category */
   memoryType: mysqlEnum("memoryType", [
@@ -1297,7 +1297,7 @@ export const semanticMemories = mysqlTable("semanticMemories", {
   source: varchar("source", { length: 255 }),
 
   /** Source task ID (if learned from a task) */
-  sourceTaskId: int("sourceTaskId"),
+  sourceTaskId: bigint("sourceTaskId", { mode: "number" }),
 
   /** Whether this knowledge is still valid */
   isValid: int("isValid").notNull().default(1),
@@ -1385,7 +1385,7 @@ export const proceduralMemories = mysqlTable("proceduralMemories", {
   relatedProcedures: json("relatedProcedures").$type<number[]>(),
 
   /** Source task ID (where this was learned) */
-  sourceTaskId: int("sourceTaskId"),
+  sourceTaskId: bigint("sourceTaskId", { mode: "number" }),
 
   /** Whether this procedure is active */
   isActive: int("isActive").notNull().default(1),
@@ -1455,7 +1455,7 @@ export const memoryAccessLog = mysqlTable("memoryAccessLog", {
   memoryId: int("memoryId").notNull(),
 
   /** Task ID that accessed this memory */
-  taskId: int("taskId"),
+  taskId: bigint("taskId", { mode: "number" }),
 
   /** Query that triggered retrieval */
   query: text("query"),
@@ -1484,7 +1484,7 @@ export const learningEvents = mysqlTable("learningEvents", {
   userId: int("userId"),
 
   /** Source task ID */
-  taskId: int("taskId"),
+  taskId: bigint("taskId", { mode: "number" }),
 
   /** Type of learning event */
   eventType: mysqlEnum("eventType", [
@@ -1527,7 +1527,7 @@ export const trainingData = mysqlTable("trainingData", {
   id: int("id").autoincrement().primaryKey(),
 
   /** Source task ID */
-  taskId: int("taskId").notNull(),
+  taskId: bigint("taskId", { mode: "number" }).notNull(),
 
   /** Data type */
   dataType: mysqlEnum("dataType", [
@@ -1819,7 +1819,7 @@ export type InsertIncidentAction = typeof incidentActions.$inferInsert;
 export const agents = mysqlTable("agents", {
   id: int("id").autoincrement().primaryKey(),
   parentAgentId: int("parentAgentId"), // null for root agents (JARVIS)
-  taskId: int("taskId"), // Link to agent task
+  taskId: bigint("taskId", { mode: "number" }), // Link to agent task
   userId: int("userId").notNull(),
 
   name: varchar("name", { length: 100 }).notNull(),
@@ -1911,7 +1911,7 @@ export type InsertInterAgentMessage = typeof interAgentMessages.$inferInsert;
  */
 export const agentSubtasks = mysqlTable("agentSubtasks", {
   id: int("id").autoincrement().primaryKey(),
-  parentTaskId: int("parentTaskId").notNull(),
+  parentTaskId: bigint("parentTaskId", { mode: "number" }).notNull(),
   assignedAgentId: int("assignedAgentId").notNull(),
   createdByAgentId: int("createdByAgentId").notNull(),
 
@@ -2432,7 +2432,7 @@ export const codeGenerationHistory = mysqlTable("codeGenerationHistory", {
   projectId: int("projectId"),
 
   /** Related task */
-  taskId: int("taskId"),
+  taskId: bigint("taskId", { mode: "number" }),
 
   /** File path that was generated */
   filePath: varchar("filePath", { length: 512 }).notNull(),
@@ -2592,7 +2592,7 @@ export type InsertAsyncTaskQueue = typeof asyncTaskQueue.$inferInsert;
 export const asyncTaskLogs = mysqlTable("asyncTaskLogs", {
   id: int("id").autoincrement().primaryKey(),
 
-  taskId: int("taskId").notNull(),
+  taskId: bigint("taskId", { mode: "number" }).notNull(),
 
   level: mysqlEnum("level", ["debug", "info", "warn", "error"]).notNull(),
 
@@ -2696,7 +2696,7 @@ export const jarvisEventLog = mysqlTable("jarvisEventLog", {
 
   sessionId: varchar("sessionId", { length: 64 }).notNull(),
 
-  taskId: int("taskId").notNull(),
+  taskId: bigint("taskId", { mode: "number" }).notNull(),
 
   seq: int("seq").notNull(),
 
@@ -2736,7 +2736,7 @@ export const actionDSLLog = mysqlTable("actionDSLLog", {
 
   actionId: varchar("actionId", { length: 32 }).notNull().unique(),
 
-  taskId: int("taskId").notNull(),
+  taskId: bigint("taskId", { mode: "number" }).notNull(),
 
   userId: int("userId").notNull(),
 
@@ -2785,7 +2785,7 @@ export const visionActionSessions = mysqlTable("visionActionSessions", {
 
   sessionId: varchar("sessionId", { length: 64 }).notNull().unique(),
 
-  taskId: int("taskId").notNull(),
+  taskId: bigint("taskId", { mode: "number" }).notNull(),
 
   userId: int("userId").notNull(),
 

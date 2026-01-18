@@ -578,7 +578,10 @@ export async function getUserAgentTasks(
     .select()
     .from(agentTasks)
     .where(eq(agentTasks.userId, userId))
-    .orderBy(desc(agentTasks.updatedAt))
+    .orderBy(
+      sql`CASE WHEN ${agentTasks.status} = 'idle' THEN 0 WHEN ${agentTasks.status} = 'running' THEN 1 ELSE 2 END`,
+      desc(agentTasks.updatedAt)
+    )
     .limit(limit);
 }
 
