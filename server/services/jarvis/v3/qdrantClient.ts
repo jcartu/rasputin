@@ -145,7 +145,7 @@ export class V3QdrantClient implements QdrantClient {
   }
 }
 
-let globalQdrantClients: Map<number, V3QdrantClient> = new Map();
+const globalQdrantClients: Map<number, V3QdrantClient> = new Map();
 
 export function getGlobalQdrantClient(userId: number): QdrantClient {
   let client = globalQdrantClients.get(userId);

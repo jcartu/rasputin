@@ -15,7 +15,6 @@ import {
   Archive,
   Cloud,
   Sun,
-  Moon,
   Wind,
   Droplets,
   Eye,

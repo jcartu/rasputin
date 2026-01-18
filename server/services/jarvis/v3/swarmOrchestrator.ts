@@ -32,6 +32,16 @@ import {
   applyAgentPostProcess,
   getAgentMaxIterations,
 } from "./agentBehaviors";
+import {
+  emitSwarmConsensusStart,
+  emitSwarmVote,
+  emitSwarmConsensusComplete,
+} from "../../websocket";
+import {
+  persistAgentMetrics,
+  persistConsensusVote,
+  persistConsensusResult,
+} from "./metricsStore";
 
 export interface SwarmConfig {
   maxConcurrentAgents: number;
@@ -461,6 +471,14 @@ export class SwarmOrchestrator {
 
     metrics.lastTaskAt = Date.now();
     this.agentMetrics.set(type, metrics);
+
+    persistAgentMetrics(
+      type,
+      result.success,
+      result.durationMs ?? 0,
+      result.metadata?.tokensUsed as number | undefined,
+      result.metadata?.cost as number | undefined
+    ).catch(() => {});
   }
 
   private combineResults(results: ToolResult[]): string {
@@ -511,6 +529,12 @@ export class SwarmOrchestrator {
     const startTime = Date.now();
     const adapter = await getGlobalFrontierAdapter();
 
+    emitSwarmConsensusStart({
+      proposalId: request.taskId,
+      question: request.question,
+      participantCount: request.participants.length,
+    });
+
     const consensusPrompt = `You are being asked to vote on a high-risk operation.
 
 QUESTION: ${request.question}
@@ -547,6 +571,21 @@ Respond ONLY with valid JSON, no other text.`;
         );
 
         const parsed = this.parseVoteResponse(result.content, participant);
+
+        emitSwarmVote({
+          proposalId: request.taskId,
+          agentId: Date.now(),
+          agentName: participant,
+          agentType: participant,
+          vote: parsed.vote,
+          weight: parsed.confidence,
+          reasoning: parsed.reasoning,
+        });
+
+        persistConsensusVote(request.taskId, request.question, parsed).catch(
+          () => {}
+        );
+
         return parsed;
       } catch (error) {
         return {
@@ -582,13 +621,24 @@ Respond ONLY with valid JSON, no other text.`;
       decision = "rejected";
     }
 
-    return {
+    emitSwarmConsensusComplete({
+      proposalId: request.taskId,
+      decision: decision === "approved" ? "approved" : "rejected",
+      approvalPercentage: agreementPercentage * 100,
+      totalVotes: votes.length,
+    });
+
+    const consensusResult = {
       taskId: request.taskId,
       decision,
       votes,
       agreementPercentage,
       timestamp: Date.now(),
     };
+
+    persistConsensusResult(request.taskId, consensusResult).catch(() => {});
+
+    return consensusResult;
   }
 
   private parseVoteResponse(

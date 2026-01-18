@@ -214,8 +214,8 @@ export function SwarmActivityPanel() {
                   )}
                 >
                   <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-current"></span>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-current" />
                   </span>
                   {statusData?.overall || "Connecting..."}
                 </span>
@@ -397,28 +397,98 @@ export function SwarmActivityPanel() {
                         <div className="text-xs font-medium text-purple-400 uppercase tracking-wider flex items-center gap-1">
                           <Activity className="h-3 w-3" /> Active Votes
                         </div>
-                        {Object.values(activeConsensus).map(c => (
-                          <Card
-                            key={c.proposalId}
-                            className="bg-purple-500/5 border-purple-500/20"
-                          >
-                            <CardContent className="p-3 space-y-2">
-                              <div className="text-xs font-medium line-clamp-2">
-                                {c.question}
-                              </div>
-                              <Progress
-                                value={
-                                  (c.votes.length / c.participantCount) * 100
-                                }
-                                className="h-1"
-                              />
-                              <div className="flex justify-between text-[10px] text-muted-foreground">
-                                <span>{c.votes.length} votes</span>
-                                <span>Target: {c.participantCount}</span>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
+                        {Object.values(activeConsensus).map(c => {
+                          const approves = c.votes.filter(
+                            v => v.vote === "approve"
+                          ).length;
+                          const rejects = c.votes.filter(
+                            v => v.vote === "reject"
+                          ).length;
+                          const abstains = c.votes.filter(
+                            v => v.vote === "abstain"
+                          ).length;
+
+                          return (
+                            <Card
+                              key={c.proposalId}
+                              className="bg-purple-500/5 border-purple-500/20"
+                            >
+                              <CardContent className="p-3 space-y-3">
+                                <div className="text-xs font-medium line-clamp-2">
+                                  {c.question}
+                                </div>
+
+                                <div className="flex gap-2 text-[10px]">
+                                  <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    {approves}
+                                  </span>
+                                  <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">
+                                    <Shield className="h-3 w-3" />
+                                    {rejects}
+                                  </span>
+                                  <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-500/20 text-gray-400">
+                                    <Clock className="h-3 w-3" />
+                                    {abstains}
+                                  </span>
+                                </div>
+
+                                <Progress
+                                  value={
+                                    (c.votes.length / c.participantCount) * 100
+                                  }
+                                  className="h-1.5"
+                                />
+
+                                {c.votes.length > 0 && (
+                                  <div className="space-y-1.5 pt-1 border-t border-border/30">
+                                    {c.votes.map((vote, idx) => {
+                                      const config =
+                                        AGENT_CONFIG[vote.agentType] ||
+                                        AGENT_CONFIG.planner;
+                                      return (
+                                        <div
+                                          key={idx}
+                                          className="flex items-center justify-between text-[10px]"
+                                        >
+                                          <div className="flex items-center gap-1.5">
+                                            <div
+                                              className={cn(
+                                                "w-1.5 h-1.5 rounded-full",
+                                                vote.vote === "approve" &&
+                                                  "bg-green-400",
+                                                vote.vote === "reject" &&
+                                                  "bg-red-400",
+                                                vote.vote === "abstain" &&
+                                                  "bg-gray-400"
+                                              )}
+                                            />
+                                            <span
+                                              className={cn(
+                                                "capitalize",
+                                                config.color.split(" ")[0]
+                                              )}
+                                            >
+                                              {vote.agentType}
+                                            </span>
+                                          </div>
+                                          <span className="text-muted-foreground truncate max-w-[120px]">
+                                            {vote.reasoning}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+
+                                <div className="flex justify-between text-[10px] text-muted-foreground">
+                                  <span>{c.votes.length} votes</span>
+                                  <span>Target: {c.participantCount}</span>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
                       </div>
                     )}
 
@@ -428,28 +498,74 @@ export function SwarmActivityPanel() {
                       </div>
                       {consensusHistory.length > 0 ? (
                         <div className="space-y-2">
-                          {consensusHistory.slice(0, 10).map((event, i) => (
-                            <div
-                              key={`${event.timestamp}-${i}`}
-                              className="text-xs p-2 rounded bg-muted/30 border border-border/50"
-                            >
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="font-medium capitalize text-purple-400">
-                                  {event.type.replace("_", " ")}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground">
-                                  {new Date(
-                                    event.timestamp
-                                  ).toLocaleTimeString()}
-                                </span>
+                          {consensusHistory.slice(0, 10).map((event, i) => {
+                            const data = event.data as any;
+                            const isComplete =
+                              event.type === "consensus_complete";
+                            const isVote = event.type === "vote";
+
+                            return (
+                              <div
+                                key={`${event.timestamp}-${i}`}
+                                className={cn(
+                                  "text-xs p-2 rounded border",
+                                  isComplete && data.decision === "approved"
+                                    ? "bg-green-500/10 border-green-500/30"
+                                    : isComplete && data.decision === "rejected"
+                                      ? "bg-red-500/10 border-red-500/30"
+                                      : "bg-muted/30 border-border/50"
+                                )}
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <div className="flex items-center gap-2">
+                                    {isComplete && (
+                                      <Badge
+                                        variant="outline"
+                                        className={cn(
+                                          "text-[9px] h-4 px-1",
+                                          data.decision === "approved"
+                                            ? "border-green-400 text-green-400"
+                                            : "border-red-400 text-red-400"
+                                        )}
+                                      >
+                                        {data.decision?.toUpperCase()}
+                                      </Badge>
+                                    )}
+                                    {isVote && (
+                                      <Badge
+                                        variant="outline"
+                                        className={cn(
+                                          "text-[9px] h-4 px-1",
+                                          data.vote === "approve"
+                                            ? "border-green-400 text-green-400"
+                                            : data.vote === "reject"
+                                              ? "border-red-400 text-red-400"
+                                              : "border-gray-400 text-gray-400"
+                                        )}
+                                      >
+                                        {data.agentType}: {data.vote}
+                                      </Badge>
+                                    )}
+                                    {!isComplete && !isVote && (
+                                      <span className="font-medium capitalize text-purple-400">
+                                        {event.type.replace("_", " ")}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {new Date(
+                                      event.timestamp
+                                    ).toLocaleTimeString()}
+                                  </span>
+                                </div>
+                                <div className="text-muted-foreground line-clamp-2">
+                                  {isComplete
+                                    ? `${data.totalVotes} votes, ${Math.round(data.approvalPercentage)}% approval`
+                                    : data.question || data.reasoning}
+                                </div>
                               </div>
-                              <div className="text-muted-foreground line-clamp-2">
-                                {(event.data as any).decision ||
-                                  (event.data as any).question ||
-                                  (event.data as any).reasoning}
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       ) : (
                         <div className="text-center py-8 text-xs text-muted-foreground">

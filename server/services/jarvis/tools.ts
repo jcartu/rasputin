@@ -5289,7 +5289,7 @@ export async function gitDiff(
       timeout: 30000,
     });
 
-    let detailCmd = cmd.replace(" --stat", "");
+    const detailCmd = cmd.replace(" --stat", "");
     const { stdout: diffOutput } = await execAsync(detailCmd, {
       cwd: projectPath,
       timeout: 30000,

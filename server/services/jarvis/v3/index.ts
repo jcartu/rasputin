@@ -193,6 +193,14 @@ export {
 
 export type { AgentBehavior } from "./agentBehaviors";
 
+export {
+  persistAgentMetrics,
+  persistConsensusVote,
+  persistConsensusResult,
+  getPersistedAgentMetrics,
+  getRecentConsensusVotes,
+} from "./metricsStore";
+
 import { getGlobalRegistry } from "./toolRegistry";
 import { getGlobalCoordinator } from "./agentCoordinator";
 import { TOOL_COUNT } from "./toolMetadata";

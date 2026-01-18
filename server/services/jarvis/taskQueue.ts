@@ -521,7 +521,7 @@ class TaskQueueService {
       await this.updateTaskProgress(task.id, 20, "Running JARVIS...");
 
       let finalResult = "";
-      let totalTokens = 0;
+      const totalTokens = 0;
       let iterationCount = 0;
 
       await runOrchestrator(

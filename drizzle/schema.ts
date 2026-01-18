@@ -2829,3 +2829,89 @@ export const visionActionSessions = mysqlTable("visionActionSessions", {
 export type VisionActionSession = typeof visionActionSessions.$inferSelect;
 export type InsertVisionActionSession =
   typeof visionActionSessions.$inferInsert;
+
+export const swarmAgentMetrics = mysqlTable("swarmAgentMetrics", {
+  id: int("id").autoincrement().primaryKey(),
+
+  agentType: mysqlEnum("agentType", [
+    "planner",
+    "coder",
+    "executor",
+    "verifier",
+    "researcher",
+    "learner",
+    "safety",
+  ]).notNull(),
+
+  tasksCompleted: int("tasksCompleted").notNull().default(0),
+
+  tasksFailed: int("tasksFailed").notNull().default(0),
+
+  averageDurationMs: int("averageDurationMs").notNull().default(0),
+
+  successRate: decimal("successRate", { precision: 5, scale: 4 })
+    .notNull()
+    .default("1.0000"),
+
+  lastTaskAt: timestamp("lastTaskAt"),
+
+  totalTokensUsed: bigint("totalTokensUsed", { mode: "number" })
+    .notNull()
+    .default(0),
+
+  totalCost: decimal("totalCost", { precision: 10, scale: 6 })
+    .notNull()
+    .default("0"),
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SwarmAgentMetrics = typeof swarmAgentMetrics.$inferSelect;
+export type InsertSwarmAgentMetrics = typeof swarmAgentMetrics.$inferInsert;
+
+export const consensusVoteLog = mysqlTable("consensusVoteLog", {
+  id: int("id").autoincrement().primaryKey(),
+
+  proposalId: varchar("proposalId", { length: 64 }).notNull(),
+
+  taskId: bigint("taskId", { mode: "number" }),
+
+  question: text("question").notNull(),
+
+  agentType: mysqlEnum("agentType", [
+    "planner",
+    "coder",
+    "executor",
+    "verifier",
+    "researcher",
+    "learner",
+    "safety",
+  ]).notNull(),
+
+  vote: mysqlEnum("vote", ["approve", "reject", "abstain"]).notNull(),
+
+  confidence: decimal("confidence", { precision: 3, scale: 2 })
+    .notNull()
+    .default("0.50"),
+
+  reasoning: text("reasoning"),
+
+  decision: mysqlEnum("decision", [
+    "approved",
+    "rejected",
+    "timeout",
+    "insufficient",
+  ]),
+
+  agreementPercentage: decimal("agreementPercentage", {
+    precision: 5,
+    scale: 2,
+  }),
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ConsensusVoteLog = typeof consensusVoteLog.$inferSelect;
+export type InsertConsensusVoteLog = typeof consensusVoteLog.$inferInsert;
