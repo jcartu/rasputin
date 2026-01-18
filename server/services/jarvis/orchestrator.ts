@@ -79,7 +79,8 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const XAI_API_KEY = process.env.XAI_API_KEY || "";
 
 // V3 Swarm Mode - enables multi-agent orchestration with frontier APIs
-const SWARM_MODE_ENABLED = process.env.JARVIS_SWARM_MODE === "true";
+// Default ON - set JARVIS_SWARM_MODE=false to disable
+const SWARM_MODE_ENABLED = process.env.JARVIS_SWARM_MODE !== "false";
 
 // Inference provider type
 type InferenceProvider = "anthropic" | "cerebras" | "gemini" | "grok";
@@ -1981,7 +1982,6 @@ export async function runOrchestrator(
   ) {
     setInferenceProvider("cerebras");
   } else {
-    // Default to Anthropic for complex/unknown tasks
     setInferenceProvider("anthropic");
   }
 

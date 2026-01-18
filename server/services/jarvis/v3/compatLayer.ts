@@ -8,6 +8,8 @@ import type {
 import { JARVISToolRegistry, getGlobalRegistry } from "./toolRegistry";
 import { getToolMetadataOrDefault } from "./toolMetadata";
 import { getAvailableTools, executeTool as legacyExecuteTool } from "../tools";
+import { getGlobalLeaseManager, createNoOpLeaseManager } from "./leaseManager";
+import { getGlobalQdrantClient, createNoOpQdrantClient } from "./qdrantClient";
 
 type LegacyToolExecutor = (
   name: string,
@@ -126,42 +128,32 @@ export class RasputinCompatLayer {
   }
 
   private buildContext(partial: Partial<ExecutionContext>): ExecutionContext {
+    const userId = partial.userId || 0;
     return {
       sessionId: partial.sessionId || `compat-${Date.now()}`,
-      userId: partial.userId || 0,
+      userId,
       taskId: partial.taskId || 0,
       params: partial.params || {},
       startTime: partial.startTime || Date.now(),
-      leaseManager: partial.leaseManager || this.createNoOpLeaseManager(),
-      qdrant: partial.qdrant || this.createNoOpQdrant(),
+      leaseManager: partial.leaseManager || this.createLeaseManager(),
+      qdrant: partial.qdrant || this.createQdrantClient(userId),
       redis: partial.redis || this.createNoOpRedis(),
       enrichment: partial.enrichment,
     };
   }
 
-  private createNoOpLeaseManager(): ExecutionContext["leaseManager"] {
+  private createLeaseManager(): ExecutionContext["leaseManager"] {
     if (!this.config.enableLeases) {
-      return {
-        acquire: async () => true,
-        release: async () => {},
-        isHeld: async () => false,
-        extend: async () => true,
-      };
+      return createNoOpLeaseManager();
     }
-    return {
-      acquire: async () => true,
-      release: async () => {},
-      isHeld: async () => false,
-      extend: async () => true,
-    };
+    return getGlobalLeaseManager();
   }
 
-  private createNoOpQdrant(): ExecutionContext["qdrant"] {
-    return {
-      search: async () => [],
-      upsert: async () => {},
-      delete: async () => {},
-    };
+  private createQdrantClient(userId: number): ExecutionContext["qdrant"] {
+    if (!this.config.enableLearning || userId === 0) {
+      return createNoOpQdrantClient();
+    }
+    return getGlobalQdrantClient(userId);
   }
 
   private createNoOpRedis(): ExecutionContext["redis"] {

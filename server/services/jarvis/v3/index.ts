@@ -45,6 +45,20 @@ export {
 } from "./toolRegistry";
 
 export {
+  RedisLeaseManager,
+  getGlobalLeaseManager,
+  resetGlobalLeaseManager,
+  createNoOpLeaseManager,
+} from "./leaseManager";
+
+export {
+  V3QdrantClient,
+  getGlobalQdrantClient,
+  resetGlobalQdrantClients,
+  createNoOpQdrantClient,
+} from "./qdrantClient";
+
+export {
   TOOL_METADATA,
   TOOL_COUNT,
   getToolMetadata,

@@ -2,6 +2,64 @@
 
 ## Active Work Items
 
+### JARVIS v3 Activation (P0 - Current Sprint)
+
+The v3 multi-agent swarm architecture is ~90% implemented but not fully activated. Key tasks:
+
+#### Phase 1: Enable Swarm Mode (This Week)
+
+- [x] **Enable SWARM_MODE by default** - Change `JARVIS_SWARM_MODE` from opt-in to opt-out
+  - File: `server/services/jarvis/orchestrator.ts` line 82
+  - Change: `process.env.JARVIS_SWARM_MODE !== "false"` (default on)
+  - DONE: Swarm mode now enabled by default
+- [x] **Wire up Redis for lease management** - LeaseManager types exist but no Redis impl
+  - Created: `server/services/jarvis/v3/leaseManager.ts`
+  - Implemented: `acquire()`, `release()`, `isHeld()`, `extend()` using SharedMemoryBus
+  - Exported: `getGlobalLeaseManager()`, `createNoOpLeaseManager()`
+  - Updated: compatLayer.ts to use real lease manager when enabled
+
+- [x] **Activate Qdrant learning collections** - 15 collections defined but not connected
+  - Created: `server/services/jarvis/v3/qdrantClient.ts`
+  - Implemented: V3QdrantClient with user-specific collection naming (`jarvis_{userId}_{collection}`)
+  - Auto-creates collections on first use with indexes for toolName, taskId, timestamp
+  - Exported: `getGlobalQdrantClient()`, `createNoOpQdrantClient()`
+  - Updated: compatLayer.ts to use real Qdrant client when learning enabled
+
+- [x] **Add v3 status endpoint to tRPC** - Expose `getV3Status()` to frontend
+  - File: `server/routers.ts`
+  - Already exists: `jarvis.v3Status` procedure at line 1451
+  - Display: Swarm health in Infrastructure page
+
+#### Phase 2: Agent Specialization (Next Week)
+
+- [x] **Agent-specific system prompts** - Each agent needs distinct personality
+  - File: `server/services/jarvis/v3/agentBehaviors.ts`
+  - Already complete: 7 detailed prompts (30-50 lines each) for all agent types
+  - Includes: role definitions, key responsibilities, principles, output formats
+
+- [x] **Tool filtering by agent** - Agents should only see their allowed tools
+  - Already implemented in v3 via `getToolsForAgent()` and `selectToolsForAgent()`
+  - SwarmOrchestrator passes only filtered tools to each agent
+  - V2 fallback shows all tools (expected - single-agent system)
+
+- [ ] **Consensus for all high-risk operations** - Currently only triggered for specific tools
+  - Expand: `requestToolConsensus()` to all tools with `riskLevel: "high" | "critical"`
+  - Add: UI for consensus voting visualization
+
+#### Phase 3: Learning Loop (Week 3)
+
+- [ ] **Store learnings after every tool execution** - Currently opt-in
+  - Wire: `extractLearningFromExecution()` to run on every tool completion
+  - Store: To Qdrant with embeddings for retrieval
+
+- [ ] **Pre-fetch relevant learnings before task** - Memory enrichment exists but passive
+  - Activate: `enrichContextWithMemory()` in main orchestrator path
+  - Display: "Recalled N relevant learnings" in task output
+
+- [ ] **Agent performance leaderboard** - Track which agents excel at what
+  - Display: Success rates per agent type
+  - Route: Tasks to best-performing agents for task type
+
 ### Testing & Verification (High Priority)
 
 - [x] Re-run stress tests 17, 19, 44 with 5-min timeout - ALL PASSED
