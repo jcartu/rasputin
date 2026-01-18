@@ -2554,6 +2554,120 @@ export const appRouter = router({
   }),
 
   // ============================================================================
+  // Vision Stream Router (Local GPU)
+  // ============================================================================
+  vision: router({
+    getStatus: protectedProcedure.query(async () => {
+      const { getGlobalPerceptionAdapter } = await import(
+        "./services/jarvis/v3/perceptionAdapter"
+      );
+      const adapter = await getGlobalPerceptionAdapter();
+      return adapter.getStatus();
+    }),
+
+    getStreamStatus: protectedProcedure.query(async () => {
+      const { getGlobalVisionStream } = await import(
+        "./services/vision/visionStream"
+      );
+      const stream = getGlobalVisionStream();
+      return {
+        running: stream.isRunning(),
+        stats: stream.getStats(),
+      };
+    }),
+
+    startStream: protectedProcedure
+      .input(
+        z.object({
+          targetFps: z.number().min(0.1).max(30).default(1),
+          screenshotSource: z
+            .enum(["server", "desktop-daemon"])
+            .default("server"),
+          daemonWebSocketUrl: z.string().optional(),
+          analysisPrompt: z.string().optional(),
+          visionProvider: z
+            .enum(["gemini-fast", "local", "claude", "gpt4", "auto"])
+            .default("auto"),
+          enableFrameDiff: z.boolean().default(true),
+          frameDiffThreshold: z.number().min(0).max(1).default(0.05),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { getGlobalVisionStream } = await import(
+          "./services/vision/visionStream"
+        );
+        const stream = getGlobalVisionStream();
+
+        if (stream.isRunning()) {
+          stream.stop();
+        }
+
+        stream.updateConfig({
+          targetFps: input.targetFps,
+          screenshotSource: input.screenshotSource,
+          daemonWebSocketUrl: input.daemonWebSocketUrl,
+          analysisPrompt: input.analysisPrompt,
+          visionProvider: input.visionProvider,
+          enableFrameDiff: input.enableFrameDiff,
+          frameDiffThreshold: input.frameDiffThreshold,
+        });
+
+        await stream.start();
+        return { success: true, stats: stream.getStats() };
+      }),
+
+    stopStream: protectedProcedure.mutation(async () => {
+      const { getGlobalVisionStream } = await import(
+        "./services/vision/visionStream"
+      );
+      const stream = getGlobalVisionStream();
+      stream.stop();
+      return { success: true, stats: stream.getStats() };
+    }),
+
+    analyzeScreenshot: protectedProcedure
+      .input(
+        z.object({
+          screenshotBase64: z.string(),
+          prompt: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { getGlobalPerceptionAdapter } = await import(
+          "./services/jarvis/v3/perceptionAdapter"
+        );
+        const adapter = await getGlobalPerceptionAdapter();
+        return adapter.analyzeImage(
+          input.screenshotBase64,
+          input.prompt ||
+            "Describe this screen. Identify UI elements, text, and current state."
+        );
+      }),
+
+    fastAnalyze: protectedProcedure
+      .input(
+        z.object({
+          screenshotBase64: z.string(),
+          prompt: z.string().optional(),
+          provider: z
+            .enum(["gemini-fast", "local", "claude", "gpt4", "auto"])
+            .default("auto"),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { fastVisionAnalyze } = await import(
+          "./services/vision/vlmClient"
+        );
+        return fastVisionAnalyze(
+          input.screenshotBase64,
+          input.prompt ||
+            "Describe this screen. Identify UI elements, text, and current state.",
+          input.provider
+        );
+      }),
+  }),
+
+  // ============================================================================
   // Multi-Agent Router
   // ============================================================================
   agents: router({
