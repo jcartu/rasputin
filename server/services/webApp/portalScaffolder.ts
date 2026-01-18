@@ -410,6 +410,24 @@ function getCountryName(code: CountryCode, locale: Locale): string {
       fr: "Mexique",
       de: "Mexiko",
     },
+    AR: {
+      en: "Argentina",
+      es: "Argentina",
+      zh: "阿根廷",
+      ru: "Аргентина",
+      ja: "アルゼンチン",
+      vi: "Argentina",
+      hi: "अर्जेंटीना",
+      ar: "الأرجنتين",
+      ko: "아르헨티나",
+      th: "อาร์เจนตินา",
+      id: "Argentina",
+      ms: "Argentina",
+      tr: "Arjantin",
+      pt: "Argentina",
+      fr: "Argentine",
+      de: "Argentinien",
+    },
   };
   return names[code]?.[locale] || names[code]?.["en"] || code;
 }

@@ -42,6 +42,7 @@ export const CountryCodeSchema = z.enum([
   "FR",
   "GB",
   "US",
+  "AR",
 ]);
 export type CountryCode = z.infer<typeof CountryCodeSchema>;
 
@@ -359,6 +360,14 @@ export const COUNTRY_INFO: Record<
     primaryLocale: "en",
     flag: "🇺🇸",
     currency: "USD",
+    currencySymbol: "$",
+  },
+  AR: {
+    name: "Argentina",
+    nativeName: "Argentina",
+    primaryLocale: "es",
+    flag: "🇦🇷",
+    currency: "ARS",
     currencySymbol: "$",
   },
 };
