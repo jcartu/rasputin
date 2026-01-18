@@ -65,6 +65,12 @@ import {
   analyzeTask as analyzeTaskV3,
   type ExecutionContext as V3ExecutionContext,
 } from "./v3";
+import {
+  getGlobalMemoryClient,
+  type V3MemoryIntegration,
+} from "./v3/memoryIntegration";
+import { extractLearningFromExecution } from "./v3/learningExtractor";
+import type { ToolCategory } from "./v3/types";
 
 // Get API keys from environment - Direct connections, no OpenRouter middleman
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
@@ -476,6 +482,8 @@ interface ToolExecutionContext {
   taskId?: number;
   qaRetryCount: number;
   wasEscalated: boolean;
+  memoryClient?: V3MemoryIntegration;
+  offloadedOutputs: Map<string, string>;
 }
 
 interface EvolutionTracker {
@@ -596,18 +604,143 @@ function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
-// Maximum context window for Anthropic is 200k tokens, but we want headroom
 const MAX_CONTEXT_TOKENS = 150000;
+const LARGE_OUTPUT_THRESHOLD = 4000;
+const RAG_RETRIEVAL_LIMIT = 5;
 
-// Trim messages to fit within context window, preserving first user message and recent context
-function trimMessagesToFitContext(
+function summarizeToolOutput(output: string, maxLen: number = 500): string {
+  if (output.length <= maxLen) return output;
+  const firstPart = output.slice(0, maxLen / 2);
+  const lastPart = output.slice(-maxLen / 4);
+  return `${firstPart}\n\n[...truncated ${output.length - maxLen} chars, full output stored in memory...]\n\n${lastPart}`;
+}
+
+async function offloadLargeToolOutput(
+  toolName: string,
+  toolCallId: string,
+  output: string,
+  context: ToolExecutionContext,
+  taskContext: string
+): Promise<string> {
+  if (!context.memoryClient || output.length < LARGE_OUTPUT_THRESHOLD) {
+    return output;
+  }
+
+  const toolCategory = inferToolCategory(toolName);
+
+  try {
+    await context.memoryClient.recordExecution({
+      toolName,
+      category: toolCategory,
+      params: {},
+      result: {
+        success: true,
+        output,
+        durationMs: 0,
+      },
+      context: {
+        sessionId: `task-${context.taskId || Date.now()}`,
+        userId: context.userId || 0,
+        taskId: context.taskId || Date.now(),
+        params: {},
+        startTime: Date.now(),
+        leaseManager: {
+          acquire: async () => true,
+          release: async () => {},
+          isHeld: async () => false,
+          extend: async () => true,
+        },
+        qdrant: {
+          search: async () => [],
+          upsert: async () => {},
+          delete: async () => {},
+        },
+        redis: {
+          xadd: async () => "0-0",
+          xread: async () => [],
+          get: async () => null,
+          set: async () => {},
+          publish: async () => 0,
+        },
+      },
+    });
+
+    context.offloadedOutputs.set(toolCallId, `${toolName}:${Date.now()}`);
+    console.info(
+      `[JARVIS-RAG] Offloaded large output from ${toolName} (${output.length} chars) to memory`
+    );
+
+    return summarizeToolOutput(output);
+  } catch (err) {
+    console.warn(`[JARVIS-RAG] Failed to offload output:`, err);
+    return output;
+  }
+}
+
+function inferToolCategory(toolName: string): ToolCategory {
+  if (
+    toolName.includes("file") ||
+    toolName.includes("read") ||
+    toolName.includes("write")
+  )
+    return "file";
+  if (toolName.includes("git")) return "git";
+  if (toolName.includes("ssh")) return "ssh";
+  if (toolName.includes("docker")) return "docker";
+  if (toolName.includes("web") || toolName.includes("browse")) return "web";
+  if (toolName.includes("search") || toolName.includes("research"))
+    return "research";
+  if (toolName.includes("database") || toolName.includes("query"))
+    return "database";
+  if (toolName.includes("execute") || toolName.includes("python"))
+    return "code";
+  if (toolName.includes("scaffold")) return "scaffold";
+  return "system";
+}
+
+async function retrieveRelevantContext(
+  task: string,
+  memoryClient: V3MemoryIntegration | undefined
+): Promise<string> {
+  if (!memoryClient) return "";
+
+  try {
+    const learnings = await memoryClient.searchRelevantLearnings(task, {
+      limit: RAG_RETRIEVAL_LIMIT,
+    });
+
+    if (learnings.length === 0) return "";
+
+    const contextParts = learnings
+      .filter(l => l.relevance > 0.3)
+      .map(l => {
+        const prefix =
+          l.type === "procedural"
+            ? "[Procedure]"
+            : l.type === "semantic"
+              ? "[Fact]"
+              : "[Experience]";
+        return `${prefix} ${l.content.slice(0, 300)}`;
+      });
+
+    if (contextParts.length === 0) return "";
+
+    return `\n\n--- RETRIEVED MEMORY CONTEXT ---\n${contextParts.join("\n")}\n--- END MEMORY CONTEXT ---`;
+  } catch (err) {
+    console.warn("[JARVIS-RAG] Failed to retrieve context:", err);
+    return "";
+  }
+}
+
+async function trimMessagesToFitContextWithRAG(
   messages: OpenRouterMessage[],
-  systemPrompt: string
-): OpenRouterMessage[] {
+  systemPrompt: string,
+  task: string,
+  memoryClient: V3MemoryIntegration | undefined
+): Promise<OpenRouterMessage[]> {
   const systemTokens = estimateTokens(systemPrompt);
   const availableTokens = MAX_CONTEXT_TOKENS - systemTokens;
 
-  // Calculate total tokens
   let totalTokens = 0;
   for (const msg of messages) {
     const content =
@@ -617,21 +750,17 @@ function trimMessagesToFitContext(
     totalTokens += estimateTokens(content);
   }
 
-  // If we're under the limit, return as-is
   if (totalTokens <= availableTokens) {
     return messages;
   }
 
   console.warn(
-    `[JARVIS] Context too large (${totalTokens} tokens), trimming to ${availableTokens}`
+    `[JARVIS-RAG] Context too large (${totalTokens} tokens), using RAG-enhanced trimming`
   );
 
-  // Strategy: Keep first message (original task) and as many recent messages as possible
-  // Also keep all tool_result messages as they're essential for tool call continuity
   const trimmed: OpenRouterMessage[] = [];
   let usedTokens = 0;
 
-  // Always keep the first message (the task)
   if (messages.length > 0) {
     const firstContent =
       typeof messages[0].content === "string"
@@ -641,17 +770,18 @@ function trimMessagesToFitContext(
     trimmed.push(messages[0]);
   }
 
-  // Add a summary note that we trimmed context
+  const retrievedContext = await retrieveRelevantContext(task, memoryClient);
+  const contextNote = retrievedContext
+    ? `[Earlier context was compressed to memory. Relevant learnings retrieved below.]${retrievedContext}`
+    : "[Earlier context was trimmed. Relevant past learnings will be retrieved as needed.]";
+
   const trimNote = {
     role: "user" as const,
-    content:
-      "[Context trimmed for token limits. Earlier conversation history has been removed to stay within model limits. Please continue with the current task.]",
+    content: contextNote,
   };
   usedTokens += estimateTokens(trimNote.content);
   trimmed.push(trimNote);
 
-  // Add messages from the end until we hit the limit
-  // Work backwards to get the most recent context
   const recentMessages: OpenRouterMessage[] = [];
   for (let i = messages.length - 1; i > 0; i--) {
     const msg = messages[i];
@@ -669,7 +799,70 @@ function trimMessagesToFitContext(
     recentMessages.unshift(msg);
   }
 
-  // Combine: first message + trim note + recent messages
+  return [...trimmed, ...recentMessages];
+}
+
+function trimMessagesToFitContext(
+  messages: OpenRouterMessage[],
+  systemPrompt: string
+): OpenRouterMessage[] {
+  const systemTokens = estimateTokens(systemPrompt);
+  const availableTokens = MAX_CONTEXT_TOKENS - systemTokens;
+
+  let totalTokens = 0;
+  for (const msg of messages) {
+    const content =
+      typeof msg.content === "string"
+        ? msg.content
+        : JSON.stringify(msg.content);
+    totalTokens += estimateTokens(content);
+  }
+
+  if (totalTokens <= availableTokens) {
+    return messages;
+  }
+
+  console.warn(
+    `[JARVIS] Context too large (${totalTokens} tokens), trimming to ${availableTokens}`
+  );
+
+  const trimmed: OpenRouterMessage[] = [];
+  let usedTokens = 0;
+
+  if (messages.length > 0) {
+    const firstContent =
+      typeof messages[0].content === "string"
+        ? messages[0].content
+        : JSON.stringify(messages[0].content);
+    usedTokens += estimateTokens(firstContent);
+    trimmed.push(messages[0]);
+  }
+
+  const trimNote = {
+    role: "user" as const,
+    content:
+      "[Context trimmed for token limits. Earlier conversation history has been removed to stay within model limits. Please continue with the current task.]",
+  };
+  usedTokens += estimateTokens(trimNote.content);
+  trimmed.push(trimNote);
+
+  const recentMessages: OpenRouterMessage[] = [];
+  for (let i = messages.length - 1; i > 0; i--) {
+    const msg = messages[i];
+    const content =
+      typeof msg.content === "string"
+        ? msg.content
+        : JSON.stringify(msg.content);
+    const msgTokens = estimateTokens(content);
+
+    if (usedTokens + msgTokens > availableTokens) {
+      break;
+    }
+
+    usedTokens += msgTokens;
+    recentMessages.unshift(msg);
+  }
+
   return [...trimmed, ...recentMessages];
 }
 
@@ -1832,6 +2025,8 @@ export async function runOrchestrator(
 
   const systemPrompt = getJarvisSystemPrompt() + memoryContext;
 
+  const memoryClient = userId ? await getGlobalMemoryClient(userId) : undefined;
+
   const executionContext: ToolExecutionContext = {
     failedTools: new Map(),
     lastToolOutputs: new Map(),
@@ -1852,6 +2047,8 @@ export async function runOrchestrator(
     signatureFailures: new Map(),
     qaRetryCount: 0,
     wasEscalated: false,
+    memoryClient,
+    offloadedOutputs: new Map(),
   };
 
   while (!isComplete && iterations < maxIterations) {
@@ -1947,7 +2144,12 @@ Do NOT continue working - call task_complete immediately.`;
     );
 
     try {
-      const trimmedMessages = trimMessagesToFitContext(messages, systemPrompt);
+      const trimmedMessages = await trimMessagesToFitContextWithRAG(
+        messages,
+        systemPrompt,
+        task,
+        executionContext.memoryClient
+      );
       if (trimmedMessages.length < messages.length) {
         messages.length = 0;
         messages.push(...trimmedMessages);
@@ -2278,16 +2480,26 @@ Please save the content now.`;
           for (const { tc, output, isError } of toolResults) {
             executionContext.progressTracker.toolsCompletedThisIteration++;
 
+            const processedOutput = isError
+              ? output
+              : await offloadLargeToolOutput(
+                  tc.name,
+                  tc.id,
+                  output,
+                  executionContext,
+                  task
+                );
+
             const result: ToolResult = {
               toolCallId: tc.id,
-              output,
+              output: processedOutput,
               isError,
             };
             callbacks.onToolResult(result);
 
             messages.push({
               role: "tool",
-              content: output,
+              content: processedOutput,
               tool_call_id: tc.id,
             });
 
