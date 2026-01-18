@@ -124,6 +124,11 @@ import {
 import { getDesktopDaemon, parseAction, type Action } from "../desktop";
 import { runVisionLoop, type VisionLoopConfig } from "../vision";
 import { daemonClient } from "./daemonClient";
+import {
+  callDesktopTool,
+  getDesktopDaemonStatus,
+  listDesktopTools,
+} from "../desktop/remoteClient";
 
 const execAsync = promisify(exec);
 const USE_DOCKER_SANDBOX = process.env.USE_SANDBOX !== "false";
@@ -10033,6 +10038,120 @@ async function executeDaemonSetClipboard(
   }
 }
 
+async function executeUserDesktopClipboard(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const userId = input.userId as number;
+    if (!userId) {
+      return "Error: userId is required for user desktop tools";
+    }
+    const status = getDesktopDaemonStatus(userId);
+    if (!status.connected) {
+      return "User's desktop daemon is not connected. Ask them to pair their desktop first.";
+    }
+    const result = await callDesktopTool(userId, "desktop_clipboard", {
+      action: input.action as string,
+      content: input.content as string | undefined,
+    });
+    return typeof result === "string" ? result : JSON.stringify(result);
+  } catch (error) {
+    return `User desktop clipboard error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeUserDesktopNotification(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const userId = input.userId as number;
+    if (!userId) {
+      return "Error: userId is required for user desktop tools";
+    }
+    const status = getDesktopDaemonStatus(userId);
+    if (!status.connected) {
+      return "User's desktop daemon is not connected. Ask them to pair their desktop first.";
+    }
+    const result = await callDesktopTool(userId, "desktop_notification", {
+      title: input.title as string,
+      message: input.message as string,
+      sound: input.sound as boolean | undefined,
+    });
+    return typeof result === "string" ? result : JSON.stringify(result);
+  } catch (error) {
+    return `User desktop notification error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeUserDesktopScreenshot(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const userId = input.userId as number;
+    if (!userId) {
+      return "Error: userId is required for user desktop tools";
+    }
+    const status = getDesktopDaemonStatus(userId);
+    if (!status.connected) {
+      return "User's desktop daemon is not connected. Ask them to pair their desktop first.";
+    }
+    const result = await callDesktopTool(userId, "desktop_screenshot", {
+      target: (input.target as string) || "screen",
+      region: input.region as object | undefined,
+    });
+    if (typeof result === "object" && result !== null) {
+      const r = result as { output?: string; metadata?: object };
+      return r.output || JSON.stringify(result);
+    }
+    return String(result);
+  } catch (error) {
+    return `User desktop screenshot error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeUserDesktopOpen(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const userId = input.userId as number;
+    if (!userId) {
+      return "Error: userId is required for user desktop tools";
+    }
+    const status = getDesktopDaemonStatus(userId);
+    if (!status.connected) {
+      return "User's desktop daemon is not connected. Ask them to pair their desktop first.";
+    }
+    const result = await callDesktopTool(userId, "desktop_open", {
+      target: input.target as string,
+      app: input.app as string | undefined,
+    });
+    return typeof result === "string" ? result : JSON.stringify(result);
+  } catch (error) {
+    return `User desktop open error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeUserDesktopSystemInfo(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const userId = input.userId as number;
+    if (!userId) {
+      return "Error: userId is required for user desktop tools";
+    }
+    const status = getDesktopDaemonStatus(userId);
+    if (!status.connected) {
+      return "User's desktop daemon is not connected. Ask them to pair their desktop first.";
+    }
+    const result = await callDesktopTool(userId, "desktop_system_info", {
+      category: (input.category as string) || "all",
+    });
+    return typeof result === "string" ? result : JSON.stringify(result);
+  } catch (error) {
+    return `User desktop system info error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 async function executeDesktopAction(
   actionInput: Action | string,
   taskId: number,
@@ -10962,6 +11081,16 @@ export async function executeTool(
       return executeDaemonGetClipboard();
     case "daemon_set_clipboard":
       return executeDaemonSetClipboard(input);
+    case "user_desktop_clipboard":
+      return executeUserDesktopClipboard(input);
+    case "user_desktop_notification":
+      return executeUserDesktopNotification(input);
+    case "user_desktop_screenshot":
+      return executeUserDesktopScreenshot(input);
+    case "user_desktop_open":
+      return executeUserDesktopOpen(input);
+    case "user_desktop_system_info":
+      return executeUserDesktopSystemInfo(input);
     default:
       if (name.startsWith("self_")) {
         return executeSelfEvolutionTool(name, input, input.userId as number);
@@ -12097,6 +12226,92 @@ export function getAvailableTools(): Array<{
       description: tool.description,
       parameters: tool.parameters,
     })),
+    {
+      name: "user_desktop_clipboard",
+      description:
+        "Read or write the user's desktop clipboard. Requires the user to have paired their desktop daemon. Use action='read' to get clipboard content, action='write' with content parameter to set it.",
+      parameters: {
+        action: {
+          type: "string",
+          description: "'read' to get clipboard, 'write' to set clipboard",
+          required: true,
+        },
+        content: {
+          type: "string",
+          description: "Content to write (required for write action)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "user_desktop_notification",
+      description:
+        "Show a system notification on the user's desktop. Requires paired desktop daemon. Useful for alerting the user about completed tasks.",
+      parameters: {
+        title: {
+          type: "string",
+          description: "Notification title",
+          required: true,
+        },
+        message: {
+          type: "string",
+          description: "Notification body text",
+          required: true,
+        },
+        sound: {
+          type: "boolean",
+          description: "Play notification sound",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "user_desktop_screenshot",
+      description:
+        "Capture a screenshot of the user's desktop. Requires paired desktop daemon and screen recording permission on macOS.",
+      parameters: {
+        target: {
+          type: "string",
+          description: "'screen' for full screen or 'region' for specific area",
+          required: false,
+        },
+        region: {
+          type: "object",
+          description:
+            "Region coordinates {x, y, width, height} if target is 'region'",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "user_desktop_open",
+      description:
+        "Open a URL, file, or application on the user's desktop. Requires paired desktop daemon.",
+      parameters: {
+        target: {
+          type: "string",
+          description: "URL, file path, or application name to open",
+          required: true,
+        },
+        app: {
+          type: "string",
+          description: "Specific application to use for opening",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "user_desktop_system_info",
+      description:
+        "Get information about the user's desktop system (OS, CPU, memory, network). Requires paired desktop daemon.",
+      parameters: {
+        category: {
+          type: "string",
+          description: "'all', 'os', 'cpu', 'memory', 'network', or 'user'",
+          required: false,
+        },
+      },
+    },
   ];
 }
 

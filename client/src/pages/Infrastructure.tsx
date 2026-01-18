@@ -35,8 +35,10 @@ import {
   ArrowLeft,
   Shield,
   Clock,
+  Monitor,
 } from "lucide-react";
 import { Link } from "wouter";
+import { DesktopDaemonPanel } from "@/components/DesktopDaemonPanel";
 
 // Main component
 export default function Infrastructure() {
@@ -110,6 +112,10 @@ export default function Infrastructure() {
             <TabsTrigger value="incidents" className="flex items-center gap-2">
               <Shield className="w-4 h-4" />
               Incidents
+            </TabsTrigger>
+            <TabsTrigger value="desktop" className="flex items-center gap-2">
+              <Monitor className="w-4 h-4" />
+              Desktop
             </TabsTrigger>
           </TabsList>
 
@@ -299,6 +305,11 @@ export default function Infrastructure() {
                 ))}
               </div>
             )}
+          </TabsContent>
+
+          {/* Desktop Tab */}
+          <TabsContent value="desktop">
+            <DesktopDaemonPanel />
           </TabsContent>
         </Tabs>
       </main>
