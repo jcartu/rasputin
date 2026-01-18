@@ -1831,22 +1831,26 @@ export default function AgentPage() {
     {
       taskId: typeof currentTask?.id === "number" ? currentTask.id : undefined,
     },
-    { enabled: typeof currentTask?.id === "number" }
+    {
+      enabled: typeof currentTask?.id === "number",
+      staleTime: 0,
+      refetchOnMount: true,
+    }
   );
 
   // Update currentTask with messages when they load
   useEffect(() => {
     if (selectedTaskMessages && typeof currentTask?.id === "number") {
       setCurrentTask(prev =>
-        prev
+        prev?.id === currentTask.id
           ? {
               ...prev,
               messages: selectedTaskMessages,
             }
-          : null
+          : prev
       );
     }
-  }, [selectedTaskMessages]);
+  }, [selectedTaskMessages, currentTask?.id]);
 
   const tasks = [
     ...localTasks,
@@ -2322,9 +2326,7 @@ export default function AgentPage() {
                   >
                     <button
                       onClick={() => {
-                        const switchingToIdleTask =
-                          task.status === "idle" && task.id !== currentTask?.id;
-                        if (switchingToIdleTask) {
+                        if (task.id !== currentTask?.id) {
                           jarvisStream.reset();
                         }
                         setCurrentTask(task);
