@@ -1980,6 +1980,7 @@ export default function AgentPage() {
     setAttachedFiles([]);
     setFileContext("");
     setCurrentTask(null);
+    jarvisStream.reset(); // Clear previous task history before starting new task
     jarvisStream.startTask(taskInput, user.id);
   }, [input, jarvisStream, user?.id, researchMode, fileContext]);
 
@@ -2320,7 +2321,14 @@ export default function AgentPage() {
                     )}
                   >
                     <button
-                      onClick={() => setCurrentTask(task)}
+                      onClick={() => {
+                        const switchingToIdleTask =
+                          task.status === "idle" && task.id !== currentTask?.id;
+                        if (switchingToIdleTask) {
+                          jarvisStream.reset();
+                        }
+                        setCurrentTask(task);
+                      }}
                       className="w-full text-left p-2.5"
                     >
                       <div className="flex items-start gap-2">
