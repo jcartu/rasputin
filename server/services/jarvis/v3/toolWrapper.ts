@@ -164,10 +164,7 @@ export class JARVISToolWrapper {
         data: { success: result.success, durationMs },
       });
 
-      // Extract learning if successful
-      if (result.success) {
-        await this.extractAndStoreLearning(params, result, context);
-      }
+      await this.extractAndStoreLearning(params, result, context);
 
       return result;
     } catch (error) {
@@ -265,10 +262,6 @@ export class JARVISToolWrapper {
     result: ToolResult,
     context: ExecutionContext
   ): Promise<void> {
-    if (this.metadata.qdrantCollections.length === 0) {
-      return;
-    }
-
     try {
       const record: ToolExecutionRecord = {
         toolName: this.toolName,

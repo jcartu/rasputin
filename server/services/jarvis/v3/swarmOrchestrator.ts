@@ -15,7 +15,7 @@ import {
   type TaskAnalysis,
   type AgentTask,
 } from "./agentCoordinator";
-import { getToolsForAgent } from "./toolMetadata";
+import { getToolsForAgent, getToolMetadata } from "./toolMetadata";
 import {
   getGlobalMemoryClient,
   enrichContextWithMemory,
@@ -640,6 +640,10 @@ Respond ONLY with valid JSON, no other text.`;
   }
 
   isHighRiskTool(toolName: string): boolean {
+    const metadata = getToolMetadata(toolName);
+    if (metadata) {
+      return metadata.riskLevel === "high" || metadata.riskLevel === "critical";
+    }
     return HIGH_RISK_TOOLS.has(toolName);
   }
 

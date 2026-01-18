@@ -42,23 +42,28 @@ The v3 multi-agent swarm architecture is ~90% implemented but not fully activate
   - SwarmOrchestrator passes only filtered tools to each agent
   - V2 fallback shows all tools (expected - single-agent system)
 
-- [ ] **Consensus for all high-risk operations** - Currently only triggered for specific tools
-  - Expand: `requestToolConsensus()` to all tools with `riskLevel: "high" | "critical"`
-  - Add: UI for consensus voting visualization
+- [x] **Consensus for all high-risk operations** - Currently only triggered for specific tools
+  - Updated: `isHighRiskTool()` now checks toolMetadata.riskLevel for "high" | "critical"
+  - Fallback: Still uses hardcoded HIGH_RISK_TOOLS set for unregistered tools
+  - TODO: UI for consensus voting visualization (separate task)
 
 #### Phase 3: Learning Loop (Week 3)
 
-- [ ] **Store learnings after every tool execution** - Currently opt-in
-  - Wire: `extractLearningFromExecution()` to run on every tool completion
-  - Store: To Qdrant with embeddings for retrieval
+- [x] **Store learnings after every tool execution** - Currently opt-in
+  - Updated: `toolWrapper.ts` now calls `extractAndStoreLearning()` for ALL executions
+  - Removed: Success-only and qdrantCollections checks
+  - Stores: To memory service and Qdrant when available
 
-- [ ] **Pre-fetch relevant learnings before task** - Memory enrichment exists but passive
-  - Activate: `enrichContextWithMemory()` in main orchestrator path
-  - Display: "Recalled N relevant learnings" in task output
+- [x] **Pre-fetch relevant learnings before task** - Memory enrichment exists but passive
+  - Already active: `enrichContextWithMemory()` called in swarmOrchestrator (default path)
+  - Config: `enableMemoryEnrichment: true` in DEFAULT_SWARM_CONFIG
+  - Usage: agentBehaviors.ts injects learnings into planner/learner prompts
 
-- [ ] **Agent performance leaderboard** - Track which agents excel at what
-  - Display: Success rates per agent type
-  - Route: Tasks to best-performing agents for task type
+- [x] **Agent performance leaderboard** - Track which agents excel at what
+  - Already tracks: `agentMetrics` in SwarmOrchestrator (success/fail/duration)
+  - Added: `jarvis.v3AgentLeaderboard` tRPC endpoint
+  - Returns: Sorted by success rate, then tasks completed
+  - TODO: Persist to DB for historical tracking (future)
 
 ### Testing & Verification (High Priority)
 

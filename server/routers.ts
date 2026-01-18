@@ -1451,6 +1451,25 @@ export const appRouter = router({
     v3Status: protectedProcedure.query(async () => {
       return getV3Status();
     }),
+
+    v3AgentLeaderboard: protectedProcedure.query(async () => {
+      const swarm = getGlobalSwarmOrchestrator();
+      const metrics = swarm.getAgentMetrics();
+      const leaderboard = Array.from(metrics.entries())
+        .map(([agentType, m]) => ({
+          agentType,
+          tasksCompleted: m.tasksCompleted,
+          tasksFailed: m.tasksFailed,
+          successRate: m.successRate,
+          averageDurationMs: Math.round(m.averageDurationMs),
+          lastTaskAt: m.lastTaskAt,
+        }))
+        .sort(
+          (a, b) =>
+            b.successRate - a.successRate || b.tasksCompleted - a.tasksCompleted
+        );
+      return leaderboard;
+    }),
   }),
 
   // ============================================================================
