@@ -10220,6 +10220,135 @@ async function executeUserDesktopFsDialog(
   }
 }
 
+async function executeVisionAnalyze(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const { getGlobalPerceptionAdapter } = await import(
+      "./v3/perceptionAdapter"
+    );
+    const adapter = await getGlobalPerceptionAdapter();
+    const status = await adapter.getStatus();
+
+    if (!status.available || !status.services.vision) {
+      return "Local GPU vision not available. Ollama may not be running or llama3.2-vision model is not installed.";
+    }
+
+    const source = (input.screenshot_source as string) || "server";
+    const prompt =
+      (input.prompt as string) ||
+      "Describe this screen. Identify UI elements, text, and current state.";
+
+    let screenshotBase64: string;
+
+    if (source === "user_desktop") {
+      const userId = input.userId as number;
+      if (!userId) {
+        return "Error: userId required for user_desktop screenshot source";
+      }
+      const daemonStatus = getDesktopDaemonStatus(userId);
+      if (!daemonStatus.connected) {
+        return "User's desktop daemon is not connected. Ask them to pair their desktop first.";
+      }
+      const result = await callDesktopTool(userId, "desktop_screenshot", {});
+      if (typeof result === "string" && result.startsWith("Error")) {
+        return result;
+      }
+      const parsed = typeof result === "string" ? JSON.parse(result) : result;
+      screenshotBase64 = parsed.data || parsed.screenshot || "";
+    } else {
+      const { exec } = await import("child_process");
+      const { promisify } = await import("util");
+      const fs = await import("fs/promises");
+      const path = await import("path");
+      const execAsync = promisify(exec);
+
+      const tmpPath = path.join("/tmp", `jarvis-vision-${Date.now()}.png`);
+      try {
+        await execAsync(`scrot -o ${tmpPath}`);
+      } catch {
+        await execAsync(`import -window root ${tmpPath}`);
+      }
+      const buffer = await fs.readFile(tmpPath);
+      await fs.unlink(tmpPath).catch(() => {});
+      screenshotBase64 = buffer.toString("base64");
+    }
+
+    const analysis = await adapter.analyzeImage(screenshotBase64, prompt);
+
+    return JSON.stringify(
+      {
+        description: analysis.description,
+        elements: analysis.elements,
+        confidence: analysis.confidence,
+        durationMs: analysis.durationMs,
+      },
+      null,
+      2
+    );
+  } catch (error) {
+    return `Vision analysis error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeVisionStreamControl(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const { getGlobalVisionStream } = await import("../vision/visionStream");
+    const stream = getGlobalVisionStream();
+
+    const action = (input.action as string) || "status";
+
+    switch (action) {
+      case "start": {
+        if (stream.isRunning()) {
+          return "Vision stream is already running. Use 'stop' first to change settings.";
+        }
+
+        const targetFps = Math.min(
+          30,
+          Math.max(1, (input.target_fps as number) || 10)
+        );
+        const source = (input.screenshot_source as string) || "server";
+
+        stream.updateConfig({
+          targetFps,
+          screenshotSource: source as "server" | "desktop-daemon",
+        });
+
+        await stream.start();
+        const stats = stream.getStats();
+        return `Vision stream started at ${targetFps} FPS (source: ${source}). Stats: ${JSON.stringify(stats)}`;
+      }
+
+      case "stop": {
+        if (!stream.isRunning()) {
+          return "Vision stream is not running.";
+        }
+        stream.stop();
+        const stats = stream.getStats();
+        return `Vision stream stopped. Final stats: ${JSON.stringify(stats)}`;
+      }
+
+      case "status":
+      default: {
+        const stats = stream.getStats();
+        return JSON.stringify(
+          {
+            running: stream.isRunning(),
+            stats,
+          },
+          null,
+          2
+        );
+      }
+    }
+  } catch (error) {
+    return `Vision stream control error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 async function executeDesktopAction(
   actionInput: Action | string,
   taskId: number,
@@ -11165,6 +11294,10 @@ export async function executeTool(
       return executeUserDesktopActiveWindow(input);
     case "user_desktop_fs_dialog":
       return executeUserDesktopFsDialog(input);
+    case "vision_analyze":
+      return executeVisionAnalyze(input);
+    case "vision_stream_control":
+      return executeVisionStreamControl(input);
     default:
       if (name.startsWith("self_")) {
         return executeSelfEvolutionTool(name, input, input.userId as number);
@@ -12449,6 +12582,47 @@ export function getAvailableTools(): Array<{
         defaultName: {
           type: "string",
           description: "Default filename (save only)",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "vision_analyze",
+      description:
+        "Analyze a screenshot using local GPU vision (llama3.2-vision:90b). Use for understanding screen content, identifying UI elements, or reading text from images.",
+      parameters: {
+        screenshot_source: {
+          type: "string",
+          description:
+            "'server' for server-side screenshot (if running on desktop), 'user_desktop' to capture from user's paired desktop daemon",
+          required: true,
+        },
+        prompt: {
+          type: "string",
+          description:
+            "Analysis prompt, e.g., 'Describe this screen', 'What button should I click to submit?', 'Read the error message'",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "vision_stream_control",
+      description:
+        "Control continuous vision streaming for real-time desktop monitoring. Use 'start' to begin watching, 'stop' to end, 'status' to check current state.",
+      parameters: {
+        action: {
+          type: "string",
+          description: "'start', 'stop', or 'status'",
+          required: true,
+        },
+        target_fps: {
+          type: "number",
+          description: "Frames per second for analysis (1-30, default 10)",
+          required: false,
+        },
+        screenshot_source: {
+          type: "string",
+          description: "'server' or 'desktop-daemon'",
           required: false,
         },
       },
