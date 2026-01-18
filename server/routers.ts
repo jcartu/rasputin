@@ -38,6 +38,14 @@ import {
   getAllAgentReasoningConfigs,
   getV3Status,
 } from "./services/jarvis/v3";
+import {
+  initiatePairing,
+  completePairing,
+  getDesktopDaemonStatus,
+  callDesktopTool,
+  listDesktopTools,
+  disconnectDaemon,
+} from "./services/desktop/remoteClient";
 
 // ============================================================================
 // Utilities
@@ -1470,6 +1478,51 @@ export const appRouter = router({
         );
       return leaderboard;
     }),
+  }),
+
+  // ============================================================================
+  // Desktop Daemon Router - Remote desktop tool bridge
+  // ============================================================================
+  desktop: router({
+    getStatus: protectedProcedure.query(async ({ ctx }) => {
+      return getDesktopDaemonStatus(ctx.user.id);
+    }),
+
+    initiatePairing: protectedProcedure.mutation(async ({ ctx }) => {
+      return initiatePairing(ctx.user.id);
+    }),
+
+    completePairing: protectedProcedure
+      .input(z.object({ code: z.string(), daemonUrl: z.string() }))
+      .mutation(async ({ input }) => {
+        return completePairing(input.code, input.daemonUrl);
+      }),
+
+    disconnect: protectedProcedure.mutation(async ({ ctx }) => {
+      disconnectDaemon(ctx.user.id);
+      return { success: true };
+    }),
+
+    listTools: protectedProcedure.query(async ({ ctx }) => {
+      return listDesktopTools(ctx.user.id);
+    }),
+
+    callTool: protectedProcedure
+      .input(
+        z.object({
+          toolId: z.string(),
+          args: z.record(z.string(), z.unknown()),
+          timeoutMs: z.number().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        return callDesktopTool(
+          ctx.user.id,
+          input.toolId,
+          input.args,
+          input.timeoutMs
+        );
+      }),
   }),
 
   // ============================================================================
