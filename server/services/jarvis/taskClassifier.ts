@@ -121,7 +121,7 @@ function getModelsForTaskType(type: TaskType): string[] {
     case "code":
       return ["claude-opus-4.5", "gpt-5.2-pro", "claude-sonnet-4.5", "gpt-5"];
     case "research":
-      return ["sonar-pro", "gemini-3-pro", "gpt-5", "claude-sonnet-4.5"];
+      return ["gemini-3-pro", "claude-sonnet-4.5", "gpt-5", "grok-4.1"];
     case "analysis":
       return [
         "gpt-5.2-pro",

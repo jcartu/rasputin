@@ -71,7 +71,7 @@ type MemoryService = {
   createOrUpdateProcedural: (
     memory: Record<string, unknown>
   ) => Promise<number>;
-  createLearningEvent: (event: Record<string, unknown>) => Promise<number>;
+  recordLearning: (event: Record<string, unknown>) => Promise<number>;
   generateEmbedding: (text: string) => Promise<number[]>;
   searchMemories: (query: {
     query: string;
@@ -176,7 +176,7 @@ export class V3MemoryIntegration implements V3MemoryClient {
     }
 
     if (learning.learningEvent) {
-      await this.memoryService.createLearningEvent(
+      await this.memoryService.recordLearning(
         learning.learningEvent as unknown as Record<string, unknown>
       );
     }
