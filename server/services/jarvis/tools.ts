@@ -10152,6 +10152,74 @@ async function executeUserDesktopSystemInfo(
   }
 }
 
+async function executeUserDesktopKeystrokes(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const userId = input.userId as number;
+    if (!userId) {
+      return "Error: userId is required for user desktop tools";
+    }
+    const status = getDesktopDaemonStatus(userId);
+    if (!status.connected) {
+      return "User's desktop daemon is not connected. Ask them to pair their desktop first.";
+    }
+    const result = await callDesktopTool(userId, "desktop_keystrokes", {
+      action: input.action as string,
+      text: input.text as string | undefined,
+      key: input.key as string | undefined,
+      modifiers: input.modifiers as string[] | undefined,
+    });
+    return typeof result === "string" ? result : JSON.stringify(result);
+  } catch (error) {
+    return `User desktop keystrokes error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeUserDesktopActiveWindow(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const userId = input.userId as number;
+    if (!userId) {
+      return "Error: userId is required for user desktop tools";
+    }
+    const status = getDesktopDaemonStatus(userId);
+    if (!status.connected) {
+      return "User's desktop daemon is not connected. Ask them to pair their desktop first.";
+    }
+    const result = await callDesktopTool(userId, "desktop_active_window", {});
+    return typeof result === "string" ? result : JSON.stringify(result);
+  } catch (error) {
+    return `User desktop active window error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function executeUserDesktopFsDialog(
+  input: Record<string, unknown>
+): Promise<string> {
+  try {
+    const userId = input.userId as number;
+    if (!userId) {
+      return "Error: userId is required for user desktop tools";
+    }
+    const status = getDesktopDaemonStatus(userId);
+    if (!status.connected) {
+      return "User's desktop daemon is not connected. Ask them to pair their desktop first.";
+    }
+    const result = await callDesktopTool(userId, "desktop_fs_dialog", {
+      action: input.action as string,
+      title: input.title as string | undefined,
+      directory: input.directory as boolean | undefined,
+      multiple: input.multiple as boolean | undefined,
+      defaultName: input.defaultName as string | undefined,
+    });
+    return typeof result === "string" ? result : JSON.stringify(result);
+  } catch (error) {
+    return `User desktop file dialog error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 async function executeDesktopAction(
   actionInput: Action | string,
   taskId: number,
@@ -11091,6 +11159,12 @@ export async function executeTool(
       return executeUserDesktopOpen(input);
     case "user_desktop_system_info":
       return executeUserDesktopSystemInfo(input);
+    case "user_desktop_keystrokes":
+      return executeUserDesktopKeystrokes(input);
+    case "user_desktop_active_window":
+      return executeUserDesktopActiveWindow(input);
+    case "user_desktop_fs_dialog":
+      return executeUserDesktopFsDialog(input);
     default:
       if (name.startsWith("self_")) {
         return executeSelfEvolutionTool(name, input, input.userId as number);
@@ -12308,6 +12382,73 @@ export function getAvailableTools(): Array<{
         category: {
           type: "string",
           description: "'all', 'os', 'cpu', 'memory', 'network', or 'user'",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "user_desktop_keystrokes",
+      description:
+        "Send keystrokes or key combinations to the user's active application. Use action='type' to type text, action='key' to send a single key with modifiers. WARNING: Use with caution.",
+      parameters: {
+        action: {
+          type: "string",
+          description: "'type' to type text, 'key' to send a single key",
+          required: true,
+        },
+        text: {
+          type: "string",
+          description: "Text to type (for action='type')",
+          required: false,
+        },
+        key: {
+          type: "string",
+          description:
+            "Key to press (for action='key'), e.g., 'enter', 'tab', 'escape'",
+          required: false,
+        },
+        modifiers: {
+          type: "array",
+          items: { type: "string" },
+          description: "Modifier keys: 'ctrl', 'alt', 'shift', 'cmd'",
+          required: false,
+        },
+      },
+    },
+    {
+      name: "user_desktop_active_window",
+      description:
+        "Get information about the currently focused window on the user's desktop. Returns app name, window title, and bounds.",
+      parameters: {},
+    },
+    {
+      name: "user_desktop_fs_dialog",
+      description:
+        "Show a file or folder selection dialog on the user's desktop. Use action='open' to select files/folders, action='save' to choose a save location.",
+      parameters: {
+        action: {
+          type: "string",
+          description: "'open' for file/folder picker, 'save' for save dialog",
+          required: true,
+        },
+        title: {
+          type: "string",
+          description: "Dialog title",
+          required: false,
+        },
+        directory: {
+          type: "boolean",
+          description: "Select directories instead of files (open only)",
+          required: false,
+        },
+        multiple: {
+          type: "boolean",
+          description: "Allow multiple selections (open only)",
+          required: false,
+        },
+        defaultName: {
+          type: "string",
+          description: "Default filename (save only)",
           required: false,
         },
       },
