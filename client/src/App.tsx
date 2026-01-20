@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/JarvisThemeContext";
+import { VoiceAnnouncementProvider } from "./contexts/VoiceAnnouncementContext";
 import SplashScreen from "./components/SplashScreen";
 
 // Main functional pages (connected to real backends)
@@ -86,10 +87,10 @@ function App() {
           {showSplash ? (
             <SplashScreen onComplete={() => setShowSplash(false)} />
           ) : (
-            <>
+            <VoiceAnnouncementProvider>
               <Toaster />
               <Router />
-            </>
+            </VoiceAnnouncementProvider>
           )}
         </TooltipProvider>
       </ThemeProvider>

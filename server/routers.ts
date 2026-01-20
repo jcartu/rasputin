@@ -2553,9 +2553,15 @@ export const appRouter = router({
       }),
   }),
 
-  // ============================================================================
-  // Vision Stream Router (Local GPU)
-  // ============================================================================
+  localStats: router({
+    get: publicProcedure.query(async () => {
+      const { getLocalSystemStats } = await import(
+        "./services/localSystemStats"
+      );
+      return getLocalSystemStats();
+    }),
+  }),
+
   vision: router({
     getStatus: protectedProcedure.query(async () => {
       const { getGlobalPerceptionAdapter } = await import(
