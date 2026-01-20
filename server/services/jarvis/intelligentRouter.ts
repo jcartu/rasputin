@@ -224,7 +224,7 @@ export function getProviderConfig(decision: RouteDecision): {
         modelId:
           decision.model === "claude-4.5-opus"
             ? "claude-sonnet-4-5-20250514"
-            : "claude-sonnet-4-20250514",
+            : "claude-sonnet-4-5-20250929",
         maxTokens: 8192,
         temperature: 0.7,
       };
@@ -275,7 +275,7 @@ export function getProviderConfig(decision: RouteDecision): {
     default:
       return {
         apiUrl: "https://api.anthropic.com/v1/messages",
-        modelId: "claude-sonnet-4-20250514",
+        modelId: "claude-sonnet-4-5-20250929",
         maxTokens: 8192,
         temperature: 0.7,
       };

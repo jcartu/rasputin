@@ -200,6 +200,8 @@ Safety measures:
       "desktop_action",
       "daemon_shell_exec",
       "daemon_start_process",
+      "generate_image",
+      "task_complete",
     ];
 
     const taskLower = task.toLowerCase();
@@ -317,7 +319,8 @@ Output format:
     return result;
   },
 
-  selectTools: (_task, available) => {
+  selectTools: (task, available) => {
+    const taskLower = task.toLowerCase();
     const researchTools = [
       "web_search",
       "deep_research",
@@ -326,7 +329,20 @@ Output format:
       "search_memory",
       "read_pdf",
       "analyze_document",
+      "get_weather",
+      "task_complete",
     ];
+
+    if (
+      taskLower.includes("weather") ||
+      taskLower.includes("temperature") ||
+      taskLower.includes("forecast")
+    ) {
+      return available.filter(
+        t => t === "get_weather" || t === "task_complete"
+      );
+    }
+
     return available.filter(t => researchTools.includes(t));
   },
 

@@ -118,6 +118,98 @@ const AGENT_DESCRIPTIONS: Record<AgentType, string> = {
 
 export function analyzeTask(task: string): TaskAnalysis {
   const taskLower = task.toLowerCase();
+
+  const isWeatherQuery =
+    taskLower.includes("weather") ||
+    taskLower.includes("temperature") ||
+    taskLower.includes("forecast");
+
+  const isImageQuery =
+    taskLower.includes("generate image") ||
+    taskLower.includes("create image") ||
+    taskLower.includes("draw") ||
+    taskLower.includes("picture of");
+
+  const isCalculationQuery =
+    taskLower.includes("calculate") ||
+    taskLower.includes("compute") ||
+    /\d+\s*[\+\-\*\/\^]\s*\d+/.test(task);
+
+  if (isWeatherQuery) {
+    return {
+      primaryAgent: "researcher",
+      secondaryAgents: [],
+      confidence: 95,
+      reasoning:
+        "Weather query detected - using researcher with get_weather tool",
+      suggestedTools: ["get_weather", "task_complete"],
+      estimatedComplexity: "simple",
+      requiresMultiAgent: false,
+    };
+  }
+
+  if (isImageQuery) {
+    return {
+      primaryAgent: "executor",
+      secondaryAgents: [],
+      confidence: 95,
+      reasoning:
+        "Image generation query detected - using executor with generate_image tool",
+      suggestedTools: ["generate_image", "task_complete"],
+      estimatedComplexity: "simple",
+      requiresMultiAgent: false,
+    };
+  }
+
+  if (
+    isCalculationQuery &&
+    !taskLower.includes("code") &&
+    !taskLower.includes("script")
+  ) {
+    return {
+      primaryAgent: "executor",
+      secondaryAgents: [],
+      confidence: 90,
+      reasoning:
+        "Calculation query detected - using executor with calculate tool",
+      suggestedTools: ["calculate", "task_complete"],
+      estimatedComplexity: "simple",
+      requiresMultiAgent: false,
+    };
+  }
+
+  // Explicit search/research query detection
+  const isSearchQuery =
+    taskLower.includes("search") ||
+    taskLower.includes("find") ||
+    taskLower.includes("look up") ||
+    taskLower.includes("research") ||
+    taskLower.includes("investigate") ||
+    taskLower.includes("news") ||
+    taskLower.includes("latest");
+
+  if (
+    isSearchQuery &&
+    !taskLower.includes("file") &&
+    !taskLower.includes("code")
+  ) {
+    return {
+      primaryAgent: "researcher",
+      secondaryAgents: [],
+      confidence: 90,
+      reasoning:
+        "Search/research query detected - using researcher with web_search tool",
+      suggestedTools: [
+        "web_search",
+        "browse_url",
+        "deep_research",
+        "task_complete",
+      ],
+      estimatedComplexity: "simple",
+      requiresMultiAgent: false,
+    };
+  }
+
   const agentScores: Record<AgentType, number> = {
     planner: 0,
     coder: 0,
@@ -176,17 +268,26 @@ export function analyzeTask(task: string): TaskAnalysis {
   const suggestedTools = getToolsForAgent(primaryAgent).slice(0, 10);
 
   const wordCount = task.split(/\s+/).length;
-  const hasMultipleTasks =
-    task.includes(" and ") || task.includes(" then ") || task.includes(";");
+  const isInherentlyComplex =
+    /\b(scaffold|scaffolding|portal|bilateral|build_bilateral_portal|scaffold_business_portal)\b/i.test(
+      taskLower
+    );
+  const hasTrulyMultipleSteps =
+    (task.includes(" then ") || task.includes(";")) &&
+    !isWeatherQuery &&
+    !isImageQuery &&
+    !isCalculationQuery;
+
   const estimatedComplexity: TaskAnalysis["estimatedComplexity"] =
-    wordCount > 50 || hasMultipleTasks
+    wordCount > 50 || hasTrulyMultipleSteps || isInherentlyComplex
       ? "complex"
       : wordCount > 20
         ? "moderate"
         : "simple";
 
   const requiresMultiAgent =
-    estimatedComplexity === "complex" || secondaryAgents.length >= 2;
+    isInherentlyComplex ||
+    (estimatedComplexity === "complex" && secondaryAgents.length >= 2);
 
   return {
     primaryAgent,

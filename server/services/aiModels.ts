@@ -32,20 +32,21 @@ interface QueryOptions {
 // ============================================================================
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const XAI_API_KEY = process.env.XAI_API_KEY;
 const SONAR_API_KEY = process.env.SONAR_API_KEY;
 const CEREBRAS_API_KEY = process.env.CEREBRAS_API_KEY;
 
-// Log API key availability at startup
 console.log("[AI Models] API Keys loaded:", {
-  OPENROUTER: !!OPENROUTER_API_KEY,
+  OPENAI: !!OPENAI_API_KEY,
   ANTHROPIC: !!ANTHROPIC_API_KEY,
   GEMINI: !!GEMINI_API_KEY,
   XAI: !!XAI_API_KEY,
   SONAR: !!SONAR_API_KEY,
   CEREBRAS: !!CEREBRAS_API_KEY,
+  OPENROUTER: !!OPENROUTER_API_KEY,
 });
 
 // ============================================================================
@@ -194,6 +195,133 @@ async function queryAnthropicDirect(
   };
 }
 
+const OPENAI_MODEL_MAP: Record<string, string> = {
+  "gpt-5": "gpt-5",
+  "gpt-5.2-pro": "gpt-5.2-pro",
+};
+
+async function queryOpenAIDirect(
+  model: ModelConfig,
+  options: QueryOptions,
+  callbacks?: StreamCallbacks
+): Promise<ModelResponseData> {
+  const startTime = Date.now();
+
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY not configured");
+  }
+
+  const openaiModel = OPENAI_MODEL_MAP[model.id] || "gpt-4.1";
+
+  const body: Record<string, unknown> = {
+    model: openaiModel,
+    messages: options.messages,
+    max_tokens: options.maxTokens || model.maxOutputTokens,
+    temperature: options.temperature || 0.7,
+    stream: options.stream && !!callbacks,
+  };
+
+  if (options.stream && callbacks) {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("No response body");
+
+    let fullContent = "";
+    let inputTokens = 0;
+    let outputTokens = 0;
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      const lines = chunk.split("\n");
+
+      for (const line of lines) {
+        if (line.startsWith("data: ") && line !== "data: [DONE]") {
+          try {
+            const data = JSON.parse(line.slice(6));
+            const delta = data.choices?.[0]?.delta?.content;
+            if (delta) {
+              fullContent += delta;
+              callbacks.onChunk(delta);
+            }
+            if (data.usage) {
+              inputTokens = data.usage.prompt_tokens || 0;
+              outputTokens = data.usage.completion_tokens || 0;
+            }
+          } catch {
+            // Skip invalid JSON
+          }
+        }
+      }
+    }
+
+    const latencyMs = Date.now() - startTime;
+    const cost = calculateCost(model, inputTokens, outputTokens);
+
+    const result: ModelResponseData = {
+      modelId: model.id,
+      modelName: model.name,
+      content: fullContent,
+      status: "completed",
+      latencyMs,
+      inputTokens,
+      outputTokens,
+      cost,
+      provider: "openai",
+    };
+
+    callbacks.onComplete(result);
+    return result;
+  }
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenAI API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const latencyMs = Date.now() - startTime;
+  const content = data.choices?.[0]?.message?.content || "";
+  const inputTokens = data.usage?.prompt_tokens || 0;
+  const outputTokens = data.usage?.completion_tokens || 0;
+  const cost = calculateCost(model, inputTokens, outputTokens);
+
+  return {
+    modelId: model.id,
+    modelName: model.name,
+    content,
+    status: "completed",
+    latencyMs,
+    inputTokens,
+    outputTokens,
+    cost,
+    provider: "openai",
+  };
+}
+
 async function queryGoogleDirect(
   model: ModelConfig,
   options: QueryOptions,
@@ -232,7 +360,8 @@ async function queryGoogleDirect(
     body.systemInstruction = { parts: [{ text: systemInstruction.content }] };
   }
 
-  const endpoint = options.stream
+  const useStreaming = options.stream && callbacks;
+  const endpoint = useStreaming
     ? `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:streamGenerateContent?key=${GEMINI_API_KEY}`
     : `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${GEMINI_API_KEY}`;
 
@@ -246,7 +375,7 @@ async function queryGoogleDirect(
     throw new Error(`Gemini API error: ${response.status}`);
   }
 
-  if (options.stream && callbacks) {
+  if (useStreaming && callbacks) {
     const reader = response.body?.getReader();
     if (!reader) throw new Error("No response body");
 
@@ -257,27 +386,23 @@ async function queryGoogleDirect(
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-
       buffer += decoder.decode(value, { stream: true });
+    }
 
-      // Gemini streams JSON objects separated by newlines
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        if (line.trim()) {
-          try {
-            const data = JSON.parse(line.replace(/^\[|,$/g, ""));
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            if (text) {
-              fullContent += text;
-              callbacks.onChunk(text);
-            }
-          } catch {
-            // Skip invalid JSON
-          }
+    try {
+      const parsed = JSON.parse(buffer);
+      const candidates = Array.isArray(parsed) ? parsed : [parsed];
+      for (const candidate of candidates) {
+        const text = candidate.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        if (text) {
+          fullContent += text;
+          callbacks.onChunk(text);
         }
       }
+    } catch (e) {
+      console.error(
+        `[Gemini] Failed to parse response: ${buffer.slice(0, 200)}`
+      );
     }
 
     const latencyMs = Date.now() - startTime;
@@ -327,7 +452,7 @@ async function queryGoogleDirect(
 
 const XAI_MODEL_MAP: Record<string, string> = {
   "grok-4.1": "grok-4.1",
-  "grok-4.1-pro": "grok-4.2",
+  "grok-4.1-mini": "grok-4.1-mini",
 };
 
 async function queryXAIDirect(
@@ -601,14 +726,14 @@ async function queryCerebrasDirect(
 }
 
 const OPENROUTER_MODEL_MAP: Record<string, string> = {
-  "gpt-5": "openai/gpt-5.2",
+  "gpt-5": "openai/gpt-5",
   "gpt-5.2-pro": "openai/gpt-5.2-pro",
   "claude-sonnet-4.5": "anthropic/claude-sonnet-4.5",
   "claude-opus-4.5": "anthropic/claude-opus-4.5",
   "gemini-3-flash": "google/gemini-3-flash",
   "gemini-3-pro": "google/gemini-3-pro",
-  "grok-4.1": "x-ai/grok-4.1",
-  "grok-4.1-pro": "x-ai/grok-4.1-pro",
+  "grok-4.1": "x-ai/grok-4.1-fast",
+  "grok-4.1-mini": "x-ai/grok-4-fast",
   "sonar-pro": "perplexity/sonar-pro",
 };
 
@@ -757,6 +882,8 @@ export async function queryModel(
 
 function getDirectQueryFunction(provider: string) {
   switch (provider) {
+    case "openai":
+      return OPENAI_API_KEY ? queryOpenAIDirect : null;
     case "anthropic":
       return ANTHROPIC_API_KEY ? queryAnthropicDirect : null;
     case "google":

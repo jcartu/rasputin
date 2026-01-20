@@ -583,6 +583,8 @@ async function handleQuery(
 
   // Track model content for streaming
   const modelContents = new Map<string, string>();
+  // Track last emitted status to avoid spam
+  const lastModelStatus = new Map<string, string>();
 
   if (mode === "consensus") {
     const result = await generateConsensus({
@@ -593,7 +595,9 @@ async function handleQuery(
       onModelUpdate: (modelId, update) => {
         if (activeQueries.get(queryKey)?.cancelled) return;
 
-        if (update.status) {
+        // Only emit status when it changes (prevents log spam)
+        if (update.status && update.status !== lastModelStatus.get(modelId)) {
+          lastModelStatus.set(modelId, update.status);
           socket.emit("model:status", {
             modelId,
             status: update.status,
@@ -682,7 +686,8 @@ async function handleQuery(
       onModelUpdate: (modelId, update) => {
         if (activeQueries.get(queryKey)?.cancelled) return;
 
-        if (update.status) {
+        if (update.status && update.status !== lastModelStatus.get(modelId)) {
+          lastModelStatus.set(modelId, update.status);
           socket.emit("model:status", {
             modelId,
             status: update.status,

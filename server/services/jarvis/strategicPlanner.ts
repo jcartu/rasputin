@@ -35,6 +35,11 @@ const COMPLEXITY_INDICATORS = {
     /\b(create|build|implement|develop)\s+.*(app|application|system|service)/i,
     /\b(multiple|several|various|all)\b.*\b(files|endpoints|components)/i,
     /\b(integrate|connect|sync)\b.*\b(with|to)\b/i,
+    // Scaffold/portal tasks are inherently complex (generate 60+ files)
+    /\b(scaffold|scaffolding)\b/i,
+    /\b(portal|business.?portal|trade.?portal|bilateral)\b/i,
+    /\bbuild_bilateral_portal/i,
+    /\bscaffold_business_portal\b/i,
   ],
 };
 

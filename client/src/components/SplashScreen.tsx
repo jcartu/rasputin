@@ -1,237 +1,195 @@
-import { useEffect, useState, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Terminal, Cpu, Zap, Shield, Database } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { playSound } from '@/lib/sound';
 
-interface SplashScreenProps {
-  onComplete?: () => void;
-  duration?: number;
-}
+export default function SplashScreen({ onComplete }: { onComplete: () => void }) {
+  const [step, setStep] = useState<'bios' | 'glitch' | 'logo' | 'complete'>('bios');
+  const [lines, setLines] = useState<string[]>([]);
 
-const BOOT_LOGS = [
-  "INITIALIZING KERNEL v0.3...",
-  "LOADING NEURAL ENGINE...",
-  "BYPASSING SECURITY PROTOCOLS...",
-  "ESTABLISHING UPLINK...",
-  "SYNCHRONIZING DATABASES...",
-  "OPTIMIZING CORE THREADS...",
-  "SYSTEM CHECK: PASSED.",
-  "RASPUTIN OS READY.",
-];
-
-export default function SplashScreen({
-  onComplete,
-  duration = 5000,
-}: SplashScreenProps) {
-  const [bootStep, setBootStep] = useState(0);
-  const [showMain, setShowMain] = useState(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
-
-  // Sound Synthesis Logic
-  const playBootSound = () => {
-    try {
-      const AudioContext =
-        window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) return;
-
-      const ctx = new AudioContext();
-      audioContextRef.current = ctx;
-      const now = ctx.currentTime;
-
-      const masterGain = ctx.createGain();
-      masterGain.connect(ctx.destination);
-      masterGain.gain.setValueAtTime(0.4, now);
-
-      // 1. Cinematic Bass Swell
-      const oscBass = ctx.createOscillator();
-      const gainBass = ctx.createGain();
-      oscBass.type = "sawtooth";
-      oscBass.frequency.setValueAtTime(50, now);
-      oscBass.frequency.exponentialRampToValueAtTime(35, now + 3);
-
-      gainBass.gain.setValueAtTime(0, now);
-      gainBass.gain.linearRampToValueAtTime(0.6, now + 1);
-      gainBass.gain.exponentialRampToValueAtTime(0.001, now + 4);
-
-      const filterBass = ctx.createBiquadFilter();
-      filterBass.type = "lowpass";
-      filterBass.frequency.setValueAtTime(100, now);
-      filterBass.frequency.linearRampToValueAtTime(300, now + 2);
-
-      oscBass.connect(filterBass);
-      filterBass.connect(gainBass);
-      gainBass.connect(masterGain);
-      oscBass.start(now);
-      oscBass.stop(now + 4.5);
-
-      // 2. High-Tech Computer Data/Arp
-      const oscData = ctx.createOscillator();
-      const gainData = ctx.createGain();
-      oscData.type = "square";
-      gainData.gain.setValueAtTime(0, now);
-
-      const bleepCount = 12;
-      for (let i = 0; i < bleepCount; i++) {
-        const time = now + 0.5 + i * 0.15;
-        oscData.frequency.setValueAtTime(800 + Math.random() * 1000, time);
-        gainData.gain.setValueAtTime(0.05, time);
-        gainData.gain.setValueAtTime(0, time + 0.05);
-      }
-
-      oscData.connect(gainData);
-      gainData.connect(masterGain);
-      oscData.start(now);
-      oscData.stop(now + 3);
-
-      // 3. Futuristic Power Up Sweep
-      const oscSweep = ctx.createOscillator();
-      const gainSweep = ctx.createGain();
-      oscSweep.type = "sine";
-      oscSweep.frequency.setValueAtTime(200, now + 2);
-      oscSweep.frequency.exponentialRampToValueAtTime(2000, now + 3.5);
-
-      gainSweep.gain.setValueAtTime(0, now + 2);
-      gainSweep.gain.linearRampToValueAtTime(0.2, now + 3);
-      gainSweep.gain.linearRampToValueAtTime(0, now + 4);
-
-      oscSweep.connect(gainSweep);
-      gainSweep.connect(masterGain);
-      oscSweep.start(now);
-      oscSweep.stop(now + 4.5);
-    } catch (e) {
-      console.error("Audio play failed", e);
-    }
-  };
-
+  // BIOS Sequence
   useEffect(() => {
-    playBootSound();
+    const bootLines = [
+      "BIOS DATE 01/18/26 14:22:55 VER 3.0.0",
+      "CPU: NEURAL QUANTUM CORE i9-14900K @ 6.2GHz",
+      "RAM: 96GB DDR5 8000MHz [OK]",
+      "GPU: NVIDIA H100 NVL [LINK ESTABLISHED]",
+      "DETECTING NEURAL INTERFACES...",
+      "> GPT-5.2 PRO [CONNECTED]",
+      "> CLAUDE OPUS 4.5 [CONNECTED]",
+      "> GEMINI 3.0 PRO [CONNECTED]",
+      "LOADING KERNEL MODULES...",
+      "MOUNTING VIRTUAL FILE SYSTEM...",
+      "INITIALIZING SWARM PROTOCOLS...",
+      "SYSTEM CHECK: PASSED",
+      "BOOTING RASPUTIN OS..."
+    ];
 
-    let step = 0;
+    let lineIndex = 0;
     const interval = setInterval(() => {
-      if (step < BOOT_LOGS.length - 1) {
-        setBootStep(prev => prev + 1);
-        step++;
+      if (lineIndex < bootLines.length) {
+        setLines(prev => [...prev, bootLines[lineIndex]]);
+        playSound('type');
+        lineIndex++;
       } else {
         clearInterval(interval);
-        setTimeout(() => setShowMain(true), 800);
+        setTimeout(() => setStep('glitch'), 500);
       }
-    }, 250);
+    }, 150);
 
-    const totalTimer = setTimeout(() => {
-      onComplete?.();
-    }, duration);
+    return () => clearInterval(interval);
+  }, []);
 
-    return () => {
-      clearInterval(interval);
-      clearTimeout(totalTimer);
-      if (
-        audioContextRef.current &&
-        audioContextRef.current.state !== "closed"
-      ) {
-        audioContextRef.current.close();
-      }
-    };
-  }, [duration, onComplete]);
+  // Glitch & Logo Sequence
+  useEffect(() => {
+    if (step === 'glitch') {
+      playSound('scan');
+      setTimeout(() => setStep('logo'), 1500);
+    }
+    if (step === 'logo') {
+      playSound('success');
+      setTimeout(() => {
+        setStep('complete');
+        setTimeout(onComplete, 1000); // Fade out time
+      }, 3000);
+    }
+  }, [step, onComplete]);
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-[#050505] flex flex-col items-center justify-center overflow-hidden font-mono text-white select-none cursor-wait">
-      <div className="absolute inset-0 pointer-events-none opacity-20">
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: `
-               linear-gradient(to right, rgba(0, 255, 170, 0.05) 1px, transparent 1px),
-               linear-gradient(to bottom, rgba(0, 255, 170, 0.05) 1px, transparent 1px)
-             `,
-            backgroundSize: "60px 60px",
-            maskImage:
-              "radial-gradient(circle at center, black 30%, transparent 80%)",
-          }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-500/5 to-transparent h-[10%] animate-scanline" />
-      </div>
+    <AnimatePresence>
+      {step !== 'complete' && (
+        <motion.div
+          className="fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center overflow-hidden font-mono"
+          exit={{ opacity: 0, filter: 'blur(20px)' }}
+          transition={{ duration: 1 }}
+        >
+          {/* BIOS Mode */}
+          {step === 'bios' && (
+            <div className="w-full max-w-3xl p-8 text-cyan-500 text-sm md:text-base">
+              <div className="mb-4 flex items-center gap-2 text-cyan-300 border-b border-cyan-900/50 pb-2">
+                <Terminal className="w-5 h-5" />
+                <span>RASPUTIN_BOOT_LOADER_v3.0</span>
+              </div>
+              <div className="space-y-1">
+                {lines.map((line, i) => (
+                  <motion.div 
+                    key={i}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="flex gap-2"
+                  >
+                    <span className="text-cyan-700">[{new Date().toLocaleTimeString()}]</span>
+                    <span>{line}</span>
+                  </motion.div>
+                ))}
+                <motion.div 
+                  animate={{ opacity: [0, 1, 0] }}
+                  transition={{ repeat: Infinity, duration: 0.8 }}
+                  className="w-3 h-5 bg-cyan-500 inline-block ml-1"
+                />
+              </div>
+            </div>
+          )}
 
-      <AnimatePresence mode="wait">
-        {!showMain ? (
-          <motion.div
-            key="boot-sequence"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0, filter: "blur(10px)", scale: 0.95 }}
-            className="z-10 w-full max-w-lg p-8 font-mono text-sm tracking-wider"
-          >
-            {BOOT_LOGS.slice(0, bootStep + 1).map((log, i) => (
+          {/* Glitch Mode */}
+          {step === 'glitch' && (
+            <div className="relative w-full h-full flex items-center justify-center">
+              {/* Random Glitch Rectangles */}
+              {[...Array(20)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  className="absolute bg-cyan-500/20"
+                  initial={{ 
+                    left: `${Math.random() * 100}%`, 
+                    top: `${Math.random() * 100}%`,
+                    width: Math.random() * 200,
+                    height: Math.random() * 50,
+                    opacity: 0
+                  }}
+                  animate={{ 
+                    opacity: [0, 1, 0],
+                    x: [0, (Math.random() - 0.5) * 100],
+                    scaleX: [1, 5, 1]
+                  }}
+                  transition={{ duration: 0.2, delay: Math.random() * 1 }}
+                />
+              ))}
+              
               <motion.div
-                key={i}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                className={`${
-                  i === BOOT_LOGS.length - 1
-                    ? "text-emerald-400 font-bold"
-                    : "text-emerald-600/80"
-                } mb-1 flex items-center gap-3`}
+                className="text-6xl md:text-9xl font-black text-cyan-500 tracking-tighter"
+                animate={{ 
+                  x: [-5, 5, -5, 0],
+                  skewX: [-20, 20, -10, 0],
+                  opacity: [0.5, 1, 0.5, 1]
+                }}
+                transition={{ duration: 0.2, repeat: 5 }}
               >
-                <span className="text-[10px] opacity-50">
-                  {`00${i + 1}`.slice(-2)}
-                </span>
-                <span>{log}</span>
+                SYSTEM BREACH
               </motion.div>
-            ))}
-          </motion.div>
-        ) : (
-          <motion.div
-            key="main-logo"
-            initial={{ scale: 0.8, opacity: 0, filter: "blur(20px)" }}
-            animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }}
-            exit={{ scale: 1.1, opacity: 0 }}
-            transition={{ type: "spring", damping: 15, stiffness: 50 }}
-            className="z-20 flex flex-col items-center relative"
-          >
-            <div className="absolute -inset-20 bg-emerald-500/20 blur-[100px] rounded-full animate-pulse" />
+            </div>
+          )}
 
-            <div className="relative flex flex-col items-center">
-              <motion.h1
-                className="text-5xl md:text-7xl font-black tracking-tighter text-white mb-2"
-                style={{ textShadow: "0 0 30px rgba(16, 185, 129, 0.6)" }}
+          {/* Logo Mode */}
+          {step === 'logo' && (
+            <motion.div 
+              className="flex flex-col items-center"
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.5, type: 'spring' }}
+            >
+              <div className="relative mb-8">
+                <motion.div
+                  className="absolute inset-0 bg-cyan-500 blur-[100px] opacity-20"
+                  animate={{ opacity: [0.2, 0.4, 0.2] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                />
+                <Cpu className="w-32 h-32 text-cyan-400" />
+              </div>
+
+              <motion.h1 
+                className="text-5xl md:text-7xl font-black text-white tracking-[0.2em] mb-4 text-center"
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.2 }}
               >
-                RASPUTIN
-                <span className="text-emerald-500 ml-2">OS</span>
+                RASPUTIN <span className="text-cyan-500">OS</span>
               </motion.h1>
 
-              <motion.div
-                initial={{ width: 0, opacity: 0 }}
-                animate={{ width: "100%", opacity: 1 }}
-                transition={{ delay: 0.5, duration: 0.8 }}
-                className="h-px bg-gradient-to-r from-transparent via-emerald-500 to-transparent w-full my-4"
-              />
-
-              <motion.div
-                initial={{ y: 10, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.8 }}
-                className="flex items-center gap-3"
-              >
-                <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 rounded text-emerald-400 text-xs font-bold tracking-widest">
-                  v0.3
-                </span>
-                <span className="text-neutral-500 text-xs tracking-[0.2em] uppercase">
-                  System Online
-                </span>
-              </motion.div>
-
-              <motion.p
+              <motion.div 
+                className="flex items-center gap-4 text-cyan-600 font-mono tracking-widest text-sm md:text-lg"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 1.5, duration: 1 }}
-                className="absolute -bottom-24 text-neutral-600 text-[10px] tracking-[0.4em] font-medium uppercase"
+                transition={{ delay: 0.5 }}
               >
-                A Josh Cartu Project
-              </motion.p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                <span className="w-12 h-[1px] bg-cyan-800" />
+                v0.3.0 // A HOUSE CARTU PROJECT
+                <span className="w-12 h-[1px] bg-cyan-800" />
+              </motion.div>
 
-      <div className="absolute inset-0 pointer-events-none z-50 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%),linear-gradient(90deg,rgba(255,0,0,0.03),rgba(0,255,0,0.01),rgba(0,0,255,0.03))] bg-[length:100%_4px,3px_100%] bg-repeat" />
-      <div className="absolute inset-0 pointer-events-none z-[51] shadow-[inset_0_0_100px_rgba(0,0,0,0.7)]" />
-    </div>
+              <motion.div
+                className="mt-12 flex gap-8 text-cyan-800"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1 }}
+              >
+                <div className="flex flex-col items-center gap-2">
+                  <Zap className="w-6 h-6" />
+                  <span className="text-[10px] tracking-widest">HYBRID CORE</span>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                  <Shield className="w-6 h-6" />
+                  <span className="text-[10px] tracking-widest">SECURE</span>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                  <Database className="w-6 h-6" />
+                  <span className="text-[10px] tracking-widest">QUANTUM MEMORY</span>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

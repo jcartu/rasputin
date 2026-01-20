@@ -83,7 +83,7 @@ const MODEL_NAMES: Record<string, string> = {
   "gemini-3-flash": "Gemini 3 Flash",
   "gemini-3-pro": "Gemini 3 Pro",
   "grok-4.1": "Grok 4.1",
-  "grok-4.1-pro": "Grok 4.1 Pro",
+  "grok-4.1-mini": "Grok 4.1 Mini",
   "sonar-pro": "Sonar Pro",
   "cerebras-llama-70b": "Cerebras Llama 70B",
   "cerebras-qwen-32b": "Cerebras Qwen 32B",

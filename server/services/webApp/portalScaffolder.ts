@@ -5,7 +5,13 @@ import {
   PortalScaffoldConfigSchema,
   Locale,
   CountryCode,
+  CountryPair,
   COUNTRY_INFO,
+  getAgreementsForPair,
+  getVisaInfoForPair,
+  getEntityTypesForPair,
+  getOrganizationsForPair,
+  getEventsForPair,
 } from "./portalConfig";
 
 export interface ScaffoldResult {
@@ -623,7 +629,7 @@ export async function scaffoldBusinessPortal(
       writeFile(
         projectPath,
         "src/features/laws/LawsContent.tsx",
-        generateLawsContent(),
+        generateLawsContent(countryPair),
         filesCreated
       );
       writeFile(
@@ -644,7 +650,7 @@ export async function scaffoldBusinessPortal(
       writeFile(
         projectPath,
         "src/features/calendar/EventList.tsx",
-        generateEventList(),
+        generateEventList(countryPair),
         filesCreated
       );
       writeFile(
@@ -665,7 +671,7 @@ export async function scaffoldBusinessPortal(
       writeFile(
         projectPath,
         "src/features/organizations/OrgDirectory.tsx",
-        generateOrgDirectory(),
+        generateOrgDirectory(countryPair),
         filesCreated
       );
     }
@@ -2787,7 +2793,28 @@ export default function LawsPage() {
 `;
 }
 
-function generateLawsContent(): string {
+function generateLawsContent(countryPair: CountryPair): string {
+  const { countryA, countryB } = countryPair;
+  const countryAInfo = COUNTRY_INFO[countryA];
+  const countryBInfo = COUNTRY_INFO[countryB];
+  const countryAName = countryAInfo?.name || countryA;
+  const countryBName = countryBInfo?.name || countryB;
+
+  // Get country-specific data
+  const agreements = getAgreementsForPair(countryA, countryB);
+  const visaData = getVisaInfoForPair(countryA, countryB);
+  const entityData = getEntityTypesForPair(countryA, countryB);
+
+  // Combine visa info from both countries
+  const visaInfo = [...visaData.countryA, ...visaData.countryB];
+  // Combine entity types from both countries
+  const entityTypes = [...entityData.countryA, ...entityData.countryB];
+
+  // Serialize data for embedding in generated code
+  const agreementsJson = JSON.stringify(agreements, null, 2);
+  const visaInfoJson = JSON.stringify(visaInfo, null, 2);
+  const entityTypesJson = JSON.stringify(entityTypes, null, 2);
+
   return `"use client";
 
 import { useState } from 'react';
@@ -2795,142 +2822,14 @@ import { useTranslations } from 'next-intl';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Scale, FileText, Stamp, Building, ExternalLink, ChevronDown, ChevronUp, Calendar, Shield, Briefcase } from 'lucide-react';
 
-// Real China-Russia bilateral agreements and legal frameworks
-const agreements = [
-  {
-    id: '1',
-    title: 'Treaty of Good-Neighborliness and Friendly Cooperation',
-    titleLocal: '中俄睦邻友好合作条约',
-    date: '2001-07-16',
-    category: 'agreements',
-    description: 'Foundation treaty establishing strategic partnership, mutual respect for sovereignty, and commitment to peaceful resolution of disputes. Renewed for 5 years in 2021.',
-    url: 'http://www.npc.gov.cn/wxzl/gongbao/2001-08/27/content_5277986.htm',
-  },
-  {
-    id: '2',
-    title: 'Joint Statement on New Era Comprehensive Strategic Partnership',
-    titleLocal: '新时代全面战略协作伙伴关系联合声明',
-    date: '2023-03-21',
-    category: 'agreements',
-    description: 'Upgraded bilateral relations to "new era comprehensive strategic partnership of coordination." Covers political, economic, security, and humanitarian cooperation.',
-    url: 'http://kremlin.ru/supplement/5920',
-  },
-  {
-    id: '3',
-    title: 'Agreement on Avoidance of Double Taxation',
-    titleLocal: '中俄避免双重征税协定',
-    date: '2014-10-13',
-    category: 'agreements',
-    description: 'Tax treaty covering income and capital, with withholding tax rates of 5-10% on dividends, 0% on interest, and 6% on royalties.',
-    url: 'https://www.chinatax.gov.cn/n810341/n810770/index.html',
-  },
-  {
-    id: '4',
-    title: 'Bilateral Investment Treaty (BIT)',
-    titleLocal: '中俄双边投资保护协定',
-    date: '2006-11-09',
-    category: 'agreements',
-    description: 'Provides legal protection for investors, including fair treatment, protection against expropriation, and free transfer of capital.',
-    url: 'https://investmentpolicy.unctad.org/international-investment-agreements/treaties/bilateral-investment-treaties/1010/china---russian-federation-bit-2006-',
-  },
-  {
-    id: '5',
-    title: 'Agreement on Customs Cooperation and Mutual Assistance',
-    titleLocal: '中俄海关合作与互助协定',
-    date: '2018-06-08',
-    category: 'agreements',
-    description: 'Streamlines customs procedures, enables data sharing, and establishes joint risk management for cross-border trade facilitation.',
-    url: 'http://www.customs.gov.cn/',
-  },
-  {
-    id: '6',
-    title: 'E-Commerce Cooperation Agreement',
-    titleLocal: '中俄电子商务合作协议',
-    date: '2019-06-05',
-    category: 'agreements',
-    description: 'Framework for cross-border e-commerce development, digital payments integration, and consumer protection standards.',
-    url: 'http://www.mofcom.gov.cn/',
-  },
-];
+// Bilateral agreements for ${countryAName}-${countryBName}
+const agreements = ${agreementsJson};
 
-const visaInfo = [
-  {
-    id: 'v1',
-    title: 'Business Visa (M Visa - China)',
-    category: 'visas',
-    description: 'For business activities, trade fairs, and investment. Valid 30-90 days, single/multiple entry. Requires invitation letter from Chinese company.',
-    requirements: ['Valid passport (6+ months)', 'Invitation letter', 'Company registration', 'Photo 33x48mm'],
-  },
-  {
-    id: 'v2',
-    title: 'Business Visa (Russia)',
-    category: 'visas',
-    description: 'Single/double/multiple entry for business purposes. Requires visa support letter from Russian organization.',
-    requirements: ['Valid passport (6+ months)', 'Visa invitation', 'Migration card', 'Photo 35x45mm'],
-  },
-  {
-    id: 'v3',
-    title: 'Work Visa (Z Visa - China)',
-    category: 'visas',
-    description: 'Required for employment. Must obtain work permit before visa application. Converts to residence permit after arrival.',
-    requirements: ['Work permit notification', 'Health certificate', 'Degree authentication', 'Background check'],
-  },
-  {
-    id: 'v4',
-    title: 'Highly Qualified Specialist (HQS - Russia)',
-    category: 'visas',
-    description: 'Simplified work permit for specialists with salary above threshold. 3-year validity with expedited processing.',
-    requirements: ['Employment contract', 'Salary above 167,000 RUB/month', 'Employer petition', 'No quota required'],
-  },
-];
+// Visa information for ${countryAName} and ${countryBName}
+const visaInfo = ${visaInfoJson};
 
-const entityTypes = [
-  {
-    id: 'e1',
-    title: 'Wholly Foreign-Owned Enterprise (WFOE) - China',
-    titleLocal: '外商独资企业',
-    category: 'entities',
-    description: '100% foreign ownership. Most common for manufacturing and trading. Requires registered capital (industry-dependent) and business scope approval.',
-    timeline: '2-3 months',
-    minCapital: 'Industry dependent',
-  },
-  {
-    id: 'e2',
-    title: 'Representative Office - China',
-    titleLocal: '代表处',
-    category: 'entities',
-    description: 'Liaison office for market research and coordination. Cannot engage in direct business activities or generate revenue in China.',
-    timeline: '1-2 months',
-    minCapital: 'None required',
-  },
-  {
-    id: 'e3',
-    title: 'Limited Liability Company (OOO) - Russia',
-    titleLocal: 'ООО (Общество с ограниченной ответственностью)',
-    category: 'entities',
-    description: 'Most common entity type. Minimum 10,000 RUB capital. Liability limited to contribution. Simple registration process.',
-    timeline: '3-5 business days',
-    minCapital: '10,000 RUB',
-  },
-  {
-    id: 'e4',
-    title: 'Joint Stock Company (AO) - Russia',
-    titleLocal: 'АО (Акционерное общество)',
-    category: 'entities',
-    description: 'For larger enterprises. Public (PAO) or private (NAO). Can issue shares. Stricter reporting requirements.',
-    timeline: '2-4 weeks',
-    minCapital: '100,000 RUB (PAO: 100M RUB)',
-  },
-  {
-    id: 'e5',
-    title: 'Special Economic Zone Entity',
-    titleLocal: '经济特区企业',
-    category: 'entities',
-    description: 'Preferential tax rates (0-15%), simplified customs, and regulatory benefits. Available in designated zones in both countries.',
-    timeline: 'Varies by zone',
-    minCapital: 'Zone-specific requirements',
-  },
-];
+// Business entity types in ${countryAName} and ${countryBName}
+const entityTypes = ${entityTypesJson};
 
 const sections = [
   { key: 'agreements', icon: FileText, color: 'from-blue-500 to-blue-600', data: agreements },
@@ -2965,7 +2864,7 @@ export function LawsContent() {
         </div>
         <h1 className="text-4xl font-bold text-white mb-4">{t('title')}</h1>
         <p className="text-slate-400 max-w-2xl mx-auto">
-          Comprehensive guide to bilateral agreements, visa requirements, and business entity formation for China-Russia trade.
+          Comprehensive guide to bilateral agreements, visa requirements, and business entity formation for ${countryAName}-${countryBName} trade.
         </p>
       </motion.div>
 
@@ -3176,7 +3075,11 @@ export default function CalendarPage() {
 `;
 }
 
-function generateEventList(): string {
+function generateEventList(countryPair: CountryPair): string {
+  const { countryA, countryB } = countryPair;
+  const events = getEventsForPair(countryA, countryB);
+  const eventsJson = JSON.stringify(events, null, 2);
+
   return `"use client";
 
 import { useState, useEffect } from 'react';
@@ -3185,128 +3088,7 @@ import { motion } from 'framer-motion';
 import { Calendar, MapPin, ExternalLink, Clock, CheckCircle } from 'lucide-react';
 import { EventCard } from './EventCard';
 
-const allEvents = [
-  {
-    id: '1',
-    title: 'Canton Fair (Spring Session)',
-    date: '2026-04-15',
-    endDate: '2026-05-05',
-    location: 'Guangzhou, China',
-    description: 'China Import and Export Fair - the largest trade fair in China with over 25,000 exhibitors. Three phases covering electronics, machinery, textiles, and consumer goods.',
-    url: 'https://www.cantonfair.org.cn',
-    country: 'CN',
-  },
-  {
-    id: '2',
-    title: 'Boao Forum for Asia 2026',
-    date: '2026-03-26',
-    endDate: '2026-03-29',
-    location: 'Hainan, China',
-    description: 'Asia\\'s Davos - premier forum for Asian economic integration. Russia participates at ministerial level. Focus on BRI cooperation and regional economic partnership.',
-    url: 'https://www.boaoforum.org',
-    country: 'CN',
-  },
-  {
-    id: '3',
-    title: 'St. Petersburg International Economic Forum (SPIEF)',
-    date: '2026-06-17',
-    endDate: '2026-06-20',
-    location: 'Saint Petersburg, Russia',
-    description: 'Premier annual Russian business forum since 1997. Key platform for discussing global economic issues and attracting foreign investment. 15,000+ participants from 130+ countries.',
-    url: 'https://forumspb.com',
-    country: 'RU',
-  },
-  {
-    id: '4',
-    title: 'China-Russia Expo 2026',
-    date: '2026-06-15',
-    endDate: '2026-06-19',
-    location: 'Harbin, China',
-    description: 'Dedicated bilateral trade expo alternating between China (Harbin) and Russia (Ekaterinburg). Direct B2B platform for cross-border trade and investment partnerships.',
-    url: 'https://www.russiachinaexpo.com',
-    country: 'CN',
-  },
-  {
-    id: '5',
-    title: 'INNOPROM Industrial Trade Fair',
-    date: '2026-07-06',
-    endDate: '2026-07-09',
-    location: 'Ekaterinburg, Russia',
-    description: 'Russia\\'s main industrial exhibition showcasing manufacturing, robotics, and Industry 4.0 technologies. Annual partner country format - China has participated multiple times.',
-    url: 'https://innoprom.com',
-    country: 'RU',
-  },
-  {
-    id: '6',
-    title: 'China International Fair for Trade in Services (CIFTIS)',
-    date: '2026-09-02',
-    endDate: '2026-09-06',
-    location: 'Beijing, China',
-    description: 'Global trade fair focused on service industries including finance, technology, healthcare, and tourism. Key platform for service trade between China and BRI countries.',
-    url: 'https://www.ciftis.org',
-    country: 'CN',
-  },
-  {
-    id: '7',
-    title: 'Eastern Economic Forum (EEF)',
-    date: '2026-09-09',
-    endDate: '2026-09-12',
-    location: 'Vladivostok, Russia',
-    description: 'Annual forum promoting development of Russian Far East and strengthening Asia-Pacific cooperation. Gateway for China-Russia investment projects in energy, infrastructure, and logistics.',
-    url: 'https://forumvostok.ru',
-    country: 'RU',
-  },
-  {
-    id: '8',
-    title: 'Canton Fair (Autumn Session)',
-    date: '2026-10-15',
-    endDate: '2026-11-04',
-    location: 'Guangzhou, China',
-    description: 'Fall edition of China Import and Export Fair. Strong Russian buyer participation with dedicated Russia-China trade zones and matchmaking events.',
-    url: 'https://www.cantonfair.org.cn',
-    country: 'CN',
-  },
-  {
-    id: '9',
-    title: 'Russian Energy Week',
-    date: '2026-10-20',
-    endDate: '2026-10-23',
-    location: 'Moscow, Russia',
-    description: 'International forum for energy cooperation. Key discussions on Power of Siberia pipeline, LNG projects, and nuclear energy cooperation with China.',
-    url: 'https://rusenergyweek.com',
-    country: 'RU',
-  },
-  {
-    id: '10',
-    title: 'China International Import Expo (CIIE)',
-    date: '2026-11-05',
-    endDate: '2026-11-10',
-    location: 'Shanghai, China',
-    description: 'World\\'s first import-themed national expo. Platform for foreign companies to access Chinese market. Russia is a key partner country with prominent national pavilion.',
-    url: 'https://www.ciie.org',
-    country: 'CN',
-  },
-  {
-    id: '11',
-    title: 'Boao Forum for Asia 2027',
-    date: '2027-03-25',
-    endDate: '2027-03-28',
-    location: 'Hainan, China',
-    description: 'Asia\\'s premier forum for economic integration. Russia participates at ministerial level with focus on BRI and SCO economic cooperation.',
-    url: 'https://www.boaoforum.org',
-    country: 'CN',
-  },
-  {
-    id: '12',
-    title: 'Canton Fair (Spring Session) 2027',
-    date: '2027-04-15',
-    endDate: '2027-05-05',
-    location: 'Guangzhou, China',
-    description: 'China Import and Export Fair - world\\'s largest trade fair. Premier platform for Russia-China business matching.',
-    url: 'https://www.cantonfair.org.cn',
-    country: 'CN',
-  },
-];
+const allEvents = ${eventsJson};
 
 export function EventList() {
   const t = useTranslations('calendar');
@@ -3510,7 +3292,12 @@ export default function OrganizationsPage() {
 `;
 }
 
-function generateOrgDirectory(): string {
+function generateOrgDirectory(countryPair: CountryPair): string {
+  const { countryA, countryB } = countryPair;
+  const orgData = getOrganizationsForPair(countryA, countryB);
+  const orgsAJson = JSON.stringify(orgData.countryA, null, 2);
+  const orgsBJson = JSON.stringify(orgData.countryB, null, 2);
+
   return `"use client";
 
 import { useTranslations } from 'next-intl';
@@ -3520,24 +3307,9 @@ import { Building2, Globe, Phone, Mail, ExternalLink } from 'lucide-react';
 import { getTargetCountry } from '@/lib/i18n/config';
 import type { Locale } from '@/lib/i18n/config';
 
-const mockOrgs = {
-  CN: [
-    { id: '1', name: 'Ministry of Commerce (MOFCOM)', nameLocal: '商务部', level: 'national', website: 'http://www.mofcom.gov.cn', description: 'Central government ministry formulating trade policies, managing foreign investment, and overseeing international economic cooperation. Key contact for market access and trade disputes.' },
-    { id: '2', name: 'China Council for Promotion of International Trade (CCPIT)', nameLocal: '中国国际贸易促进委员会', level: 'national', website: 'http://www.ccpit.org', description: 'China\\'s largest trade promotion organization. Issues certificates of origin, organizes trade delegations, and provides arbitration services through CIETAC.' },
-    { id: '3', name: 'China Chamber of International Commerce (CCOIC)', nameLocal: '中国国际商会', level: 'national', website: 'http://www.ccoic.cn', description: 'National business organization representing Chinese enterprises in international trade. Provides business matchmaking and legal consulting services.' },
-    { id: '4', name: 'China-Russia Chamber of Commerce', nameLocal: '中国俄罗斯商会', level: 'national', website: 'http://www.crcc.org.cn', description: 'Specialized chamber for China-Russia bilateral trade. Organizes business forums, trade missions, and provides market entry consulting.' },
-    { id: '5', name: 'Shanghai Municipal Commission of Commerce', nameLocal: '上海市商务委员会', level: 'regional', website: 'http://sww.sh.gov.cn', description: 'Shanghai\\'s trade authority managing free trade zone, foreign investment projects, and hosting major expos including CIIE.' },
-    { id: '6', name: 'Heilongjiang Department of Commerce', nameLocal: '黑龙江省商务厅', level: 'regional', website: 'http://swt.hlj.gov.cn', description: 'Key border province for Russia trade. Manages cross-border e-commerce zones and logistics hubs in Suifenhe and Heihe.' },
-  ],
-  RU: [
-    { id: '1', name: 'Ministry of Economic Development', nameLocal: 'Минэкономразвития России', level: 'national', website: 'https://economy.gov.ru', description: 'Federal ministry for economic strategy, investment climate, and special economic zones. Coordinates bilateral investment treaties and SEZ development.' },
-    { id: '2', name: 'Russian Export Center (REC)', nameLocal: 'Российский экспортный центр', level: 'national', website: 'https://exportcenter.ru', description: 'State institution providing export financing, insurance, and support services. Key partner for Russian companies entering Chinese market.' },
-    { id: '3', name: 'Russian Direct Investment Fund (RDIF)', nameLocal: 'РФПИ', level: 'national', website: 'https://rdif.ru', description: 'Russia\\'s sovereign wealth fund co-investing with foreign partners. Active in China-Russia infrastructure and technology projects.' },
-    { id: '4', name: 'Russian-Chinese Business Council', nameLocal: 'Российско-Китайский Деловой Совет', level: 'national', website: 'https://www.rcbc.ru', description: 'Premier bilateral business organization. Co-chaired by major corporations, organizes annual business forums and investment roadshows.' },
-    { id: '5', name: 'Chamber of Commerce and Industry of Russia', nameLocal: 'ТПП России', level: 'national', website: 'https://tpprf.ru', description: 'Federal chamber with 180+ regional branches. Provides export certificates, arbitration, and business verification services.' },
-    { id: '6', name: 'Far East Development Corporation (ERDC)', nameLocal: 'КРДВ', level: 'regional', website: 'https://erdc.ru', description: 'Manages Advanced Special Economic Zones and Free Port of Vladivostok. Gateway for Chinese investment in Russian Far East.' },
-    { id: '7', name: 'Primorsky Krai Investment Agency', nameLocal: 'Агентство по привлечению инвестиций', level: 'regional', website: 'https://invest.primorsky.ru', description: 'Regional investment promotion for Primorsky Krai. Key logistics hub connecting Trans-Siberian Railway to Chinese border.' },
-  ],
+const orgsByCountry: Record<string, Array<{ id: string; name: string; nameLocal?: string; level: string; website: string; description: string }>> = {
+  ${countryA}: ${orgsAJson},
+  ${countryB}: ${orgsBJson},
 };
 
 export function OrgDirectory() {
@@ -3545,7 +3317,7 @@ export function OrgDirectory() {
   const params = useParams();
   const locale = params.locale as Locale;
   const targetCountry = getTargetCountry(locale);
-  const orgs = mockOrgs[targetCountry];
+  const orgs = orgsByCountry[targetCountry] || [];
 
   const levels = ['national', 'regional', 'municipal'] as const;
 

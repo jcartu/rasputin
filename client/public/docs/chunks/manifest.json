@@ -1,0 +1,38 @@
+[
+  {
+    "id": 0,
+    "title": "JARVIS ULTIMATE v3 - The MANUS Killer",
+    "filename": "00_jarvis_ultimate_v3___the_manus_killer.md",
+    "url": "/chunks/00_jarvis_ultimate_v3___the_manus_killer.md"
+  },
+  {
+    "id": 1,
+    "title": "JARVIS v3: Ultimate Autonomous AI Operating System",
+    "filename": "01_jarvis_v3__ultimate_autonomous_ai_operating_system.md",
+    "url": "/chunks/01_jarvis_v3__ultimate_autonomous_ai_operating_system.md"
+  },
+  {
+    "id": 2,
+    "title": "1. Executive Summary",
+    "filename": "02_1__executive_summary.md",
+    "url": "/chunks/02_1__executive_summary.md"
+  },
+  {
+    "id": 3,
+    "title": "2. Architecture Overview",
+    "filename": "03_2__architecture_overview.md",
+    "url": "/chunks/03_2__architecture_overview.md"
+  },
+  {
+    "id": 4,
+    "title": "3. Existing Rasputin Integration Map",
+    "filename": "04_3__existing_rasputin_integration_map.md",
+    "url": "/chunks/04_3__existing_rasputin_integration_map.md"
+  },
+  {
+    "id": 5,
+    "title": "4. Desktop Daemon Specification",
+    "filename": "05_4__desktop_daemon_specification.md",
+    "url": "/chunks/05_4__desktop_daemon_specification.md"
+  }
+]

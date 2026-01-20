@@ -11,6 +11,8 @@ import {
   getModelsForTier,
   getSynthesizerModel,
   FRONTIER_MODELS,
+  isSimpleQuery,
+  getFastModelForSimpleQueries,
 } from "../../shared/rasputin";
 import { queryModel, queryModelsInParallel } from "./aiModels";
 import {
@@ -123,9 +125,53 @@ Format your response as follows:
 ## Confidence Assessment
 [Brief assessment of overall confidence in the consensus based on model agreement]`;
 
-// ============================================================================
-// Main Consensus Function
-// ============================================================================
+async function generateFastConsensus(
+  options: ConsensusOptions
+): Promise<ConsensusResult> {
+  const startTime = Date.now();
+  const { query, conversationHistory = [], onModelUpdate } = options;
+
+  const fastModel = getFastModelForSimpleQueries();
+  console.log(`[Consensus:FastPath] Using ${fastModel.name} for simple query`);
+
+  const messages: Array<{
+    role: "system" | "user" | "assistant";
+    content: string;
+  }> = [
+    { role: "system", content: getModelSystemPrompt() },
+    ...conversationHistory.map(m => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    })),
+    { role: "user", content: query },
+  ];
+
+  onModelUpdate?.(fastModel.id, { status: "streaming" });
+
+  const response = await queryModel(fastModel, { messages, stream: true });
+
+  onModelUpdate?.(fastModel.id, {
+    status: "completed",
+    content: response.content,
+    latencyMs: response.latencyMs,
+    inputTokens: response.inputTokens,
+    outputTokens: response.outputTokens,
+    cost: response.cost,
+  });
+
+  const totalLatencyMs = Date.now() - startTime;
+  const totalTokens =
+    (response.inputTokens || 0) + (response.outputTokens || 0);
+
+  return {
+    summary: response.content,
+    agreementPercentage: 100,
+    modelResponses: [response],
+    totalLatencyMs,
+    totalTokens,
+    totalCost: response.cost || 0,
+  };
+}
 
 export async function generateConsensus(
   options: ConsensusOptions
@@ -142,6 +188,13 @@ export async function generateConsensus(
     onSearchStart,
     onSearchComplete,
   } = options;
+
+  if (isSimpleQuery(query) && !(selectedModels && selectedModels.length > 0)) {
+    console.log(
+      `[Consensus:FastPath] Simple query detected, using single model`
+    );
+    return generateFastConsensus(options);
+  }
 
   let models: ModelConfig[];
   if (selectedModels && selectedModels.length > 0) {

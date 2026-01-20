@@ -120,6 +120,13 @@
       "when": 1768732802094,
       "tag": "0016_dusty_mephisto",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1768890083366,
+      "tag": "0017_bright_chamber",
+      "breakpoints": true
     }
   ]
 }

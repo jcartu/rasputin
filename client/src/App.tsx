@@ -1,77 +1,57 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
-import { ThemeProvider } from "./contexts/ThemeContext";
-import { VoiceAnnouncementProvider } from "./contexts/VoiceAnnouncementContext";
+import { ThemeProvider } from "./contexts/JarvisThemeContext";
 import SplashScreen from "./components/SplashScreen";
-import Chat from "./pages/Chat";
-import Login from "./pages/Login";
-import Agent from "./pages/Agent";
-import Infrastructure from "./pages/Infrastructure";
-import MultiAgent from "./pages/MultiAgent";
-import Codebase from "./pages/Codebase";
-import Events from "./pages/Events";
-import Hosts from "./pages/Hosts";
-import Memory from "./pages/Memory";
+import Home from "./pages/jarvis/Home";
+import Research from "./pages/jarvis/Research";
+import Prototype from "./pages/jarvis/Prototype";
+import Architecture from "./pages/jarvis/Architecture";
+import Agents from "./pages/jarvis/Agents";
+import Memory from "./pages/jarvis/Memory";
+import Daemon from "./pages/jarvis/Daemon";
+import Security from "./pages/jarvis/Security";
+import Implementation from "./pages/jarvis/Implementation";
+import Ingestion from "./pages/jarvis/Ingestion";
+import IntegrationGuide from "./pages/jarvis/IntegrationGuide";
+import NotFound from "./pages/jarvis/NotFound";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Chat} />
-      <Route path="/login" component={Login} />
-      <Route path="/chat" component={Chat} />
-      <Route path="/chat/:id" component={Chat} />
-      <Route path="/agent" component={Agent} />
-      <Route path="/infrastructure" component={Infrastructure} />
-      <Route path="/multi-agent" component={MultiAgent} />
-      <Route path="/codebase" component={Codebase} />
-      <Route path="/events" component={Events} />
-      <Route path="/hosts" component={Hosts} />
+      <Route path="/" component={Home} />
+      <Route path="/research" component={Research} />
+      <Route path="/prototype" component={Prototype} />
+      <Route path="/integration" component={IntegrationGuide} />
+      <Route path="/ingestion" component={Ingestion} />
+      <Route path="/architecture" component={Architecture} />
+      <Route path="/daemon" component={Daemon} />
+      <Route path="/agents" component={Agents} />
       <Route path="/memory" component={Memory} />
-      <Route path="/404" component={NotFound} />
+      <Route path="/security" component={Security} />
+      <Route path="/implementation" component={Implementation} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
 function App() {
-  const [showSplash, setShowSplash] = useState(() => {
-    const hasSeenSplash = sessionStorage.getItem("rasputin-splash-seen");
-    return !hasSeenSplash;
-  });
-
-  useEffect(() => {
-    if (!showSplash) {
-      sessionStorage.setItem("rasputin-splash-seen", "true");
-    }
-  }, [showSplash]);
+  const [showSplash, setShowSplash] = useState(true);
 
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="dark">
-        {showSplash && (
-          <SplashScreen
-            onComplete={() => setShowSplash(false)}
-            duration={3500}
-          />
-        )}
+      <ThemeProvider defaultTheme="cyber-blue">
         <TooltipProvider>
-          <VoiceAnnouncementProvider>
-            <Toaster
-              position="top-right"
-              toastOptions={{
-                style: {
-                  background: "oklch(0.16 0.02 260)",
-                  border: "1px solid oklch(0.28 0.02 260)",
-                  color: "oklch(0.95 0.01 260)",
-                },
-              }}
-            />
-            <Router />
-          </VoiceAnnouncementProvider>
+          {showSplash ? (
+            <SplashScreen onComplete={() => setShowSplash(false)} />
+          ) : (
+            <>
+              <Toaster />
+              <Router />
+            </>
+          )}
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

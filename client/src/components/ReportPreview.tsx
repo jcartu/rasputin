@@ -1,9 +1,24 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Streamdown } from "streamdown";
 import { motion, AnimatePresence } from "framer-motion";
 import { ImageIcon, FileText, Download, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+function cleanToolResultsFromContent(content: string): string {
+  // Regex: "Tool Results: [tool_name]: ..." until end of JSON (greedy to closing brace before newline/end)
+  const toolResultPattern =
+    /Tool Results?:\s*\[[^\]]+\]:\s*\{[\s\S]*?\}(?=\s*$|\n\n|\n[A-Z])/g;
+
+  // Regex: orphaned JSON fragments like ",\"forecast\":[...]}"
+  const orphanedJsonPattern = /,?"[a-zA-Z_]+"\s*:\s*\[[^\]]*\]\}?/g;
+
+  return content
+    .replace(toolResultPattern, "")
+    .replace(orphanedJsonPattern, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 interface Artifact {
   type: string;
@@ -28,6 +43,10 @@ export function ReportPreview({
   className,
 }: ReportPreviewProps) {
   const [selectedImage, setSelectedImage] = useState<Artifact | null>(null);
+  const cleanedContent = useMemo(
+    () => cleanToolResultsFromContent(content),
+    [content]
+  );
 
   const visuals = artifacts.filter(
     a =>
@@ -86,9 +105,9 @@ export function ReportPreview({
       </AnimatePresence>
 
       <div className="relative min-h-[200px]">
-        {content ? (
+        {cleanedContent ? (
           <div className="prose prose-invert prose-lg max-w-none prose-headings:font-bold prose-headings:tracking-tight prose-p:leading-relaxed prose-pre:bg-muted/50 prose-pre:border prose-pre:border-border/50">
-            <Streamdown>{content}</Streamdown>
+            <Streamdown>{cleanedContent}</Streamdown>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">

@@ -233,8 +233,8 @@ export const agentTasks = mysqlTable("agentTasks", {
   /** Pending approval ID (when status is waiting_approval) */
   pendingApprovalId: int("pendingApprovalId"),
 
-  /** Final result/summary */
-  result: text("result"),
+  /** Final result/summary - uses mediumtext to handle large outputs like base64 images */
+  result: mediumtext("result"),
 
   /** Error message if failed */
   errorMessage: text("errorMessage"),
@@ -274,8 +274,8 @@ export const agentMessages = mysqlTable("agentMessages", {
   /** Message role */
   role: mysqlEnum("role", ["user", "assistant", "system"]).notNull(),
 
-  /** Message content */
-  content: text("content").notNull(),
+  /** Message content - uses mediumtext to handle large outputs like base64 images */
+  content: mediumtext("content").notNull(),
 
   /** Tool calls made in this message (JSON array) */
   toolCalls: json("toolCalls").$type<

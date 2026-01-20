@@ -938,15 +938,18 @@ ${result.conflictsResolved?.length ? result.conflictsResolved.join("\n- ") : "No
   }
 }
 
-export async function executePython(code: string): Promise<string> {
+export async function executePython(
+  code: string,
+  networkEnabled = false
+): Promise<string> {
   if (USE_DOCKER_SANDBOX) {
     const status = await getSandboxStatus();
     if (status.dockerAvailable && status.imageBuilt) {
-      // Ensure sandbox directory exists on host for volume mounting
       await ensureSandbox();
       const result = await executePythonInSandbox(code, {
         timeoutMs: 30000,
-        workspacePath: JARVIS_SANDBOX, // Mount shared workspace
+        workspacePath: JARVIS_SANDBOX,
+        networkEnabled,
       });
       if (result.success) {
         const output =
@@ -1039,7 +1042,10 @@ export async function executeJavaScript(code: string): Promise<string> {
   }
 }
 
-export async function runShell(command: string): Promise<string> {
+export async function runShell(
+  command: string,
+  networkEnabled = false
+): Promise<string> {
   if (USE_DOCKER_SANDBOX) {
     const status = await getSandboxStatus();
     if (status.dockerAvailable && status.imageBuilt) {
@@ -1047,6 +1053,7 @@ export async function runShell(command: string): Promise<string> {
       const result = await executeShellInSandbox(command, {
         timeoutMs: 60000,
         workspacePath: JARVIS_SANDBOX,
+        networkEnabled,
       });
       if (result.success) {
         const output =
@@ -10750,13 +10757,19 @@ export async function executeTool(
     case "browse_url":
       return browseUrl(input.url as string);
     case "execute_python":
-      return executePython(input.code as string);
+      return executePython(
+        input.code as string,
+        input.networkEnabled as boolean | undefined
+      );
     case "execute_javascript":
       return executeJavaScript(input.code as string);
     case "run_shell":
     case "execute_shell":
     case "shell":
-      return runShell(input.command as string);
+      return runShell(
+        input.command as string,
+        input.networkEnabled as boolean | undefined
+      );
     case "read_file":
       return readFile(input.path as string);
     case "write_file":
@@ -11352,12 +11365,18 @@ export function getAvailableTools(): Array<{
     {
       name: "execute_python",
       description:
-        "Execute Python code in a sandboxed environment. Has access to standard library and common packages.",
+        "Execute Python code in a sandboxed environment. Has access to standard library and common packages (requests, numpy, matplotlib, pandas). Set networkEnabled=true if the code needs to fetch data from the internet.",
       parameters: {
         code: {
           type: "string",
           description: "The Python code to execute",
           required: true,
+        },
+        networkEnabled: {
+          type: "boolean",
+          description:
+            "Enable network access for the sandbox. Required for HTTP requests, API calls, or fetching external data. Default: false",
+          required: false,
         },
       },
     },
@@ -11376,12 +11395,18 @@ export function getAvailableTools(): Array<{
     {
       name: "run_shell",
       description:
-        "Run a shell command in the sandbox. Some dangerous commands are blocked.",
+        "Run a shell command in the sandbox. Some dangerous commands are blocked. Set networkEnabled=true if the command needs network access (curl, wget, API calls).",
       parameters: {
         command: {
           type: "string",
           description: "The shell command to run",
           required: true,
+        },
+        networkEnabled: {
+          type: "boolean",
+          description:
+            "Enable network access. Required for curl, wget, pip install, or any command that needs internet. Default: false",
+          required: false,
         },
       },
     },

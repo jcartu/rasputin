@@ -303,6 +303,7 @@ function getJarvisSystemPrompt(): string {
 CORE CAPABILITIES:
 - Web search and browsing (with automatic fallbacks)
 - Code execution (Python, JavaScript, shell commands)
+  IMPORTANT: execute_python has a networkEnabled parameter. Set networkEnabled=true when Python code needs to fetch data from the internet (API calls, HTTP requests, web scraping)
 - File management (read, write, list files)
 - HTTP API requests (for current data like prices)
 - Image generation and analysis (vision, screenshots)
@@ -1912,6 +1913,16 @@ export async function runOrchestrator(
       const executor = createFrontierExecutor(executeToolFn, {
         enableConsensus: true,
         swarmOrchestrator: swarm,
+        onToolCall: tc =>
+          callbacks.onToolCall({ id: tc.id, name: tc.name, input: tc.input }),
+        onToolResult: tr =>
+          callbacks.onToolResult({
+            toolCallId: tr.toolCallId,
+            output: tr.output,
+            isError: tr.isError,
+          }),
+        onThinking: thought => callbacks.onThinking?.(thought),
+        onThinkingChunk: chunk => callbacks.onThinkingChunk?.(chunk),
       });
       const result = await swarm.executeSwarmTask(task, v3Context, executor);
 

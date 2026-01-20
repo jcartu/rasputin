@@ -15,13 +15,15 @@ import {
   SynthesisStage,
   SpeedTier,
   getModelsForTier,
-  getSynthesizerModel,
+  getCerebrasForIntermediateStages,
+  getClaudeForFinalSynthesis,
   FRONTIER_MODELS,
 } from "../../shared/rasputin";
 import { queryModel, queryModelsInParallel } from "./aiModels";
 
 const WEB_SEARCH_TIMEOUT_MS = 20_000;
-const STAGE_TIMEOUT_MS = 30_000;
+const INTERMEDIATE_STAGE_TIMEOUT_MS = 45_000;
+const FINAL_SYNTHESIS_TIMEOUT_MS = 60_000;
 
 async function withTimeout<T>(
   promise: Promise<T>,
@@ -274,8 +276,19 @@ async function runParallelProposers(
       onModelUpdate
     );
 
-    const successfulResponses = responses.filter(r => r.status === "completed");
+    const successfulResponses = responses.filter(
+      r => r.status === "completed" && r.content
+    );
     const durationMs = Date.now() - startTime;
+
+    console.log(
+      `[Synthesis:Proposers] ${responses.length} total, ${successfulResponses.length} with content`
+    );
+    responses.forEach(r => {
+      console.log(
+        `[Synthesis:Proposers]   ${r.modelId}: ${r.status} (${r.content?.length || 0} chars) ${r.errorMessage || ""}`
+      );
+    });
 
     const output = `Received ${successfulResponses.length}/${proposerModels.length} model responses`;
     onUpdate?.("completed", output);
@@ -316,7 +329,6 @@ async function runParallelProposers(
 async function runInformationExtraction(
   query: string,
   proposerResponses: ModelResponseData[],
-  speedTier: SpeedTier,
   onUpdate?: (
     status: "running" | "completed" | "error",
     output?: string
@@ -326,12 +338,21 @@ async function runInformationExtraction(
   onUpdate?.("running");
 
   try {
-    const synthesizer = getSynthesizerModel(speedTier);
+    const fastModel = getCerebrasForIntermediateStages();
+
+    const completedResponses = proposerResponses.filter(
+      r => r.status === "completed" && r.content
+    );
+    console.log(
+      `[Synthesis:Extraction] Using Cerebras for fast extraction (${completedResponses.length} responses)`
+    );
+
+    if (completedResponses.length === 0) {
+      throw new Error("No model responses with content to extract from");
+    }
 
     let prompt = `## Original Query\n${query}\n\n## Model Responses\n\n`;
-    for (const response of proposerResponses.filter(
-      r => r.status === "completed"
-    )) {
+    for (const response of completedResponses) {
       prompt += `### ${response.modelName}\n${response.content}\n\n---\n\n`;
     }
     prompt += `\nExtract and organize the key information from these responses.`;
@@ -345,11 +366,11 @@ async function runInformationExtraction(
     ];
 
     const response = await withTimeout(
-      queryModel(synthesizer, { messages, stream: false }),
-      STAGE_TIMEOUT_MS,
+      queryModel(fastModel, { messages, stream: false }),
+      INTERMEDIATE_STAGE_TIMEOUT_MS,
       {
-        modelId: synthesizer.id,
-        modelName: synthesizer.name,
+        modelId: fastModel.id,
+        modelName: fastModel.name,
         content: "Extraction timed out. Using raw proposer responses.",
         status: "completed" as const,
       }
@@ -365,7 +386,7 @@ async function runInformationExtraction(
       output: response.content,
       durationMs,
       metadata: {
-        model: synthesizer.id,
+        model: fastModel.id,
         tokens: (response.inputTokens || 0) + (response.outputTokens || 0),
         cost: response.cost,
       },
@@ -389,7 +410,6 @@ async function runInformationExtraction(
 async function runGapDetection(
   query: string,
   extractedInfo: string,
-  speedTier: SpeedTier,
   onUpdate?: (
     status: "running" | "completed" | "error",
     output?: string
@@ -399,7 +419,8 @@ async function runGapDetection(
   onUpdate?.("running");
 
   try {
-    const synthesizer = getSynthesizerModel(speedTier);
+    const fastModel = getCerebrasForIntermediateStages();
+    console.log(`[Synthesis:GapDetection] Using Cerebras for fast analysis`);
 
     const prompt = `## Original Query\n${query}\n\n## Extracted Information\n${extractedInfo}\n\nIdentify gaps and conflicts in this information.`;
 
@@ -412,11 +433,11 @@ async function runGapDetection(
     ];
 
     const response = await withTimeout(
-      queryModel(synthesizer, { messages, stream: false }),
-      STAGE_TIMEOUT_MS,
+      queryModel(fastModel, { messages, stream: false }),
+      INTERMEDIATE_STAGE_TIMEOUT_MS,
       {
-        modelId: synthesizer.id,
-        modelName: synthesizer.name,
+        modelId: fastModel.id,
+        modelName: fastModel.name,
         content: "Gap detection timed out. No gaps identified.",
         status: "completed" as const,
       }
@@ -432,7 +453,7 @@ async function runGapDetection(
       output: response.content,
       durationMs,
       metadata: {
-        model: synthesizer.id,
+        model: fastModel.id,
         tokens: (response.inputTokens || 0) + (response.outputTokens || 0),
         cost: response.cost,
       },
@@ -468,7 +489,10 @@ async function runMetaSynthesis(
   onUpdate?.("running");
 
   try {
-    const synthesizer = getSynthesizerModel(speedTier);
+    const synthesizer = getClaudeForFinalSynthesis(speedTier);
+    console.log(
+      `[Synthesis:Meta] Using ${synthesizer.name} for final synthesis`
+    );
 
     const prompt = `## Original Query
 ${query}
@@ -494,7 +518,7 @@ Create the ultimate synthesis that addresses the query comprehensively.`;
 
     const response = await withTimeout(
       queryModel(synthesizer, { messages, stream: false }),
-      STAGE_TIMEOUT_MS,
+      FINAL_SYNTHESIS_TIMEOUT_MS,
       {
         modelId: synthesizer.id,
         modelName: synthesizer.name,
@@ -554,12 +578,31 @@ export async function generateSynthesis(
   const stages: SynthesisPipelineStageData[] = [];
   let proposerResponses: ModelResponseData[] = [];
 
-  // Stage 1: Web Search
-  const webSearchStage = await runWebSearch(
+  console.log(
+    "[Synthesis:Parallel] Starting Web Search and Proposers concurrently"
+  );
+  onStageUpdate?.("web_search", "running");
+
+  const webSearchPromise = runWebSearch(
     query,
     conversationHistory,
     (status, output) => onStageUpdate?.("web_search", status, output)
   );
+
+  const proposerPromise = runParallelProposers(
+    query,
+    "",
+    speedTier,
+    conversationHistory,
+    (status, output) => onStageUpdate?.("parallel_proposers", status, output),
+    onModelUpdate
+  );
+
+  const [webSearchStage, proposerResult] = await Promise.all([
+    webSearchPromise,
+    proposerPromise,
+  ]);
+
   stages.push(webSearchStage);
 
   if (webSearchStage.status === "error") {
@@ -568,39 +611,27 @@ export async function generateSynthesis(
       "Web search unavailable. Proceeding with model knowledge only.";
   }
 
-  // Stage 2: Parallel Proposers
-  const proposerResult = await runParallelProposers(
-    query,
-    webSearchStage.output || "",
-    speedTier,
-    conversationHistory,
-    (status, output) => onStageUpdate?.("parallel_proposers", status, output),
-    onModelUpdate
-  );
   stages.push(proposerResult.stage);
   proposerResponses = proposerResult.responses;
 
   if (
-    proposerResult.responses.filter(r => r.status === "completed").length === 0
+    proposerResult.responses.filter(r => r.status === "completed" && r.content)
+      .length === 0
   ) {
-    throw new Error("All proposer models failed");
+    throw new Error("All proposer models failed or returned empty responses");
   }
 
-  // Stage 3: Information Extraction
   const extractionStage = await runInformationExtraction(
     query,
     proposerResponses,
-    speedTier,
     (status, output) =>
       onStageUpdate?.("information_extraction", status, output)
   );
   stages.push(extractionStage);
 
-  // Stage 4: Gap Detection
   const gapStage = await runGapDetection(
     query,
     extractionStage.output || "",
-    speedTier,
     (status, output) => onStageUpdate?.("gap_detection", status, output)
   );
   stages.push(gapStage);

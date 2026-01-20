@@ -110,12 +110,12 @@ export const FRONTIER_MODELS: ModelConfig[] = [
     supportsVision: true,
     tier: "max",
   },
-  // xAI
+  // xAI - Grok 4.1 released Nov 17, 2025
   {
     id: "grok-4.1",
     name: "Grok 4.1",
     provider: "xai",
-    openRouterId: "x-ai/grok-4.1",
+    openRouterId: "x-ai/grok-4.1-fast",
     contextWindow: 131072,
     maxOutputTokens: 16384,
     inputPricePerMillion: 3,
@@ -125,14 +125,14 @@ export const FRONTIER_MODELS: ModelConfig[] = [
     tier: "normal",
   },
   {
-    id: "grok-4.1-pro",
-    name: "Grok 4.1 Pro",
+    id: "grok-4.1-mini",
+    name: "Grok 4.1 Mini",
     provider: "xai",
-    openRouterId: "x-ai/grok-4.1-pro",
+    openRouterId: "x-ai/grok-4-fast",
     contextWindow: 131072,
     maxOutputTokens: 32768,
-    inputPricePerMillion: 5,
-    outputPricePerMillion: 25,
+    inputPricePerMillion: 2,
+    outputPricePerMillion: 10,
     supportsStreaming: true,
     supportsVision: true,
     tier: "max",
@@ -388,7 +388,7 @@ export function getModelsForTier(tier: SpeedTier): ModelConfig[] {
           "gpt-5.2-pro",
           "claude-opus-4.5",
           "gemini-3-pro",
-          "grok-4.1-pro",
+          "grok-4.1-mini",
           "sonar-pro",
         ].includes(m.id)
       );
@@ -400,4 +400,57 @@ export function getSynthesizerModel(tier: SpeedTier): ModelConfig {
     return FRONTIER_MODELS.find(m => m.id === "claude-opus-4.5")!;
   }
   return FRONTIER_MODELS.find(m => m.id === "claude-sonnet-4.5")!;
+}
+
+export function getCerebrasForIntermediateStages(): ModelConfig {
+  return FRONTIER_MODELS.find(m => m.id === "cerebras-llama-70b")!;
+}
+
+export function getClaudeForFinalSynthesis(tier: SpeedTier): ModelConfig {
+  if (tier === "max") {
+    return FRONTIER_MODELS.find(m => m.id === "claude-opus-4.5")!;
+  }
+  return FRONTIER_MODELS.find(m => m.id === "claude-sonnet-4.5")!;
+}
+
+export type QueryComplexity = "simple" | "moderate" | "complex";
+
+const SIMPLE_MATH_PATTERNS = [
+  /^\s*(?:what\s+is\s+)?[\d\s+\-*/().^]+\s*[=?]?\s*$/i,
+  /^\s*(?:calculate|compute|solve|what\s+is)\s+[\d\s+\-*/().^]+/i,
+  /^\s*\d+\s*[+\-*/x×÷]\s*\d+/i,
+];
+
+const SIMPLE_FACT_PATTERNS = [
+  /^(?:what|who)\s+(?:is|are|was|were)\s+(?:the\s+)?(?:capital|president|author|inventor|founder|ceo)\s+of\s+/i,
+  /^(?:when|where)\s+(?:is|was|did)\s+\w+\s+(?:born|founded|created|invented|discovered)/i,
+  /^(?:how\s+(?:many|much|old|tall|long|far))\s+(?:is|are|was|were)\s+/i,
+  /^(?:what|who)\s+(?:wrote|invented|discovered|founded|created)\s+/i,
+  /^(?:define|what\s+does)\s+\w+\s+mean/i,
+];
+
+export function classifyQueryComplexity(query: string): QueryComplexity {
+  const trimmedQuery = query.trim();
+  const wordCount = trimmedQuery.split(/\s+/).length;
+
+  if (wordCount <= 10) {
+    for (const pattern of SIMPLE_MATH_PATTERNS) {
+      if (pattern.test(trimmedQuery)) return "simple";
+    }
+    for (const pattern of SIMPLE_FACT_PATTERNS) {
+      if (pattern.test(trimmedQuery)) return "simple";
+    }
+  }
+
+  if (wordCount <= 5) return "simple";
+  if (wordCount <= 20) return "moderate";
+  return "complex";
+}
+
+export function isSimpleQuery(query: string): boolean {
+  return classifyQueryComplexity(query) === "simple";
+}
+
+export function getFastModelForSimpleQueries(): ModelConfig {
+  return FRONTIER_MODELS.find(m => m.id === "gemini-3-flash")!;
 }

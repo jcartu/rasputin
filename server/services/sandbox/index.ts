@@ -132,7 +132,7 @@ export async function executeInSandbox(
     "--network",
     network,
     "--pids-limit",
-    "100",
+    "256",
     "--read-only",
     "--tmpfs",
     "/tmp:rw,noexec,nosuid,size=100m",
@@ -140,6 +140,13 @@ export async function executeInSandbox(
     "no-new-privileges:true",
     "--cap-drop",
     "ALL",
+    // Limit OpenBLAS/NumPy threading to prevent resource exhaustion
+    "-e",
+    "OPENBLAS_NUM_THREADS=1",
+    "-e",
+    "OMP_NUM_THREADS=1",
+    "-e",
+    "MKL_NUM_THREADS=1",
   ];
 
   if (config.workspacePath) {

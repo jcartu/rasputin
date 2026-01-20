@@ -16,6 +16,7 @@ import {
   type AgentTask,
 } from "./agentCoordinator";
 import { getToolsForAgent, getToolMetadata } from "./toolMetadata";
+import { getAvailableTools } from "../tools";
 import {
   getGlobalMemoryClient,
   enrichContextWithMemory,
@@ -207,12 +208,10 @@ export class SwarmOrchestrator {
     context: ExecutionContext,
     executor: AgentExecutor
   ): Promise<ToolResult> {
-    const { primaryAgent, suggestedTools } = analysis;
+    const { primaryAgent } = analysis;
     const behavior = getAgentBehavior(primaryAgent);
-    const tools =
-      suggestedTools.length > 0
-        ? suggestedTools
-        : behavior.selectTools(task, getToolsForAgent(primaryAgent));
+    const availableTools = getToolsForAgent(primaryAgent);
+    const tools = behavior.selectTools(task, availableTools);
 
     this.activateAgent(primaryAgent, `single-${Date.now()}`);
 
@@ -795,6 +794,18 @@ export function createSwarmExecutor(
 export interface FrontierExecutorOptions {
   enableConsensus?: boolean;
   swarmOrchestrator?: SwarmOrchestrator;
+  onToolCall?: (toolCall: {
+    id: string;
+    name: string;
+    input: Record<string, unknown>;
+  }) => void;
+  onToolResult?: (result: {
+    toolCallId: string;
+    output: string;
+    isError: boolean;
+  }) => void;
+  onThinking?: (thought: string) => void;
+  onThinkingChunk?: (chunk: string) => void;
 }
 
 export function createFrontierExecutor(
@@ -804,7 +815,14 @@ export function createFrontierExecutor(
   ) => Promise<string>,
   options: FrontierExecutorOptions = {}
 ): AgentExecutor {
-  const { enableConsensus = false, swarmOrchestrator } = options;
+  const {
+    enableConsensus = false,
+    swarmOrchestrator,
+    onToolCall,
+    onToolResult,
+    onThinking,
+    onThinkingChunk,
+  } = options;
 
   return {
     async executeWithAgent(
@@ -818,28 +836,76 @@ export function createFrontierExecutor(
       try {
         const adapter = await getGlobalFrontierAdapter();
 
-        const toolDefs: ToolDefinition[] = tools.slice(0, 20).map(name => ({
-          type: "function",
-          function: {
-            name,
-            description: `Tool: ${name}`,
-            parameters: { type: "object", properties: {} },
-          },
-        }));
+        // Get actual tool definitions with proper descriptions and parameters
+        const allTools = getAvailableTools();
+        const toolMap = new Map(allTools.map(t => [t.name, t]));
+
+        const toolDefs: ToolDefinition[] = tools
+          .slice(0, 20)
+          .map(name => {
+            const tool = toolMap.get(name);
+            if (tool) {
+              return {
+                type: "function" as const,
+                function: {
+                  name: tool.name,
+                  description: tool.description,
+                  parameters: {
+                    type: "object" as const,
+                    properties: Object.fromEntries(
+                      Object.entries(tool.parameters).map(([key, val]) => [
+                        key,
+                        {
+                          type: val.type,
+                          description: val.description,
+                          ...(val.type === "array"
+                            ? { items: val.items || { type: "string" } }
+                            : {}),
+                        },
+                      ])
+                    ),
+                    required: Object.entries(tool.parameters)
+                      .filter(([, val]) => val.required)
+                      .map(([key]) => key),
+                  },
+                },
+              };
+            }
+            // Fallback for tools not in legacy list
+            return {
+              type: "function" as const,
+              function: {
+                name,
+                description: `Tool: ${name}`,
+                parameters: { type: "object", properties: {} },
+              },
+            };
+          })
+          .filter(Boolean);
 
         const messages: ChatMessage[] = [{ role: "user", content: task }];
 
+        onThinking?.(`[${agentType}] Processing task...`);
+
         const result = await adapter.reason(agentType, messages, {
           tools: toolDefs.length > 0 ? toolDefs : undefined,
+          onChunk: onThinkingChunk,
         });
+
+        if (result.content && !onThinkingChunk) {
+          onThinking?.(result.content);
+        }
 
         if (result.toolCalls && result.toolCalls.length > 0 && toolExecutor) {
           const toolResults: string[] = [];
 
           for (const call of result.toolCalls) {
+            const toolCallId = call.id || crypto.randomUUID();
             try {
               const params = JSON.parse(call.function.arguments);
               const toolName = call.function.name;
+
+              onToolCall?.({ id: toolCallId, name: toolName, input: params });
 
               if (
                 enableConsensus &&
@@ -851,18 +917,28 @@ export function createFrontierExecutor(
                   params
                 );
                 if (consensus.decision !== "approved") {
-                  toolResults.push(
-                    `[${toolName}]: BLOCKED - Consensus ${consensus.decision} ` +
-                      `(${Math.round(consensus.agreementPercentage * 100)}% agreement)`
-                  );
+                  const blockedMsg = `BLOCKED - Consensus ${consensus.decision} (${Math.round(consensus.agreementPercentage * 100)}% agreement)`;
+                  onToolResult?.({
+                    toolCallId,
+                    output: blockedMsg,
+                    isError: true,
+                  });
+                  toolResults.push(`[${toolName}]: ${blockedMsg}`);
                   continue;
                 }
               }
 
               const toolResult = await toolExecutor(toolName, params);
+              onToolResult?.({
+                toolCallId,
+                output: toolResult,
+                isError: false,
+              });
               toolResults.push(`[${toolName}]: ${toolResult}`);
             } catch (err) {
-              toolResults.push(`[${call.function.name}]: Error - ${err}`);
+              const errorMsg = err instanceof Error ? err.message : String(err);
+              onToolResult?.({ toolCallId, output: errorMsg, isError: true });
+              toolResults.push(`[${call.function.name}]: Error - ${errorMsg}`);
             }
           }
 

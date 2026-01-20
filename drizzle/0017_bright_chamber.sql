@@ -1,0 +1,1 @@
+ALTER TABLE `agentTasks` MODIFY COLUMN `result` mediumtext;
