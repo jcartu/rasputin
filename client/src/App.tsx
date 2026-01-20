@@ -63,6 +63,7 @@ function Router() {
 
       {/* Legacy routes - redirect to new structure */}
       <Route path="/research" component={DocsResearch} />
+      <Route path="/research/:id" component={DocsResearch} />
       <Route path="/prototype" component={DocsPrototype} />
       <Route path="/architecture" component={DocsArchitecture} />
       <Route path="/agents" component={DocsAgents} />

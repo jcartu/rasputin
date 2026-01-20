@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useLocation } from "wouter";
 import {
   Terminal,
   Cpu,
@@ -17,101 +18,114 @@ import {
   Code,
   Eye,
   Play,
+  Wifi,
+  WifiOff,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  StopCircle,
 } from "lucide-react";
 import { IntelligenceStream } from "@/components/IntelligenceStream";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useJarvisStream } from "@/hooks/useJarvisStream";
+import { getSocket } from "@/lib/socket";
+import { toast } from "sonner";
+import { getLoginUrl } from "@/const";
 
-// Simulated log data
-const logStream = [
-  {
-    agent: "Orchestrator",
-    msg: "User intent detected: 'Analyze market trends'",
-    type: "info",
-  },
-  {
-    agent: "Planner",
-    msg: "Decomposing task into 3 sub-routines",
-    type: "action",
-  },
-  {
-    agent: "Memory",
-    msg: "Retrieving context from Qdrant (0.02s)",
-    type: "db",
-  },
-  {
-    agent: "Vision",
-    msg: "Scanning active window: 'TradingView'",
-    type: "vision",
-  },
-  {
-    agent: "Executor",
-    msg: "Running python script: fetch_data.py",
-    type: "exec",
-  },
-  { agent: "Verifier", msg: "Validating output schema...", type: "check" },
-  {
-    agent: "Orchestrator",
-    msg: "Response ready. Streaming to UI.",
-    type: "success",
-  },
-];
+const TOOL_TO_AGENT: Record<string, string> = {
+  web_search: "VIS",
+  browse_url: "VIS",
+  execute_python: "CODE",
+  execute_javascript: "CODE",
+  run_shell: "EXEC",
+  read_file: "MEM",
+  write_file: "MEM",
+  list_files: "MEM",
+  search_memory: "MEM",
+  store_memory: "MEM",
+  calculate: "CODE",
+  http_request: "VIS",
+  generate_image: "VIS",
+  task_complete: "VER",
+  create_rich_report: "CODE",
+};
 
 export default function Prototype() {
+  const [, navigate] = useLocation();
+  const { user, refresh: refreshAuth } = useAuth();
+  const jarvis = useJarvisStream();
+
   const [logs, setLogs] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [isHudOpen, setIsHudOpen] = useState(true);
-  const [isThinking, setIsThinking] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [gpuData, setGpuData] = useState<any[]>(() => {
-    // Pre-fill with 60 seconds of low-activity data
-    return Array.from({ length: 60 }).map((_, i) => ({
+  const [gpuData, setGpuData] = useState<any[]>(() =>
+    Array.from({ length: 60 }).map((_, i) => ({
       time: new Date(Date.now() - (60 - i) * 1000).toISOString(),
       load: Math.floor(Math.random() * 10) + 5,
       vram: Math.floor(Math.random() * 5) + 10,
-    }));
-  });
+    }))
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
-  // WebSocket & VNC State
   const [isConnected, setIsConnected] = useState(false);
   const [isOverride, setIsOverride] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
 
-  // Connect to Rasputin WebSocket
+  const { data: systemStats } = trpc.localStats.get.useQuery(undefined, {
+    refetchInterval: 2000,
+  });
+
+  const { data: taskHistory } = trpc.jarvis.listTasks.useQuery({ limit: 20 });
+
   useEffect(() => {
-    // In a real deployment, this would connect to wss://rasputin.studio/api/stream
-    // For this demo, we simulate the connection state
-    const timer = setTimeout(() => setIsConnected(true), 1500);
-    return () => clearTimeout(timer);
+    refreshAuth().then(() => setAuthChecked(true));
+  }, [refreshAuth]);
+
+  useEffect(() => {
+    if (authChecked && !user) {
+      navigate(getLoginUrl());
+    }
+  }, [user, authChecked, navigate]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    setIsConnected(socket.connected);
+
+    const onConnect = () => setIsConnected(true);
+    const onDisconnect = () => setIsConnected(false);
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+    };
   }, []);
 
-  // Simulate GPU Telemetry (with real-time jitter)
   useEffect(() => {
-    const interval = setInterval(() => {
+    if (systemStats) {
       setGpuData(prev => {
         const now = new Date();
         const time = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
-        // Simulate higher load when "connected"
-        const baseLoad = isConnected ? 45 : 20;
-        const load = Math.floor(Math.random() * 30) + baseLoad;
-        const vram = Math.floor(Math.random() * 10) + (isConnected ? 48 : 12);
+        const gpuTotal = systemStats.gpu?.memoryTotalMb ?? 1;
+        const gpuUsed = systemStats.gpu?.memoryUsedMb ?? 0;
+        const load =
+          systemStats.gpu?.utilizationPercent ??
+          Math.floor(Math.random() * 30) + 20;
+        const vram = Math.round((gpuUsed / gpuTotal) * 100);
         const newData = [...prev, { time, load, vram }];
-        return newData.slice(-60); // Keep last 60 seconds for sparkline
+        return newData.slice(-60);
       });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [isConnected]);
+    }
+  }, [systemStats]);
 
   // TTS Handler
   const speak = async (text: string) => {
@@ -194,7 +208,6 @@ export default function Prototype() {
     recognition.start();
   };
 
-  // Demo Scenario State
   const [activeScenario, setActiveScenario] = useState<string | null>(null);
   const [showStream, setShowStream] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
@@ -203,7 +216,51 @@ export default function Prototype() {
     Record<string, { cpu: number; mem: number; net: number }>
   >({});
 
-  // Simulate agent metrics
+  const currentRunningTool = jarvis.steps.find(
+    s => s.type === "tool" && s.tool?.status === "running"
+  )?.tool?.name;
+
+  const derivedActiveAgent = currentRunningTool
+    ? TOOL_TO_AGENT[currentRunningTool] || "ORCH"
+    : jarvis.isStreaming
+      ? "ORCH"
+      : null;
+
+  useEffect(() => {
+    if (derivedActiveAgent) {
+      setActiveAgent(derivedActiveAgent);
+    } else if (!jarvis.isStreaming) {
+      setActiveAgent(null);
+    }
+  }, [derivedActiveAgent, jarvis.isStreaming]);
+
+  useEffect(() => {
+    const newLogs = jarvis.steps.map(step => {
+      if (step.type === "tool" && step.tool) {
+        const agentCode = TOOL_TO_AGENT[step.tool.name] || "EXEC";
+        const statusSuffix =
+          step.tool.status === "running"
+            ? " [RUNNING]"
+            : step.tool.status === "failed"
+              ? " [FAILED]"
+              : " [DONE]";
+        return {
+          agent: agentCode,
+          msg: `${step.tool.name}${statusSuffix}`,
+          type: step.tool.status === "failed" ? "error" : "exec",
+        };
+      }
+      return {
+        agent: "ORCH",
+        msg: step.content?.slice(0, 100) || "Thinking...",
+        type: "info",
+      };
+    });
+    if (newLogs.length > 0) {
+      setLogs(newLogs);
+    }
+  }, [jarvis.steps]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       setAgentMetrics(prev => {
@@ -373,10 +430,26 @@ export default function Prototype() {
     }
   };
 
-  const runDemo = () => {
-    setActiveScenario(selectedScenario);
+  const handleSubmit = useCallback(() => {
+    if (!input.trim() || !user) {
+      if (!user) toast.error("Please sign in to use JARVIS");
+      return;
+    }
+    jarvis.startTask(input, user.id);
     setShowStream(true);
-    setLogs([]); // Clear previous logs
+    setActiveScenario("jarvis");
+    setInput("");
+  }, [input, user, jarvis]);
+
+  const runDemo = () => {
+    const scenario = scenarios[selectedScenario];
+    if (user) {
+      jarvis.startTask(scenario.prompt, user.id);
+      setShowStream(true);
+      setActiveScenario(selectedScenario);
+    } else {
+      toast.error("Please sign in to use JARVIS");
+    }
   };
 
   return (
@@ -425,11 +498,14 @@ export default function Prototype() {
             <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground">
               <div className="flex items-center gap-2">
                 <Cpu className="h-3 w-3" />
-                <span>GPU: 34%</span>
+                <span>GPU: {systemStats?.gpu?.utilizationPercent ?? 0}%</span>
               </div>
               <div className="flex items-center gap-2">
                 <Activity className="h-3 w-3" />
-                <span>MEM: {isConnected ? "64GB" : "12GB"}</span>
+                <span>
+                  MEM: {((systemStats?.memory?.usedMb ?? 0) / 1024).toFixed(1)}/
+                  {((systemStats?.memory?.totalMb ?? 0) / 1024).toFixed(0)}GB
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <select
@@ -469,15 +545,120 @@ export default function Prototype() {
             </div>
           </header>
 
-          {/* Intelligence Stream Overlay */}
-          {showStream && activeScenario ? (
+          {jarvis.isStreaming || jarvis.summary ? (
+            <div className="absolute inset-0 z-10 bg-black/90 backdrop-blur-sm p-6 overflow-hidden mt-14 mb-24">
+              <ScrollArea className="h-full">
+                <div className="max-w-3xl mx-auto space-y-4">
+                  {jarvis.exchanges.length > 0 && (
+                    <div className="p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                      <div className="text-xs font-mono text-cyan-400 mb-2">
+                        USER QUERY
+                      </div>
+                      <div className="text-sm text-white">
+                        {
+                          jarvis.exchanges[jarvis.exchanges.length - 1]
+                            ?.userQuery
+                        }
+                      </div>
+                    </div>
+                  )}
+
+                  {jarvis.steps.map((step, idx) => (
+                    <div
+                      key={step.id || idx}
+                      className={cn(
+                        "p-3 rounded-lg border animate-in fade-in slide-in-from-left-2",
+                        step.type === "thinking"
+                          ? "bg-purple-500/10 border-purple-500/20"
+                          : step.tool?.status === "running"
+                            ? "bg-cyan-500/10 border-cyan-500/30"
+                            : step.tool?.status === "failed"
+                              ? "bg-red-500/10 border-red-500/20"
+                              : "bg-green-500/10 border-green-500/20"
+                      )}
+                    >
+                      {step.type === "thinking" ? (
+                        <div className="flex items-start gap-3">
+                          <Brain className="h-4 w-4 text-purple-400 animate-pulse mt-0.5" />
+                          <div className="text-sm text-purple-200/90">
+                            {step.content || "Thinking..."}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            {step.tool?.status === "running" ? (
+                              <Loader2 className="h-4 w-4 text-cyan-400 animate-spin" />
+                            ) : step.tool?.status === "failed" ? (
+                              <XCircle className="h-4 w-4 text-red-400" />
+                            ) : (
+                              <CheckCircle2 className="h-4 w-4 text-green-400" />
+                            )}
+                            <span className="font-mono text-sm text-white">
+                              {step.tool?.name}
+                            </span>
+                            {step.tool?.durationMs && (
+                              <span className="text-xs text-muted-foreground">
+                                {(step.tool.durationMs / 1000).toFixed(2)}s
+                              </span>
+                            )}
+                          </div>
+                          {step.tool?.output && (
+                            <pre className="text-xs text-muted-foreground bg-black/30 p-2 rounded overflow-x-auto max-h-32">
+                              {step.tool.output.slice(0, 500)}
+                              {step.tool.output.length > 500 && "..."}
+                            </pre>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {jarvis.summary && (
+                    <div className="p-4 rounded-lg bg-gradient-to-r from-purple-500/20 to-cyan-500/20 border border-purple-500/30">
+                      <div className="text-xs font-mono text-purple-400 mb-2">
+                        SYNTHESIS COMPLETE
+                      </div>
+                      <div className="text-sm text-white whitespace-pre-wrap">
+                        {jarvis.summary}
+                      </div>
+                    </div>
+                  )}
+
+                  {jarvis.error && (
+                    <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
+                      <div className="text-xs font-mono text-red-400 mb-2">
+                        ERROR
+                      </div>
+                      <div className="text-sm text-red-300">{jarvis.error}</div>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+              {!jarvis.isStreaming && (
+                <div className="absolute bottom-4 right-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => {
+                      jarvis.reset();
+                      setShowStream(false);
+                      setActiveScenario(null);
+                    }}
+                  >
+                    Clear & New Task
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : showStream && activeScenario && activeScenario !== "jarvis" ? (
             <div className="absolute inset-0 z-10 bg-black/90 backdrop-blur-sm p-6 overflow-hidden mt-14 mb-24">
               <IntelligenceStream
                 scenario={activeScenario}
                 onComplete={() => setActiveAgent(null)}
                 onLog={log => {
                   setLogs(prev => [...prev, log]);
-                  // Map full agent names to grid codes
                   const agentMap: Record<string, string> = {
                     VISION: "VIS",
                     EXEC: "EXEC",
@@ -485,21 +666,18 @@ export default function Prototype() {
                     PLANNER: "PLAN",
                     SYSTEM: "ORCH",
                     SEC: "SEC",
-                    NET: "SEC", // Map network ops to security for now
+                    NET: "SEC",
                     CODE: "CODE",
                     TEST: "VER",
                     DEP: "EXEC",
                   };
                   const gridCode = agentMap[log.agent] || "ORCH";
                   setActiveAgent(gridCode);
-
-                  // Reset active agent after a short delay to create a pulse effect
                   setTimeout(() => setActiveAgent(null), 800);
                 }}
               />
             </div>
           ) : (
-            /* Placeholder / Empty State */
             <div className="absolute inset-0 flex items-center justify-center flex-col text-muted-foreground opacity-50 pointer-events-none z-0 mt-14 mb-24">
               <Brain className="w-16 h-16 mb-4 animate-pulse text-cyan-500/50" />
               <p className="font-mono text-sm text-cyan-500/50 tracking-widest">
@@ -572,17 +750,38 @@ export default function Prototype() {
                   type="text"
                   value={input}
                   onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleSubmit()}
                   placeholder="Command JARVIS..."
                   className="flex-1 bg-transparent border-none outline-none text-sm px-2 placeholder:text-muted-foreground/50"
+                  disabled={jarvis.isStreaming}
                 />
-                <Button
-                  size="icon"
-                  className="bg-cyan-500 hover:bg-cyan-400 text-black rounded-lg h-8 w-8"
-                  onClick={runDemo}
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
+                {jarvis.isStreaming ? (
+                  <Button
+                    size="icon"
+                    variant="destructive"
+                    className="rounded-lg h-8 w-8"
+                    onClick={() => jarvis.cancelTask()}
+                  >
+                    <StopCircle className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    size="icon"
+                    className="bg-cyan-500 hover:bg-cyan-400 text-black rounded-lg h-8 w-8"
+                    onClick={handleSubmit}
+                    disabled={!input.trim()}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
+              {jarvis.isStreaming && (
+                <div className="mt-2 text-center">
+                  <span className="text-xs font-mono text-cyan-400 animate-pulse">
+                    ITERATION {jarvis.currentIteration}/{jarvis.maxIterations}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -757,17 +956,32 @@ export default function Prototype() {
                       <span
                         className={cn(
                           "font-bold mr-2",
-                          log.agent === "Orchestrator" && "text-purple-400",
-                          log.agent === "Planner" && "text-blue-400",
-                          log.agent === "Memory" && "text-yellow-400",
-                          log.agent === "Vision" && "text-cyan-400",
-                          log.agent === "Executor" && "text-green-400",
-                          log.agent === "Verifier" && "text-red-400"
+                          (log.agent === "ORCH" ||
+                            log.agent === "Orchestrator") &&
+                            "text-purple-400",
+                          (log.agent === "PLAN" || log.agent === "Planner") &&
+                            "text-blue-400",
+                          (log.agent === "MEM" || log.agent === "Memory") &&
+                            "text-yellow-400",
+                          (log.agent === "VIS" || log.agent === "Vision") &&
+                            "text-cyan-400",
+                          (log.agent === "EXEC" || log.agent === "Executor") &&
+                            "text-green-400",
+                          (log.agent === "VER" || log.agent === "Verifier") &&
+                            "text-orange-400",
+                          log.agent === "CODE" && "text-amber-400",
+                          log.agent === "SEC" && "text-red-400",
+                          log.type === "error" && "text-red-400"
                         )}
                       >
-                        [{log.agent.toUpperCase()}]
+                        [{log.agent?.toUpperCase?.() || "SYS"}]
                       </span>
-                      <span className="text-white/70 group-hover:text-white transition-colors">
+                      <span
+                        className={cn(
+                          "text-white/70 group-hover:text-white transition-colors",
+                          log.type === "error" && "text-red-300"
+                        )}
+                      >
                         {log.msg}
                       </span>
                     </div>
@@ -784,18 +998,27 @@ export default function Prototype() {
               <span className="text-[10px] font-mono text-muted-foreground">
                 SYSTEM VITALS
               </span>
-              <span className="text-[10px] font-mono text-purple-400 animate-pulse">
-                GPT-5.2 PRO ACTIVE
+              <span
+                className={cn(
+                  "text-[10px] font-mono",
+                  jarvis.isStreaming
+                    ? "text-cyan-400 animate-pulse"
+                    : "text-purple-400"
+                )}
+              >
+                {jarvis.isStreaming ? "JARVIS ACTIVE" : "STANDBY"}
               </span>
             </div>
 
-            {/* Detailed Vitals Bars */}
             <div className="space-y-2">
-              {/* VRAM */}
               <div className="space-y-1">
                 <div className="flex justify-between text-[9px] font-mono text-white/50">
-                  <span>VRAM (RTX 6000)</span>
-                  <span>{gpuData[gpuData.length - 1]?.vram || 0}%</span>
+                  <span>VRAM ({systemStats?.gpu?.count ?? 0}x GPU)</span>
+                  <span>
+                    {systemStats?.gpu?.memoryUsedMb
+                      ? `${(systemStats.gpu.memoryUsedMb / 1024).toFixed(1)}/${(systemStats.gpu.memoryTotalMb / 1024).toFixed(0)}GB`
+                      : `${gpuData[gpuData.length - 1]?.vram || 0}%`}
+                  </span>
                 </div>
                 <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
                   <div
@@ -806,44 +1029,34 @@ export default function Prototype() {
                   />
                 </div>
               </div>
-              {/* Tensor Cores */}
               <div className="space-y-1">
                 <div className="flex justify-between text-[9px] font-mono text-white/50">
-                  <span>TENSOR CORES</span>
-                  <span>{gpuData[gpuData.length - 1]?.load || 0}%</span>
+                  <span>GPU UTIL</span>
+                  <span>
+                    {systemStats?.gpu?.utilizationPercent ??
+                      gpuData[gpuData.length - 1]?.load ??
+                      0}
+                    %
+                  </span>
                 </div>
                 <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-purple-500 transition-all duration-300"
                     style={{
-                      width: `${gpuData[gpuData.length - 1]?.load || 0}%`,
+                      width: `${systemStats?.gpu?.utilizationPercent ?? gpuData[gpuData.length - 1]?.load ?? 0}%`,
                     }}
                   />
                 </div>
               </div>
-              {/* Network I/O */}
               <div className="space-y-1">
                 <div className="flex justify-between text-[9px] font-mono text-white/50">
-                  <span>NETWORK I/O</span>
-                  <span>{Math.floor(Math.random() * 100)} MB/s</span>
-                </div>
-                <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-green-500 transition-all duration-100"
-                    style={{ width: `${Math.random() * 60 + 20}%` }}
-                  />
-                </div>
-              </div>
-              {/* CPU Load */}
-              <div className="space-y-1">
-                <div className="flex justify-between text-[9px] font-mono text-white/50">
-                  <span>CPU LOAD (128 CORES)</span>
-                  <span>{Math.floor(Math.random() * 40 + 10)}%</span>
+                  <span>CPU ({systemStats?.cpu?.cores ?? 0} cores)</span>
+                  <span>{systemStats?.cpu?.loadPercent?.toFixed(0) ?? 0}%</span>
                 </div>
                 <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-blue-500 transition-all duration-500"
-                    style={{ width: `${Math.random() * 40 + 10}%` }}
+                    style={{ width: `${systemStats?.cpu?.loadPercent ?? 0}%` }}
                   />
                 </div>
               </div>
