@@ -5,33 +5,72 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/JarvisThemeContext";
 import SplashScreen from "./components/SplashScreen";
-import Home from "./pages/jarvis/Home";
-import Research from "./pages/jarvis/Research";
-import Prototype from "./pages/jarvis/Prototype";
-import Architecture from "./pages/jarvis/Architecture";
-import Agents from "./pages/jarvis/Agents";
-import Memory from "./pages/jarvis/Memory";
-import Daemon from "./pages/jarvis/Daemon";
-import Security from "./pages/jarvis/Security";
-import Implementation from "./pages/jarvis/Implementation";
-import Ingestion from "./pages/jarvis/Ingestion";
-import IntegrationGuide from "./pages/jarvis/IntegrationGuide";
+
+// Main functional pages (connected to real backends)
+import Chat from "./pages/Chat";
+import Agent from "./pages/Agent";
+import Login from "./pages/Login";
+import Infrastructure from "./pages/Infrastructure";
+import MultiAgent from "./pages/MultiAgent";
+import Hosts from "./pages/Hosts";
+import Events from "./pages/Events";
+import Codebase from "./pages/Codebase";
+import MemoryPage from "./pages/Memory";
+
+// Documentation/demo pages (moved to /docs/*)
+import DocsHome from "./pages/jarvis/Home";
+import DocsResearch from "./pages/jarvis/Research";
+import DocsPrototype from "./pages/jarvis/Prototype";
+import DocsArchitecture from "./pages/jarvis/Architecture";
+import DocsAgents from "./pages/jarvis/Agents";
+import DocsMemory from "./pages/jarvis/Memory";
+import DocsDaemon from "./pages/jarvis/Daemon";
+import DocsSecurity from "./pages/jarvis/Security";
+import DocsImplementation from "./pages/jarvis/Implementation";
+import DocsIngestion from "./pages/jarvis/Ingestion";
+import DocsIntegrationGuide from "./pages/jarvis/IntegrationGuide";
 import NotFound from "./pages/jarvis/NotFound";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/research" component={Research} />
-      <Route path="/prototype" component={Prototype} />
-      <Route path="/integration" component={IntegrationGuide} />
-      <Route path="/ingestion" component={Ingestion} />
-      <Route path="/architecture" component={Architecture} />
-      <Route path="/daemon" component={Daemon} />
-      <Route path="/agents" component={Agents} />
-      <Route path="/memory" component={Memory} />
-      <Route path="/security" component={Security} />
-      <Route path="/implementation" component={Implementation} />
+      {/* Main functional routes - connected to real backends */}
+      <Route path="/" component={DocsHome} />
+      <Route path="/chat" component={Chat} />
+      <Route path="/chat/:id" component={Chat} />
+      <Route path="/agent" component={Agent} />
+      <Route path="/login" component={Login} />
+      <Route path="/infrastructure" component={Infrastructure} />
+      <Route path="/multi-agent" component={MultiAgent} />
+      <Route path="/hosts" component={Hosts} />
+      <Route path="/events" component={Events} />
+      <Route path="/codebase" component={Codebase} />
+      <Route path="/memory" component={MemoryPage} />
+
+      {/* Documentation/demo routes */}
+      <Route path="/docs" component={DocsHome} />
+      <Route path="/docs/research" component={DocsResearch} />
+      <Route path="/docs/prototype" component={DocsPrototype} />
+      <Route path="/docs/architecture" component={DocsArchitecture} />
+      <Route path="/docs/agents" component={DocsAgents} />
+      <Route path="/docs/memory" component={DocsMemory} />
+      <Route path="/docs/daemon" component={DocsDaemon} />
+      <Route path="/docs/security" component={DocsSecurity} />
+      <Route path="/docs/implementation" component={DocsImplementation} />
+      <Route path="/docs/ingestion" component={DocsIngestion} />
+      <Route path="/docs/integration" component={DocsIntegrationGuide} />
+
+      {/* Legacy routes - redirect to new structure */}
+      <Route path="/research" component={DocsResearch} />
+      <Route path="/prototype" component={DocsPrototype} />
+      <Route path="/architecture" component={DocsArchitecture} />
+      <Route path="/agents" component={DocsAgents} />
+      <Route path="/daemon" component={DocsDaemon} />
+      <Route path="/security" component={DocsSecurity} />
+      <Route path="/implementation" component={DocsImplementation} />
+      <Route path="/ingestion" component={DocsIngestion} />
+      <Route path="/integration" component={DocsIntegrationGuide} />
+
       <Route component={NotFound} />
     </Switch>
   );
