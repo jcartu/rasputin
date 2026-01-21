@@ -10,7 +10,7 @@ import {
   infrastructureHosts,
   remediations,
   incidentActions,
-  sshHosts,
+  sshHosts as _sshHosts,
 } from "../../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import {

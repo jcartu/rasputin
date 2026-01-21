@@ -250,7 +250,7 @@ async function generateWithLocalTurbo(
   throw new Error("No image data returned from local SD-Turbo");
 }
 
-async function generateWithLocalFlux(
+async function _generateWithLocalFlux(
   options: GenerateImageOptions
 ): Promise<GenerateImageResponse> {
   console.info("[ImageGen] Using local Flux:", options.prompt.slice(0, 80));
@@ -484,7 +484,7 @@ const NSFW_PATTERNS = [
   /hentai/i,
 ];
 
-function isNsfwPrompt(prompt: string): boolean {
+function _isNsfwPrompt(prompt: string): boolean {
   return NSFW_PATTERNS.some(p => p.test(prompt));
 }
 

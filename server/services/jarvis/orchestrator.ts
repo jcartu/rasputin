@@ -20,23 +20,26 @@ import {
 import { postTaskEvolution, type TaskOutcome } from "./autoEvolution";
 import {
   classifyError,
-  shouldRetry,
-  getRetryDelay,
+  shouldRetry as _shouldRetry,
+  getRetryDelay as _getRetryDelay,
   formatErrorForLog,
   type ClassifiedError,
 } from "./errorClassification";
-import { recordFailure, getFailureContext } from "./failureMemory";
-import { decideFallback } from "./fallbackPolicy";
+import {
+  recordFailure as _recordFailure,
+  getFailureContext as _getFailureContext,
+} from "./failureMemory";
+import { decideFallback as _decideFallback } from "./fallbackPolicy";
 import {
   createInitialState,
   updateStrategy,
   generateStrategyPrompt,
-  shouldForceComplete,
+  shouldForceComplete as _shouldForceComplete,
   type StrategyState,
 } from "./strategySwitching";
 import {
   recordTaskPerformance,
-  getPerformanceGuidance,
+  getPerformanceGuidance as _getPerformanceGuidance,
   formatPerformanceReport,
   getOptimizedPromptContext,
 } from "./performanceTracking";
@@ -44,7 +47,7 @@ import {
   routeTask,
   recordModelPerformance,
   formatRoutingReport,
-  type RoutingDecision,
+  type RoutingDecision as _RoutingDecision,
 } from "./modelRouter";
 import {
   validateTaskQuality,
@@ -53,23 +56,30 @@ import {
   type TaskContext,
   type FileInfo,
 } from "./qualityAssurance";
-import { getEventLogger, getSharedMemoryBus, connectRedis } from "../bus";
 import {
-  routeRequest as routeToProvider,
-  type RoutingContext,
+  getEventLogger,
+  getSharedMemoryBus as _getSharedMemoryBus,
+  connectRedis,
+} from "../bus";
+import {
+  routeRequest as _routeToProvider,
+  type RoutingContext as _RoutingContext,
 } from "./intelligentRouter";
-import { getCachedLLMResponse, setCachedLLMResponse } from "../knowledgeCache";
+import {
+  getCachedLLMResponse as _getCachedLLMResponse,
+  setCachedLLMResponse as _setCachedLLMResponse,
+} from "../knowledgeCache";
 import {
   getGlobalSwarmOrchestrator,
   createFrontierExecutor,
-  analyzeTask as analyzeTaskV3,
+  analyzeTask as _analyzeTaskV3,
   type ExecutionContext as V3ExecutionContext,
 } from "./v3";
 import {
   getGlobalMemoryClient,
   type V3MemoryIntegration,
 } from "./v3/memoryIntegration";
-import { extractLearningFromExecution } from "./v3/learningExtractor";
+import { extractLearningFromExecution as _extractLearningFromExecution } from "./v3/learningExtractor";
 import type { ToolCategory } from "./v3/types";
 
 // Get API keys from environment - Direct connections, no OpenRouter middleman
@@ -167,7 +177,14 @@ function buildJarvisTools(): OpenRouterTool[] {
   }));
 }
 
-const JARVIS_TOOLS: OpenRouterTool[] = buildJarvisTools();
+// Lazy initialization to avoid circular dependency issues during module loading
+let _jarvisToolsCache: OpenRouterTool[] | null = null;
+function getJarvisTools(): OpenRouterTool[] {
+  if (!_jarvisToolsCache) {
+    _jarvisToolsCache = buildJarvisTools();
+  }
+  return _jarvisToolsCache;
+}
 
 function getCurrentDateString(): string {
   const now = new Date();
@@ -441,6 +458,11 @@ export interface OrchestratorCallbacks {
   onError: (error: string) => void;
   onIteration?: (iteration: number, maxIterations: number) => void;
   onProgress?: (progress: TaskProgress) => void;
+  onMemory?: (
+    type: "search" | "store" | "enrich",
+    message: string,
+    count?: number
+  ) => void;
 }
 
 const TOOL_ALTERNATIVES: Record<string, string[]> = {
@@ -622,7 +644,7 @@ async function offloadLargeToolOutput(
   toolCallId: string,
   output: string,
   context: ToolExecutionContext,
-  taskContext: string
+  _taskContext: string
 ): Promise<string> {
   if (!context.memoryClient || output.length < LARGE_OUTPUT_THRESHOLD) {
     return output;
@@ -804,7 +826,7 @@ async function trimMessagesToFitContextWithRAG(
   return [...trimmed, ...recentMessages];
 }
 
-function trimMessagesToFitContext(
+function _trimMessagesToFitContext(
   messages: OpenRouterMessage[],
   systemPrompt: string
 ): OpenRouterMessage[] {
@@ -939,7 +961,7 @@ function isToolResultError(output: string): boolean {
   return errorPatterns.some(p => p.test(output));
 }
 
-function suggestVerificationTool(
+function _suggestVerificationTool(
   toolName: string,
   input: Record<string, unknown>
 ): { tool: string; input: Record<string, unknown> } | null {
@@ -1404,7 +1426,7 @@ async function callAnthropic(
   onChunk?: (chunk: string) => void
 ): Promise<OpenRouterResponse> {
   const anthropicMessages = toAnthropicMessages(messages);
-  const anthropicTools = toAnthropicTools(JARVIS_TOOLS);
+  const anthropicTools = toAnthropicTools(getJarvisTools());
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -1486,7 +1508,7 @@ async function callAnthropic(
                 );
               }
               break;
-            case "content_block_stop":
+            case "content_block_stop": {
               const toolBlock = toolBlocks.get(event.index);
               if (toolBlock) {
                 const inputJson = toolInputBuffers.get(event.index) || "{}";
@@ -1500,6 +1522,7 @@ async function callAnthropic(
                 });
               }
               break;
+            }
             case "message_delta":
               if (event.delta?.stop_reason) {
                 stopReason =
@@ -1582,7 +1605,7 @@ async function callCerebras(
       model: "llama-3.3-70b",
       max_tokens: 8192,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
-      tools: JARVIS_TOOLS,
+      tools: getJarvisTools(),
       tool_choice: "auto",
     }),
   });
@@ -1624,7 +1647,7 @@ async function callGemini(
         contents: geminiContents,
         tools: [
           {
-            functionDeclarations: JARVIS_TOOLS.map(t => ({
+            functionDeclarations: getJarvisTools().map(t => ({
               name: t.function.name,
               description: t.function.description,
               parameters: t.function.parameters,
@@ -1692,7 +1715,7 @@ async function callGrok(
       model: "grok-4.1",
       max_tokens: 8192,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
-      tools: JARVIS_TOOLS,
+      tools: getJarvisTools(),
       tool_choice: "auto",
     }),
   });
@@ -1924,7 +1947,12 @@ export async function runOrchestrator(
         onThinking: thought => callbacks.onThinking?.(thought),
         onThinkingChunk: chunk => callbacks.onThinkingChunk?.(chunk),
       });
-      const result = await swarm.executeSwarmTask(task, v3Context, executor);
+      const result = await swarm.executeSwarmTask(
+        task,
+        v3Context,
+        executor,
+        callbacks.onMemory
+      );
 
       if (result.success) {
         callbacks.onComplete?.(result.output, [
@@ -2300,7 +2328,7 @@ Please save the content now.`;
           for (const [toolName, output] of toolOutputEntries) {
             if (toolName === "write_file" && typeof output === "string") {
               const pathMatch = output.match(
-                /(?:wrote|created|saved).*?([\/\w.-]+\.\w+)/i
+                /(?:wrote|created|saved).*?([/\w.-]+\.\w+)/i
               );
               if (pathMatch) {
                 filesWritten.push({

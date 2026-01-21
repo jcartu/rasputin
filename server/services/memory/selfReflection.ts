@@ -12,8 +12,8 @@ import { invokeLLM } from "../../_core/llm";
 import { createMemorySystem, MemorySystem } from "./memorySystem";
 import { getDb } from "../../db";
 import {
-  agentTasks,
-  agentToolCalls,
+  agentTasks as _agentTasks,
+  agentToolCalls as _agentToolCalls,
   selfModificationLog,
 } from "../../../drizzle/schema";
 import { eq, desc } from "drizzle-orm";

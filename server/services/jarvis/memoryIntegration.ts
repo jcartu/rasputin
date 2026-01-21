@@ -222,7 +222,7 @@ export async function learnFromTask(
 
       if (!existingProcedure) {
         // Create new procedure from successful task
-        const steps = meaningfulSteps.map((s, i) => ({
+        const steps = meaningfulSteps.map(s => ({
           action: `Use ${s.toolName}`,
           tool: s.toolName,
           result: s.output.slice(0, 200),
@@ -462,7 +462,7 @@ function extractEntities(query: string, toolsUsed: string[]): string[] {
       entities.add(`url:${word}`);
     }
     // File paths
-    if (word.match(/^[\/~]/)) {
+    if (word.match(/^[/~]/)) {
       entities.add(`path:${word}`);
     }
     // Capitalized words (potential proper nouns)

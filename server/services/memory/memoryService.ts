@@ -11,7 +11,7 @@ import {
   semanticMemories,
   proceduralMemories,
   memoryEmbeddings,
-  memoryAccessLog,
+  memoryAccessLog as _memoryAccessLog,
   learningEvents,
   trainingData,
 } from "../../../drizzle/schema";
@@ -53,6 +53,9 @@ export class MemoryService {
   // ============================================================================
 
   async generateEmbedding(text: string): Promise<number[]> {
+    if (!text) {
+      return this.simpleEmbedding("");
+    }
     const cacheKey = text.slice(0, 100);
     if (this.embeddingCache.has(cacheKey)) {
       return this.embeddingCache.get(cacheKey)!;
@@ -648,6 +651,9 @@ export class MemoryService {
    * Search across all memory types
    */
   async search(query: MemorySearchQuery): Promise<MemorySearchResult[]> {
+    if (!query.query) {
+      return [];
+    }
     const { memoryTypes = ["episodic", "semantic", "procedural"], limit = 10 } =
       query;
     const results: MemorySearchResult[] = [];
@@ -986,6 +992,33 @@ export class MemoryService {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
+  }
+
+  /**
+   * Search memories - alias for V3MemoryIntegration compatibility
+   */
+  async searchMemories(params: {
+    query: string;
+    userId: number;
+    limit?: number;
+  }): Promise<
+    Array<{
+      memory: Record<string, unknown>;
+      memoryType: string;
+      relevanceScore: number;
+    }>
+  > {
+    const results = await this.search({
+      query: params.query,
+      userId: params.userId,
+      limit: params.limit,
+    });
+
+    return results.map(r => ({
+      memory: r.memory as unknown as Record<string, unknown>,
+      memoryType: r.memoryType,
+      relevanceScore: r.relevanceScore,
+    }));
   }
 }
 

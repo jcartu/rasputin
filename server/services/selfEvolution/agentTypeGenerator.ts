@@ -5,8 +5,8 @@
 
 import { invokeLLM } from "../../_core/llm";
 import { getDb } from "../../db";
-import { agentTasks } from "../../../drizzle/schema";
-import { eq, gte, sql, desc } from "drizzle-orm";
+import { agentTasks as _agentTasks } from "../../../drizzle/schema";
+import { eq as _eq, gte as _gte, sql, desc as _desc } from "drizzle-orm";
 import type { AgentCapabilities } from "../multiAgent/types";
 
 interface TaskPattern {

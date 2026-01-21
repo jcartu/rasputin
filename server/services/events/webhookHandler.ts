@@ -107,7 +107,7 @@ export class WebhookHandler {
     path: string,
     headers: Record<string, string>,
     body: unknown,
-    sourceIp?: string
+    _sourceIp?: string
   ): Promise<{
     success: boolean;
     message: string;

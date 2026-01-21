@@ -12,15 +12,15 @@ JARVIS v3 transforms the existing Rasputin system from a capable AI assistant in
 
 ## 1.2 Key Differentiators vs. Competition
 
-| Capability | ChatGPT | MANUS | OpenCode | JARVIS v3 |
-|------------|---------|-------|----------|-----------|
-| Frontier Reasoning | ✅ | ❌ | ✅ | ✅ Multi-model consensus |
-| Desktop Control | ❌ | ✅ | ❌ | ✅ Privileged daemon |
-| Code Generation | ✅ | ❌ | ✅ | ✅ With execution |
-| Multi-Agent Swarm | ❌ | ❌ | ❌ | ✅ 7 specialized agents |
-| Episodic Memory | ❌ | ❌ | ❌ | ✅ Qdrant learning |
-| Local GPU Inference | ❌ | ❌ | ❌ | ✅ 96GB VRAM |
-| Full Deployment | ❌ | ❌ | Partial | ✅ End-to-end |
+| Capability          | ChatGPT | MANUS | OpenCode | JARVIS v3                |
+| ------------------- | ------- | ----- | -------- | ------------------------ |
+| Frontier Reasoning  | ✅      | ❌    | ✅       | ✅ Multi-model consensus |
+| Desktop Control     | ❌      | ✅    | ❌       | ✅ Privileged daemon     |
+| Code Generation     | ✅      | ❌    | ✅       | ✅ With execution        |
+| Multi-Agent Swarm   | ❌      | ❌    | ❌       | ✅ 7 specialized agents  |
+| Episodic Memory     | ❌      | ❌    | ❌       | ✅ Qdrant learning       |
+| Local GPU Inference | ❌      | ❌    | ❌       | ✅ 96GB VRAM             |
+| Full Deployment     | ❌      | ❌    | Partial  | ✅ End-to-end            |
 
 ## 1.3 Hardware Target Specifications
 
@@ -42,4 +42,3 @@ Users: 1-5 concurrent (not simultaneous heavy tasks)
 5. **SECURE BY DEFAULT** - Capability-based security, sandboxing, audit trails
 
 ---
-

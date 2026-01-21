@@ -35,7 +35,8 @@ interface LogEntry {
     | "tool-error"
     | "info"
     | "success"
-    | "error";
+    | "error"
+    | "memory";
   message: string;
   toolName?: string;
 }
@@ -75,6 +76,8 @@ function getLogColor(type: LogEntry["type"]) {
       return "text-green-400";
     case "thinking":
       return "text-purple-400";
+    case "memory":
+      return "text-amber-400";
     default:
       return "text-muted-foreground";
   }
@@ -93,6 +96,8 @@ function getLogPrefix(type: LogEntry["type"]) {
       return "FIN";
     case "thinking":
       return "THK";
+    case "memory":
+      return "MEM";
     default:
       return "LOG";
   }
@@ -115,13 +120,16 @@ function FlyingLogs({
   }, [logs, autoScroll]);
 
   return (
-    <div className="relative h-56 bg-black/80 rounded-lg border border-border overflow-hidden font-mono text-[11px] shadow-inner">
-      <div className="flex items-center gap-2 px-3 py-2 bg-secondary/50 border-b border-border">
-        <Terminal className="h-3 w-3 text-primary" />
-        <span className="text-muted-foreground font-medium">System Logs</span>
+    <div className="relative h-80 bg-black/90 rounded-lg border border-cyan-500/20 overflow-hidden font-mono text-[11px] shadow-lg shadow-cyan-500/5">
+      <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-cyan-500/10 to-purple-500/10 border-b border-cyan-500/20">
+        <Terminal className="h-3 w-3 text-cyan-400" />
+        <span className="text-cyan-400/80 font-medium">Intelligence Feed</span>
         {isActive && (
-          <span className="ml-auto flex items-center gap-1 text-green-400 text-[10px] uppercase tracking-wider">
-            <Activity className="h-3 w-3 animate-pulse" />
+          <span className="ml-auto flex items-center gap-1.5 text-green-400 text-[10px] uppercase tracking-wider">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+            </span>
             Live
           </span>
         )}
@@ -129,7 +137,7 @@ function FlyingLogs({
 
       <div
         ref={scrollRef}
-        className="h-[calc(100%-32px)] overflow-y-auto p-2 space-y-0.5"
+        className="h-[calc(100%-36px)] overflow-y-auto p-2 space-y-1"
         onScroll={e => {
           const target = e.target as HTMLDivElement;
           const isAtBottom =
@@ -140,38 +148,54 @@ function FlyingLogs({
         {logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground/40">
             <Terminal className="h-6 w-6 mb-2 opacity-20" />
-            <p className="text-[10px]">Waiting for output...</p>
+            <p className="text-[10px]">Awaiting neural activity...</p>
           </div>
         ) : (
-          logs.map(log => (
-            <div
-              key={log.id}
-              className={`flex gap-1.5 animate-in slide-in-from-bottom-1 duration-150 leading-tight ${getLogColor(
-                log.type
-              )}`}
-            >
-              <span className="text-muted-foreground/40 shrink-0 select-none text-[10px]">
-                {new Date(log.timestamp).toLocaleTimeString("en-US", {
-                  hour12: false,
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit",
-                })}
-              </span>
-              <span className="text-muted-foreground/60 shrink-0 select-none text-[10px]">
-                [{getLogPrefix(log.type)}]
-              </span>
-              <span className="break-words font-medium opacity-90 min-w-0 overflow-hidden">
-                {log.message}
-              </span>
-            </div>
-          ))
+          <AnimatePresence mode="popLayout">
+            {logs.map((log, index) => (
+              <motion.div
+                key={log.id}
+                initial={{ opacity: 0, x: -50, scale: 0.8 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 500,
+                  damping: 30,
+                  delay: index === logs.length - 1 ? 0 : 0,
+                }}
+                className={`flex gap-1.5 leading-tight py-0.5 px-1 rounded ${getLogColor(log.type)} ${
+                  index === logs.length - 1 && isActive
+                    ? "bg-cyan-500/10"
+                    : "hover:bg-white/5"
+                }`}
+              >
+                <span className="text-muted-foreground/40 shrink-0 select-none text-[10px]">
+                  {new Date(log.timestamp).toLocaleTimeString("en-US", {
+                    hour12: false,
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                  })}
+                </span>
+                <span className="text-muted-foreground/60 shrink-0 select-none text-[10px]">
+                  [{getLogPrefix(log.type)}]
+                </span>
+                <span className="break-words font-medium opacity-90 min-w-0 overflow-hidden">
+                  {log.message}
+                </span>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         )}
 
         {isActive && (
-          <div className="flex items-center gap-1 text-primary mt-1">
-            <span className="animate-pulse">_</span>
-          </div>
+          <motion.div
+            animate={{ opacity: [1, 0.3, 1] }}
+            transition={{ duration: 1, repeat: Infinity }}
+            className="flex items-center gap-1 text-cyan-400 mt-1"
+          >
+            <span className="inline-block w-2 h-4 bg-cyan-400" />
+          </motion.div>
         )}
       </div>
     </div>
@@ -248,47 +272,86 @@ interface JarvisThinkingPanelProps {
 }
 
 export function JarvisThinkingPanel({ state }: JarvisThinkingPanelProps) {
+  const logHistoryRef = useRef<LogEntry[]>([]);
+  const seenIdsRef = useRef<Set<string>>(new Set());
+  const lastTaskIdRef = useRef<number | null>(null);
+
   const logs = useMemo(() => {
-    const entries: LogEntry[] = [];
+    if (state.taskId !== null && state.taskId !== lastTaskIdRef.current) {
+      if (lastTaskIdRef.current !== null && logHistoryRef.current.length > 0) {
+        logHistoryRef.current.push({
+          id: `separator-${Date.now()}`,
+          timestamp: Date.now(),
+          type: "info",
+          message: "─── New Task ───",
+        });
+      }
+      lastTaskIdRef.current = state.taskId;
+    }
 
     state.steps.forEach(step => {
       if (step.type === "thinking" && step.content) {
-        entries.push({
-          id: `${step.id}-thk`,
-          timestamp: step.timestamp,
-          type: "thinking",
-          message:
-            step.content.slice(0, 100) +
-            (step.content.length > 100 ? "..." : ""),
-        });
+        const id = `${step.id}-thk`;
+        if (!seenIdsRef.current.has(id)) {
+          seenIdsRef.current.add(id);
+          logHistoryRef.current.push({
+            id,
+            timestamp: step.timestamp,
+            type: "thinking",
+            message:
+              step.content.slice(0, 100) +
+              (step.content.length > 100 ? "..." : ""),
+          });
+        }
       }
 
       if (step.type === "tool" && step.tool) {
-        entries.push({
-          id: `${step.id}-start`,
-          timestamp: step.tool.startTime,
-          type: "tool-start",
-          message: `Executing ${step.tool.name}...`,
-          toolName: step.tool.name,
-        });
+        const startId = `${step.id}-start`;
+        if (!seenIdsRef.current.has(startId)) {
+          seenIdsRef.current.add(startId);
+          logHistoryRef.current.push({
+            id: startId,
+            timestamp: step.tool.startTime,
+            type: "tool-start",
+            message: `Executing ${step.tool.name}...`,
+            toolName: step.tool.name,
+          });
+        }
 
         if (step.tool.status !== "running" && step.tool.endTime) {
-          entries.push({
-            id: `${step.id}-end`,
-            timestamp: step.tool.endTime,
-            type: step.tool.status === "failed" ? "tool-error" : "tool-end",
-            message:
-              step.tool.status === "failed"
-                ? `Tool ${step.tool.name} failed`
-                : `Tool ${step.tool.name} completed (${step.tool.durationMs}ms)`,
-            toolName: step.tool.name,
+          const endId = `${step.id}-end`;
+          if (!seenIdsRef.current.has(endId)) {
+            seenIdsRef.current.add(endId);
+            logHistoryRef.current.push({
+              id: endId,
+              timestamp: step.tool.endTime,
+              type: step.tool.status === "failed" ? "tool-error" : "tool-end",
+              message:
+                step.tool.status === "failed"
+                  ? `Tool ${step.tool.name} failed`
+                  : `Tool ${step.tool.name} completed (${step.tool.durationMs}ms)`,
+              toolName: step.tool.name,
+            });
+          }
+        }
+      }
+
+      if (step.type === "memory" && step.content) {
+        const memId = `${step.id}-mem`;
+        if (!seenIdsRef.current.has(memId)) {
+          seenIdsRef.current.add(memId);
+          logHistoryRef.current.push({
+            id: memId,
+            timestamp: step.timestamp,
+            type: "memory",
+            message: step.content,
           });
         }
       }
     });
 
-    return entries.sort((a, b) => a.timestamp - b.timestamp);
-  }, [state.steps]);
+    return [...logHistoryRef.current].sort((a, b) => a.timestamp - b.timestamp);
+  }, [state.steps, state.taskId]);
 
   const [elapsedTime, setElapsedTime] = useState(0);
   const startTimeRef = useRef<number | null>(null);

@@ -9,6 +9,7 @@ import {
   type JarvisCompleteEvent,
   type JarvisErrorEvent,
   type JarvisRejoinStateEvent,
+  type JarvisMemoryEvent,
   type StreamingStep as SocketStreamingStep,
 } from "@/lib/socket";
 
@@ -31,9 +32,11 @@ export interface StreamingToolCall {
 
 export interface StreamingStep {
   id: string;
-  type: "thinking" | "tool";
+  type: "thinking" | "tool" | "memory";
   content?: string;
   tool?: StreamingToolCall;
+  memoryType?: "search" | "store" | "enrich";
+  memoryCount?: number;
   timestamp: number;
 }
 
@@ -405,6 +408,26 @@ export function useJarvisStream() {
       }));
     };
 
+    const handleMemory = (event: JarvisMemoryEvent) => {
+      console.info("[JARVIS] memory:", event.type, event.message);
+      if (event.taskId !== activeTaskIdRef.current) return;
+
+      setState(prev => ({
+        ...prev,
+        steps: [
+          ...prev.steps,
+          {
+            id: crypto.randomUUID(),
+            type: "memory",
+            content: event.message,
+            memoryType: event.type,
+            memoryCount: event.count,
+            timestamp: event.timestamp,
+          },
+        ],
+      }));
+    };
+
     socket.on("jarvis:thinking", handleThinking);
     socket.on("jarvis:thinking_chunk", handleThinkingChunk);
     socket.on("jarvis:tool_start", handleToolStart);
@@ -413,6 +436,7 @@ export function useJarvisStream() {
     socket.on("jarvis:complete", handleComplete);
     socket.on("jarvis:error", handleError);
     socket.on("jarvis:rejoin_state", handleRejoinState);
+    socket.on("jarvis:memory", handleMemory);
 
     return () => {
       socket.off("jarvis:thinking", handleThinking);
@@ -423,6 +447,7 @@ export function useJarvisStream() {
       socket.off("jarvis:complete", handleComplete);
       socket.off("jarvis:error", handleError);
       socket.off("jarvis:rejoin_state", handleRejoinState);
+      socket.off("jarvis:memory", handleMemory);
     };
   }, []);
 

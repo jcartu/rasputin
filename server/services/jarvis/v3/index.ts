@@ -204,7 +204,7 @@ export {
 import { getGlobalRegistry } from "./toolRegistry";
 import { getGlobalCoordinator } from "./agentCoordinator";
 import { TOOL_COUNT } from "./toolMetadata";
-import type { PerceptionStatus } from "./perceptionAdapter";
+import type { PerceptionStatus as _PerceptionStatus } from "./perceptionAdapter";
 
 export interface V3SubsystemStatus {
   name: string;

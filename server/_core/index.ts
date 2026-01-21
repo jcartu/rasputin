@@ -11,7 +11,7 @@ import {
   processFile,
   processMultipleFiles,
   generateFileContext,
-  type ProcessedFile,
+  type ProcessedFile as _ProcessedFile,
 } from "../services/fileProcessor";
 import {
   registerAuthRoutes,

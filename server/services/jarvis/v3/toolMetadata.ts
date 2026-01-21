@@ -24,7 +24,7 @@ const AGENT_GROUPS = {
   fileOps: ["coder", "executor"] as AgentType[],
   deployment: ["executor", "verifier"] as AgentType[],
   communication: ["planner", "executor"] as AgentType[],
-  memory: ["planner", "learner", "researcher"] as AgentType[],
+  memory: ["planner", "learner", "researcher", "coder"] as AgentType[],
   safety: ["safety", "verifier"] as AgentType[],
 };
 

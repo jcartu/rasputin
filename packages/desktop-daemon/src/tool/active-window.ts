@@ -103,7 +103,7 @@ Useful for understanding what the user is currently working on.`,
 
   parameters: z.object({}),
 
-  async execute(args, ctx) {
+  async execute(_args, _ctx) {
     const info = await getActiveWindow();
 
     const output = [

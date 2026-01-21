@@ -1,16 +1,18 @@
 import Layout from "@/components/JarvisLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Database, HardDrive, Clock, FileJson } from "lucide-react";
+import { Database, HardDrive, FileJson } from "lucide-react";
 
 export default function Memory() {
   return (
     <Layout>
       <div className="space-y-10">
         <div className="space-y-4">
-          <h1 className="text-3xl font-bold tracking-tight font-mono">5. Memory Systems</h1>
+          <h1 className="text-3xl font-bold tracking-tight font-mono">
+            5. Memory Systems
+          </h1>
           <p className="text-lg text-muted-foreground">
-            A three-tier memory architecture combining hot cache, warm vector storage, and cold archival.
+            A three-tier memory architecture combining hot cache, warm vector
+            storage, and cold archival.
           </p>
         </div>
 
@@ -103,7 +105,7 @@ export default function Memory() {
               <span>memory/schema.ts</span>
             </div>
             <pre className="text-blue-400">
-{`interface EpisodicMemory {
+              {`interface EpisodicMemory {
   id: string;
   vector: number[1536]; // OpenAI/BGE embedding
   payload: {
@@ -151,5 +153,5 @@ function ZapIcon(props: any) {
     >
       <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
     </svg>
-  )
+  );
 }

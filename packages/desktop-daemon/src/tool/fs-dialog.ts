@@ -114,7 +114,7 @@ Returns the selected path(s).`,
       .describe("File type filters"),
   }),
 
-  async execute(args, ctx) {
+  async execute(args, _ctx) {
     if (args.action === "open") {
       const paths = await showOpenDialog({
         title: args.title,

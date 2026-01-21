@@ -8,21 +8,16 @@ import {
   markDataAsUsed,
   exportToJsonl,
 } from "./dataCollector";
-import type {
-  TrainingJob,
-  TrainingConfig,
-  TrainingDataFilter,
-  TrainingMetrics,
-  TrainingProgressUpdate,
-  StartTrainingRequest,
-  TrainingJobStatus,
-  BaseModelType,
-  DEFAULT_TRAINING_CONFIG,
-  DEFAULT_LORA_CONFIGS,
-} from "./types";
 import {
   DEFAULT_TRAINING_CONFIG as defaultConfig,
   DEFAULT_LORA_CONFIGS as loraConfigs,
+  type TrainingJob,
+  type TrainingConfig,
+  type TrainingDataFilter,
+  type TrainingProgressUpdate,
+  type StartTrainingRequest,
+  type TrainingJobStatus,
+  type BaseModelType,
 } from "./types";
 
 const execAsync = promisify(exec);
@@ -38,7 +33,7 @@ const MODEL_PATHS: Record<BaseModelType, string> = {
   "deepseek-coder": "deepseek-ai/deepseek-coder-33b-instruct",
 };
 
-interface TrainerEvents {
+interface _TrainerEvents {
   progress: (update: TrainingProgressUpdate) => void;
   completed: (job: TrainingJob) => void;
   failed: (job: TrainingJob, error: Error) => void;
@@ -122,7 +117,7 @@ class TrainingJobManager extends EventEmitter {
       const splitIdx = Math.floor(allData.length * 0.9);
 
       const trainFilter = { ...filter, limit: splitIdx };
-      const evalFilter = { ...filter, limit: allData.length - splitIdx };
+      const _evalFilter = { ...filter, limit: allData.length - splitIdx };
 
       await exportToJsonl(trainFilter, trainPath);
 

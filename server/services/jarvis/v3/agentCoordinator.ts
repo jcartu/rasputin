@@ -133,7 +133,7 @@ export function analyzeTask(task: string): TaskAnalysis {
   const isCalculationQuery =
     taskLower.includes("calculate") ||
     taskLower.includes("compute") ||
-    /\d+\s*[\+\-\*\/\^]\s*\d+/.test(task);
+    /\d+\s*[+\-*/^]\s*\d+/.test(task);
 
   if (isWeatherQuery) {
     return {
@@ -285,7 +285,13 @@ export function analyzeTask(task: string): TaskAnalysis {
         ? "moderate"
         : "simple";
 
+  // Detect explicit multi-agent requests via keywords
+  const MULTI_AGENT_KEYWORDS =
+    /spawn.*team|spawn.*agents?|multi-?model|different.*models|debate|committee|consensus|swarm|review.*team|multiple.*agents?|agent.*team|team.*of.*agents?/i;
+  const explicitMultiAgent = MULTI_AGENT_KEYWORDS.test(taskLower);
+
   const requiresMultiAgent =
+    explicitMultiAgent ||
     isInherentlyComplex ||
     (estimatedComplexity === "complex" && secondaryAgents.length >= 2);
 

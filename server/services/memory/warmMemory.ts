@@ -1,6 +1,6 @@
 import { getDb } from "../../db";
 import { episodicMemories, semanticMemories } from "../../../drizzle/schema";
-import { eq, desc, and, isNull } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { getOllamaClient } from "../localLLM/ollama";
 import { getVLLMClient } from "../localLLM/vllm";
 
@@ -38,7 +38,7 @@ async function extractKnowledgeWithLocalLLM(
   const memoryText = memories
     .map(
       (m, i) =>
-        `${i + 1}. [${m.memoryType}] ${m.title}\n   ${m.description.slice(0, 500)}`
+        `${i + 1}. [${m.memoryType}] ${m.title || "Untitled"}\n   ${(m.description || "").slice(0, 500)}`
     )
     .join("\n\n");
 

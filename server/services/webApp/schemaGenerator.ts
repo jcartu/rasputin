@@ -243,10 +243,11 @@ function generateFieldDefinition(
       }
       break;
 
-    case "string":
+    case "string": {
       const length = field.length || 255;
       definition = `${field.name}: varchar("${columnName}", { length: ${length} })`;
       break;
+    }
 
     case "text":
       definition = `${field.name}: text("${columnName}")`;
@@ -268,11 +269,12 @@ function generateFieldDefinition(
       }
       break;
 
-    case "decimal":
+    case "decimal": {
       const precision = field.precision || 10;
       const scale = field.scale || 2;
       definition = `${field.name}: decimal("${columnName}", { precision: ${precision}, scale: ${scale} })`;
       break;
+    }
 
     case "json":
       if (databaseType === "sqlite") {

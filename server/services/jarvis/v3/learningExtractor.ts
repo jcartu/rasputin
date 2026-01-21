@@ -163,7 +163,7 @@ function extractSemanticFacts(
   patterns: string[]
 ): Omit<SemanticMemory, "id" | "createdAt" | "updatedAt">[] {
   const facts: Omit<SemanticMemory, "id" | "createdAt" | "updatedAt">[] = [];
-  const { toolName, category, params, result, context } = record;
+  const { toolName, category: _category, params, result, context } = record;
 
   for (const pattern of patterns) {
     const [type, value] = pattern.split(":");

@@ -328,8 +328,8 @@ export class EventExecutor {
    */
   private async executeChainEvent(
     config: ActionConfig,
-    payload: Record<string, unknown>,
-    eventId: number
+    _payload: Record<string, unknown>,
+    _eventId: number
   ): Promise<{ triggered: boolean }> {
     if (!config.triggerId) {
       throw new Error("Trigger ID is required for chain_event");

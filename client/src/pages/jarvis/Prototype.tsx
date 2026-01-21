@@ -9,17 +9,11 @@ import {
   MessageSquare,
   Mic,
   Send,
-  Minimize2,
-  Maximize2,
   ChevronRight,
   ChevronLeft,
   Brain,
   Layers,
   Code,
-  Eye,
-  Play,
-  Wifi,
-  WifiOff,
   Loader2,
   CheckCircle2,
   XCircle,
@@ -37,6 +31,45 @@ import { useJarvisStream } from "@/hooks/useJarvisStream";
 import { getSocket } from "@/lib/socket";
 import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
+
+function TypewriterText({
+  text,
+  speed = 15,
+  className,
+}: {
+  text: string;
+  speed?: number;
+  className?: string;
+}) {
+  const [displayText, setDisplayText] = useState("");
+  const [isComplete, setIsComplete] = useState(false);
+
+  useEffect(() => {
+    if (!text) return;
+    setDisplayText("");
+    setIsComplete(false);
+    let index = 0;
+    const interval = setInterval(() => {
+      if (index < text.length) {
+        setDisplayText(text.slice(0, index + 1));
+        index++;
+      } else {
+        setIsComplete(true);
+        clearInterval(interval);
+      }
+    }, speed);
+    return () => clearInterval(interval);
+  }, [text, speed]);
+
+  return (
+    <span className={className}>
+      {displayText}
+      {!isComplete && (
+        <span className="inline-block w-2 h-4 ml-0.5 bg-cyan-400 animate-pulse" />
+      )}
+    </span>
+  );
+}
 
 const TOOL_TO_AGENT: Record<string, string> = {
   web_search: "VIS",
@@ -83,6 +116,13 @@ export default function Prototype() {
   });
 
   const { data: taskHistory } = trpc.jarvis.listTasks.useQuery({ limit: 20 });
+
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const { data: selectedTaskMessages } = trpc.jarvis.getTaskMessages.useQuery(
+    { taskId: selectedTaskId ?? undefined },
+    { enabled: !!selectedTaskId }
+  );
+  const selectedTask = taskHistory?.find((t: any) => t.id === selectedTaskId);
 
   useEffect(() => {
     refreshAuth().then(() => setAuthChecked(true));
@@ -210,9 +250,10 @@ export default function Prototype() {
 
   const [activeScenario, setActiveScenario] = useState<string | null>(null);
   const [showStream, setShowStream] = useState(false);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [_messages, setMessages] = useState<any[]>([]);
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
-  const [agentMetrics, setAgentMetrics] = useState<
+  const [isTaskListOpen, setIsTaskListOpen] = useState(true);
+  const [_agentMetrics, setAgentMetrics] = useState<
     Record<string, { cpu: number; mem: number; net: number }>
   >({});
 
@@ -235,7 +276,38 @@ export default function Prototype() {
   }, [derivedActiveAgent, jarvis.isStreaming]);
 
   useEffect(() => {
-    const newLogs = jarvis.steps.map(step => {
+    const newLogs: any[] = [];
+    const now = new Date();
+
+    if (jarvis.isStreaming && jarvis.steps.length === 0) {
+      newLogs.push({
+        agent: "ORCH",
+        msg: "Using swarm mode with frontier APIs for multi-agent coordination...",
+        type: "info",
+        timestamp:
+          now.toLocaleTimeString([], {
+            hour12: false,
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          }) +
+          "." +
+          String(now.getMilliseconds()).padStart(3, "0"),
+      });
+    }
+
+    jarvis.steps.forEach((step, idx) => {
+      const stepTime = new Date(now.getTime() + idx * 100);
+      const timestamp =
+        stepTime.toLocaleTimeString([], {
+          hour12: false,
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }) +
+        "." +
+        String(stepTime.getMilliseconds()).padStart(3, "0");
+
       if (step.type === "tool" && step.tool) {
         const agentCode = TOOL_TO_AGENT[step.tool.name] || "EXEC";
         const statusSuffix =
@@ -244,22 +316,36 @@ export default function Prototype() {
             : step.tool.status === "failed"
               ? " [FAILED]"
               : " [DONE]";
-        return {
+        newLogs.push({
           agent: agentCode,
           msg: `${step.tool.name}${statusSuffix}`,
           type: step.tool.status === "failed" ? "error" : "exec",
-        };
+          timestamp,
+        });
+        if (step.tool.durationMs && step.tool.status !== "running") {
+          newLogs.push({
+            agent: agentCode,
+            msg: `└─ completed in ${(step.tool.durationMs / 1000).toFixed(2)}s`,
+            type: "info",
+            timestamp,
+          });
+        }
+      } else if (step.type === "thinking" && step.content) {
+        newLogs.push({
+          agent: "ORCH",
+          msg:
+            step.content.slice(0, 120) +
+            (step.content.length > 120 ? "..." : ""),
+          type: "info",
+          timestamp,
+        });
       }
-      return {
-        agent: "ORCH",
-        msg: step.content?.slice(0, 100) || "Thinking...",
-        type: "info",
-      };
     });
+
     if (newLogs.length > 0) {
       setLogs(newLogs);
     }
-  }, [jarvis.steps]);
+  }, [jarvis.steps, jarvis.isStreaming]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -381,7 +467,7 @@ export default function Prototype() {
     useState<keyof typeof scenarios>("bugfix");
 
   // Audio Synthesizer
-  const playSound = (type: "type" | "alert" | "success" | "hover") => {
+  const _playSound = (type: "type" | "alert" | "success" | "hover") => {
     const ctx = new (window.AudioContext ||
       (window as any).webkitAudioContext)();
     const osc = ctx.createOscillator();
@@ -438,6 +524,7 @@ export default function Prototype() {
     jarvis.startTask(input, user.id);
     setShowStream(true);
     setActiveScenario("jarvis");
+    setSelectedTaskId(null);
     setInput("");
   }, [input, user, jarvis]);
 
@@ -459,20 +546,105 @@ export default function Prototype() {
 
       {/* Main Layout */}
       <div className="relative z-10 flex h-full">
-        {/* Left Sidebar (Navigation) */}
-        <div className="w-16 border-r border-white/10 flex flex-col items-center py-6 gap-6 bg-black/40 backdrop-blur-md">
-          <div className="h-10 w-10 rounded-full bg-cyan-500/10 border border-cyan-500/50 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.3)]">
-            <Terminal className="h-5 w-5 text-cyan-400" />
+        {/* Left Sidebar (Navigation + Task List) */}
+        <div
+          className={cn(
+            "border-r border-white/10 flex flex-col bg-black/40 backdrop-blur-md transition-all duration-300",
+            isTaskListOpen ? "w-72" : "w-16"
+          )}
+        >
+          {/* Logo & Toggle */}
+          <div className="h-16 border-b border-white/10 flex items-center justify-between px-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-cyan-500/10 border border-cyan-500/50 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.3)] shrink-0">
+                <Terminal className="h-5 w-5 text-cyan-400" />
+              </div>
+              {isTaskListOpen && (
+                <span className="font-mono font-bold text-xs tracking-widest text-cyan-400 animate-in fade-in">
+                  TASKS
+                </span>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-cyan-400"
+              onClick={() => setIsTaskListOpen(!isTaskListOpen)}
+            >
+              {isTaskListOpen ? (
+                <ChevronLeft className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </Button>
           </div>
-          <nav className="flex flex-col gap-4">
-            <NavIcon icon={MessageSquare} active />
-            <NavIcon icon={Layers} />
-            <NavIcon icon={Code} />
-            <NavIcon icon={Shield} />
-          </nav>
-          <div className="mt-auto">
-            <NavIcon icon={Zap} />
-          </div>
+
+          {/* Task List */}
+          {isTaskListOpen && (
+            <ScrollArea className="flex-1 p-2">
+              <div className="space-y-1">
+                {taskHistory?.map((task: any) => (
+                  <button
+                    key={task.id}
+                    className={cn(
+                      "w-full text-left p-2 rounded-lg border transition-all duration-200 group",
+                      task.status === "completed"
+                        ? "border-green-500/20 bg-green-500/5 hover:bg-green-500/10"
+                        : task.status === "failed"
+                          ? "border-red-500/20 bg-red-500/5 hover:bg-red-500/10"
+                          : task.status === "running"
+                            ? "border-cyan-500/30 bg-cyan-500/10 animate-pulse"
+                            : "border-white/10 bg-white/5 hover:bg-white/10"
+                    )}
+                    onClick={() => setSelectedTaskId(task.id)}
+                  >
+                    <div className="flex items-start gap-2">
+                      {task.status === "completed" ? (
+                        <CheckCircle2 className="h-3 w-3 text-green-400 mt-0.5 shrink-0" />
+                      ) : task.status === "failed" ? (
+                        <XCircle className="h-3 w-3 text-red-400 mt-0.5 shrink-0" />
+                      ) : task.status === "running" ? (
+                        <Loader2 className="h-3 w-3 text-cyan-400 mt-0.5 shrink-0 animate-spin" />
+                      ) : (
+                        <Clock className="h-3 w-3 text-muted-foreground mt-0.5 shrink-0" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-mono text-white/90 truncate">
+                          {task.title ||
+                            task.query?.slice(0, 50) ||
+                            "Untitled Task"}
+                          {!task.title && task.query?.length > 50 && "..."}
+                        </p>
+                        <p className="text-[8px] font-mono text-muted-foreground mt-0.5">
+                          {new Date(task.createdAt).toLocaleDateString()} •{" "}
+                          {task.iterationCount || 0} steps
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+                {(!taskHistory || taskHistory.length === 0) && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Brain className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                    <p className="text-[10px] font-mono">No tasks yet</p>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          )}
+
+          {/* Nav Icons (when collapsed) */}
+          {!isTaskListOpen && (
+            <nav className="flex flex-col items-center py-6 gap-4">
+              <NavIcon icon={MessageSquare} active />
+              <NavIcon icon={Layers} />
+              <NavIcon icon={Code} />
+              <NavIcon icon={Shield} />
+              <div className="mt-auto">
+                <NavIcon icon={Zap} />
+              </div>
+            </nav>
+          )}
         </div>
 
         {/* Center Stage (Chat/Work) */}
@@ -581,7 +753,10 @@ export default function Prototype() {
                         <div className="flex items-start gap-3">
                           <Brain className="h-4 w-4 text-purple-400 animate-pulse mt-0.5" />
                           <div className="text-sm text-purple-200/90">
-                            {step.content || "Thinking..."}
+                            <TypewriterText
+                              text={step.content || "Thinking..."}
+                              speed={8}
+                            />
                           </div>
                         </div>
                       ) : (
@@ -604,10 +779,32 @@ export default function Prototype() {
                             )}
                           </div>
                           {step.tool?.output && (
-                            <pre className="text-xs text-muted-foreground bg-black/30 p-2 rounded overflow-x-auto max-h-32">
-                              {step.tool.output.slice(0, 500)}
-                              {step.tool.output.length > 500 && "..."}
-                            </pre>
+                            <>
+                              {step.tool.name === "generate_image" &&
+                                step.tool.output.includes(
+                                  "rasputin.studio/generated/"
+                                ) && (
+                                  <div className="mt-2">
+                                    {step.tool.output
+                                      .match(
+                                        /https:\/\/rasputin\.studio\/generated\/[^\s"]+\.png/g
+                                      )
+                                      ?.map((url: string, i: number) => (
+                                        <img
+                                          key={i}
+                                          src={url}
+                                          alt="Generated image"
+                                          className="max-w-full rounded-lg border border-white/10 mt-2"
+                                          style={{ maxHeight: "300px" }}
+                                        />
+                                      ))}
+                                  </div>
+                                )}
+                              <pre className="text-xs text-muted-foreground bg-black/30 p-2 rounded overflow-x-auto max-h-32">
+                                {step.tool.output.slice(0, 500)}
+                                {step.tool.output.length > 500 && "..."}
+                              </pre>
+                            </>
                           )}
                         </div>
                       )}
@@ -651,6 +848,117 @@ export default function Prototype() {
                   </Button>
                 </div>
               )}
+            </div>
+          ) : selectedTask ? (
+            <div className="absolute inset-0 z-10 bg-black/90 backdrop-blur-sm p-6 overflow-hidden mt-14 mb-24">
+              <ScrollArea className="h-full">
+                <div className="max-w-3xl mx-auto space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex-1">
+                      <div className="text-xs font-mono text-cyan-400 mb-2">
+                        TASK QUERY
+                      </div>
+                      <div className="text-sm text-white">
+                        {selectedTask.query}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-4 text-muted-foreground hover:text-white"
+                      onClick={() => setSelectedTaskId(null)}
+                    >
+                      <XCircle className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs font-mono">
+                    <span
+                      className={cn(
+                        "px-2 py-1 rounded",
+                        selectedTask.status === "completed"
+                          ? "bg-green-500/20 text-green-400"
+                          : selectedTask.status === "failed"
+                            ? "bg-red-500/20 text-red-400"
+                            : "bg-cyan-500/20 text-cyan-400"
+                      )}
+                    >
+                      {selectedTask.status?.toUpperCase()}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {selectedTask.iterationCount || 0} iterations
+                    </span>
+                    {selectedTask.durationMs && (
+                      <span className="text-muted-foreground">
+                        {(selectedTask.durationMs / 1000).toFixed(1)}s
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedTaskMessages?.map((msg: any, idx: number) => (
+                    <div
+                      key={msg.id || idx}
+                      className={cn(
+                        "p-3 rounded-lg border animate-in fade-in",
+                        msg.role === "user"
+                          ? "bg-cyan-500/10 border-cyan-500/20"
+                          : msg.role === "tool"
+                            ? "bg-purple-500/10 border-purple-500/20"
+                            : "bg-white/5 border-white/10"
+                      )}
+                    >
+                      <div className="text-xs font-mono text-muted-foreground mb-1">
+                        {msg.role?.toUpperCase()}
+                      </div>
+                      <div className="text-sm text-white whitespace-pre-wrap">
+                        {msg.content?.slice(0, 1000)}
+                        {msg.content?.length > 1000 && "..."}
+                      </div>
+                    </div>
+                  ))}
+
+                  {selectedTask.summary && (
+                    <div className="p-4 rounded-lg bg-gradient-to-r from-purple-500/20 to-cyan-500/20 border border-purple-500/30">
+                      <div className="text-xs font-mono text-purple-400 mb-2">
+                        RESULT
+                      </div>
+                      {selectedTask.summary.includes(
+                        "rasputin.studio/generated/"
+                      ) && (
+                        <div className="mb-3">
+                          {selectedTask.summary
+                            .match(
+                              /https:\/\/rasputin\.studio\/generated\/[^\s"]+\.png/g
+                            )
+                            ?.map((url: string, i: number) => (
+                              <img
+                                key={i}
+                                src={url}
+                                alt="Generated image"
+                                className="max-w-full rounded-lg border border-white/10 mb-2"
+                                style={{ maxHeight: "400px" }}
+                              />
+                            ))}
+                        </div>
+                      )}
+                      <div className="text-sm text-white whitespace-pre-wrap">
+                        {selectedTask.summary}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedTask.errorMessage && (
+                    <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
+                      <div className="text-xs font-mono text-red-400 mb-2">
+                        ERROR
+                      </div>
+                      <div className="text-sm text-red-300">
+                        {selectedTask.errorMessage}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
             </div>
           ) : showStream && activeScenario && activeScenario !== "jarvis" ? (
             <div className="absolute inset-0 z-10 bg-black/90 backdrop-blur-sm p-6 overflow-hidden mt-14 mb-24">
@@ -930,55 +1238,81 @@ export default function Prototype() {
             </div>
           </div>
 
-          {/* 3. Hyper-Stream Logs */}
-          <div className="flex-1 overflow-hidden flex flex-col bg-black/90 relative">
-            <div className="absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-black to-transparent z-10" />
+          {/* 3. Hyper-Stream Logs - Flying Logs Terminal */}
+          <div className="flex-1 overflow-hidden flex flex-col bg-black/95 relative border-t border-cyan-500/20">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500/10 to-purple-500/10 border-b border-white/5">
+              <Terminal className="h-3 w-3 text-cyan-400" />
+              <span className="text-[10px] font-mono text-cyan-300 tracking-wider">
+                LIVE STREAM
+              </span>
+              {jarvis.isStreaming && (
+                <span className="ml-auto flex items-center gap-1 text-[10px] text-green-400">
+                  <Activity className="h-3 w-3 animate-pulse" />
+                  ACTIVE
+                </span>
+              )}
+            </div>
+            <div className="absolute top-8 left-0 right-0 h-6 bg-gradient-to-b from-black/80 to-transparent z-10 pointer-events-none" />
             <ScrollArea
-              className="flex-1 p-4 font-mono text-[10px] leading-tight"
+              className="flex-1 p-3 font-mono text-[10px] leading-relaxed"
               ref={scrollRef}
             >
-              <div className="space-y-1.5">
+              <div className="space-y-1">
+                {logs.length === 0 && !jarvis.isStreaming && (
+                  <div className="text-white/20 text-center py-4">
+                    Awaiting task execution...
+                  </div>
+                )}
                 {logs.map((log, i) => (
                   <div
                     key={i}
-                    className="flex gap-2 animate-in fade-in slide-in-from-left-2 duration-100 group hover:bg-white/5 p-0.5 rounded"
+                    className={cn(
+                      "flex gap-2 group hover:bg-white/5 p-1 rounded transition-all duration-150",
+                      "animate-in fade-in slide-in-from-left-4 duration-200",
+                      i === logs.length - 1 &&
+                        jarvis.isStreaming &&
+                        "bg-cyan-500/5 border-l-2 border-cyan-500"
+                    )}
+                    style={{ animationDelay: `${Math.min(i * 30, 300)}ms` }}
                   >
-                    <span className="text-white/30 w-12 shrink-0 select-none">
-                      {new Date().toLocaleTimeString([], {
-                        hour12: false,
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                      })}
-                      .{Math.floor(Math.random() * 999)}
+                    <span className="text-white/30 w-20 shrink-0 select-none tabular-nums">
+                      {log.timestamp ||
+                        new Date().toLocaleTimeString([], {
+                          hour12: false,
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                          fractionalSecondDigits: 3,
+                        } as any)}
                     </span>
                     <div className="flex-1 break-all">
                       <span
                         className={cn(
-                          "font-bold mr-2",
+                          "font-bold mr-2 px-1 rounded text-[9px]",
                           (log.agent === "ORCH" ||
                             log.agent === "Orchestrator") &&
-                            "text-purple-400",
+                            "text-purple-300 bg-purple-500/20",
                           (log.agent === "PLAN" || log.agent === "Planner") &&
-                            "text-blue-400",
+                            "text-blue-300 bg-blue-500/20",
                           (log.agent === "MEM" || log.agent === "Memory") &&
-                            "text-yellow-400",
+                            "text-yellow-300 bg-yellow-500/20",
                           (log.agent === "VIS" || log.agent === "Vision") &&
-                            "text-cyan-400",
+                            "text-cyan-300 bg-cyan-500/20",
                           (log.agent === "EXEC" || log.agent === "Executor") &&
-                            "text-green-400",
+                            "text-green-300 bg-green-500/20",
                           (log.agent === "VER" || log.agent === "Verifier") &&
-                            "text-orange-400",
-                          log.agent === "CODE" && "text-amber-400",
-                          log.agent === "SEC" && "text-red-400",
-                          log.type === "error" && "text-red-400"
+                            "text-orange-300 bg-orange-500/20",
+                          log.agent === "CODE" &&
+                            "text-amber-300 bg-amber-500/20",
+                          log.agent === "SEC" && "text-red-300 bg-red-500/20",
+                          log.type === "error" && "text-red-300 bg-red-500/20"
                         )}
                       >
                         [{log.agent?.toUpperCase?.() || "SYS"}]
                       </span>
                       <span
                         className={cn(
-                          "text-white/70 group-hover:text-white transition-colors",
+                          "text-white/80 group-hover:text-white transition-colors",
                           log.type === "error" && "text-red-300"
                         )}
                       >
@@ -987,9 +1321,28 @@ export default function Prototype() {
                     </div>
                   </div>
                 ))}
-                <div className="h-4 w-2 bg-cyan-500 animate-pulse mt-2" />
+                {jarvis.isStreaming && (
+                  <div className="flex items-center gap-2 text-cyan-400 pt-2">
+                    <div className="flex gap-0.5">
+                      <div
+                        className="h-2 w-2 bg-cyan-400 rounded-full animate-bounce"
+                        style={{ animationDelay: "0ms" }}
+                      />
+                      <div
+                        className="h-2 w-2 bg-cyan-400 rounded-full animate-bounce"
+                        style={{ animationDelay: "150ms" }}
+                      />
+                      <div
+                        className="h-2 w-2 bg-cyan-400 rounded-full animate-bounce"
+                        style={{ animationDelay: "300ms" }}
+                      />
+                    </div>
+                    <span className="text-[9px]">Processing...</span>
+                  </div>
+                )}
               </div>
             </ScrollArea>
+            <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-black to-transparent pointer-events-none" />
           </div>
 
           {/* 4. Model Telemetry & Vitals */}
@@ -1155,7 +1508,7 @@ function NavIcon({ icon: Icon, active }: { icon: any; active?: boolean }) {
   );
 }
 
-function AgentStatus({ name, active }: { name: string; active?: boolean }) {
+function _AgentStatus({ name, active }: { name: string; active?: boolean }) {
   return (
     <div
       className={cn(

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Brain,
   ChevronDown,
   ChevronRight,
   CheckCircle2,
@@ -61,7 +60,7 @@ export const IntelligenceStream: React.FC<IntelligenceStreamProps> = ({
   useEffect(() => {
     const runSimulation = async () => {
       const initialQuery = getInitialQuery(scenario);
-      const msgId1 = addMessage("user", initialQuery);
+      addMessage("user", initialQuery);
 
       await wait(1000);
 

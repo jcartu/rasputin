@@ -45,7 +45,7 @@ Useful for understanding the user's computing context.`,
       .describe("What category of information to return"),
   }),
 
-  async execute(args, ctx) {
+  async execute(args, _ctx) {
     const category = args.category;
     const info: Record<string, unknown> = {};
 

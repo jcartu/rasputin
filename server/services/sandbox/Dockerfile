@@ -3,9 +3,10 @@
 
 FROM node:22-alpine
 
-# Install Python, common tools, and security utilities
+# Install Python, common tools, build deps, and security utilities
 RUN apk add --no-cache \
     python3 \
+    python3-dev \
     py3-pip \
     py3-requests \
     py3-numpy \
@@ -13,11 +14,31 @@ RUN apk add --no-cache \
     py3-pillow \
     py3-pandas \
     py3-scipy \
+    py3-scikit-learn \
     bash \
     curl \
     git \
     jq \
-    && ln -sf python3 /usr/bin/python
+    gcc \
+    g++ \
+    musl-dev \
+    linux-headers \
+    freetype-dev \
+    libpng-dev \
+    && ln -sf python3 /usr/bin/python \
+    && pip install --break-system-packages \
+        yfinance \
+        plotly \
+        seaborn \
+        altair \
+        bokeh \
+        networkx \
+        wordcloud \
+        statsmodels \
+        fredapi \
+        alpha_vantage \
+        kaleido \
+    && apk del gcc g++ musl-dev linux-headers python3-dev
 
 # Create non-root user for execution (use different GID to avoid conflicts)
 RUN addgroup -g 2000 sandbox && \

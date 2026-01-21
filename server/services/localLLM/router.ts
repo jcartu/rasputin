@@ -13,7 +13,7 @@ import type {
   LocalLLMConfig,
   ModelRegistry,
   LocalModel,
-  ModelCapability,
+  ModelCapability as _ModelCapability,
   CompletionRequest,
   CompletionResponse,
   StreamChunk,

@@ -55,7 +55,9 @@ async function disableAutostartMacOS(): Promise<void> {
   try {
     await $`launchctl unload ${plistPath}`.quiet();
     await unlink(plistPath);
-  } catch {}
+  } catch {
+    // Ignore unload errors - file may not exist
+  }
 }
 
 async function enableAutostartWindows(execPath: string): Promise<void> {
@@ -100,7 +102,9 @@ async function disableAutostartLinux(): Promise<void> {
   );
   try {
     await unlink(desktopFile);
-  } catch {}
+  } catch {
+    // Ignore unlink errors - file may not exist
+  }
 }
 
 export async function enableAutostart(): Promise<{

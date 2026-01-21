@@ -85,9 +85,7 @@
       "compositePrimaryKeys": {
         "agentFiles_id": {
           "name": "agentFiles_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -152,9 +150,7 @@
       "compositePrimaryKeys": {
         "agentMessages_id": {
           "name": "agentMessages_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -303,9 +299,7 @@
       "compositePrimaryKeys": {
         "agentSkills_id": {
           "name": "agentSkills_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -430,9 +424,7 @@
       "compositePrimaryKeys": {
         "agentSubtasks_id": {
           "name": "agentSubtasks_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -560,9 +552,7 @@
       "compositePrimaryKeys": {
         "agentTasks_id": {
           "name": "agentTasks_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -649,9 +639,7 @@
       "compositePrimaryKeys": {
         "agentToolCalls_id": {
           "name": "agentToolCalls_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -800,9 +788,7 @@
       "compositePrimaryKeys": {
         "agents_id": {
           "name": "agents_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -937,9 +923,7 @@
       "compositePrimaryKeys": {
         "alertRules_id": {
           "name": "alertRules_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1069,9 +1053,7 @@
       "compositePrimaryKeys": {
         "appIterations_id": {
           "name": "appIterations_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1172,9 +1154,7 @@
       "compositePrimaryKeys": {
         "chats_id": {
           "name": "chats_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1291,9 +1271,7 @@
       "compositePrimaryKeys": {
         "codeChunks_id": {
           "name": "codeChunks_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1394,9 +1372,7 @@
       "compositePrimaryKeys": {
         "codeGenerationHistory_id": {
           "name": "codeGenerationHistory_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1461,9 +1437,7 @@
       "compositePrimaryKeys": {
         "codeRelationships_id": {
           "name": "codeRelationships_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1564,9 +1538,7 @@
       "compositePrimaryKeys": {
         "codeSymbols_id": {
           "name": "codeSymbols_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1717,9 +1689,7 @@
       "compositePrimaryKeys": {
         "codebaseProjects_id": {
           "name": "codebaseProjects_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1865,9 +1835,7 @@
       "compositePrimaryKeys": {
         "episodicMemories_id": {
           "name": "episodicMemories_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1966,9 +1934,7 @@
       "compositePrimaryKeys": {
         "eventActions_id": {
           "name": "eventActions_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2110,9 +2076,7 @@
       "compositePrimaryKeys": {
         "eventCronJobs_id": {
           "name": "eventCronJobs_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2205,9 +2169,7 @@
       "compositePrimaryKeys": {
         "eventLog_id": {
           "name": "eventLog_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2311,9 +2273,7 @@
       "compositePrimaryKeys": {
         "eventTriggers_id": {
           "name": "eventTriggers_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2532,9 +2492,7 @@
       "compositePrimaryKeys": {
         "healthMetrics_id": {
           "name": "healthMetrics_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2627,9 +2585,7 @@
       "compositePrimaryKeys": {
         "incidentActions_id": {
           "name": "incidentActions_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2769,9 +2725,7 @@
       "compositePrimaryKeys": {
         "incidents_id": {
           "name": "incidents_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2876,9 +2830,7 @@
       "compositePrimaryKeys": {
         "infrastructureHosts_id": {
           "name": "infrastructureHosts_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2973,9 +2925,7 @@
       "compositePrimaryKeys": {
         "interAgentMessages_id": {
           "name": "interAgentMessages_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3077,9 +3027,7 @@
       "compositePrimaryKeys": {
         "knowledgeCache_id": {
           "name": "knowledgeCache_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3167,9 +3115,7 @@
       "compositePrimaryKeys": {
         "learningEvents_id": {
           "name": "learningEvents_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3241,9 +3187,7 @@
       "compositePrimaryKeys": {
         "memoryAccessLog_id": {
           "name": "memoryAccessLog_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3315,9 +3259,7 @@
       "compositePrimaryKeys": {
         "memoryEmbeddings_id": {
           "name": "memoryEmbeddings_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3410,9 +3352,7 @@
       "compositePrimaryKeys": {
         "messages_id": {
           "name": "messages_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3520,9 +3460,7 @@
       "compositePrimaryKeys": {
         "modelResponses_id": {
           "name": "modelResponses_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3638,9 +3576,7 @@
       "compositePrimaryKeys": {
         "pendingApprovals_id": {
           "name": "pendingApprovals_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3795,9 +3731,7 @@
       "compositePrimaryKeys": {
         "proceduralMemories_id": {
           "name": "proceduralMemories_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3940,9 +3874,7 @@
       "compositePrimaryKeys": {
         "remediations_id": {
           "name": "remediations_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4035,9 +3967,7 @@
       "compositePrimaryKeys": {
         "scheduledTaskRuns_id": {
           "name": "scheduledTaskRuns_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4200,9 +4130,7 @@
       "compositePrimaryKeys": {
         "scheduledTasks_id": {
           "name": "scheduledTasks_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4325,9 +4253,7 @@
       "compositePrimaryKeys": {
         "selfModificationLog_id": {
           "name": "selfModificationLog_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4460,9 +4386,7 @@
       "compositePrimaryKeys": {
         "semanticMemories_id": {
           "name": "semanticMemories_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4599,9 +4523,7 @@
       "compositePrimaryKeys": {
         "sshAuditLog_id": {
           "name": "sshAuditLog_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4675,9 +4597,7 @@
       "compositePrimaryKeys": {
         "sshCredentials_id": {
           "name": "sshCredentials_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4811,9 +4731,7 @@
       "compositePrimaryKeys": {
         "sshHosts_id": {
           "name": "sshHosts_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4934,9 +4852,7 @@
       "compositePrimaryKeys": {
         "sshPermissions_id": {
           "name": "sshPermissions_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5016,9 +4932,7 @@
       "compositePrimaryKeys": {
         "synthesisPipelineStages_id": {
           "name": "synthesisPipelineStages_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5106,9 +5020,7 @@
       "compositePrimaryKeys": {
         "trainingData_id": {
           "name": "trainingData_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5201,9 +5113,7 @@
       "compositePrimaryKeys": {
         "usageTracking_id": {
           "name": "usageTracking_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5307,23 +5217,17 @@
       "compositePrimaryKeys": {
         "users_id": {
           "name": "users_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "users_openId_unique": {
           "name": "users_openId_unique",
-          "columns": [
-            "openId"
-          ]
+          "columns": ["openId"]
         },
         "users_username_unique": {
           "name": "users_username_unique",
-          "columns": [
-            "username"
-          ]
+          "columns": ["username"]
         }
       },
       "checkConstraint": {}
@@ -5476,9 +5380,7 @@
       "compositePrimaryKeys": {
         "webAppProjects_id": {
           "name": "webAppProjects_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5583,17 +5485,13 @@
       "compositePrimaryKeys": {
         "webhookEndpoints_id": {
           "name": "webhookEndpoints_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "webhookEndpoints_path_unique": {
           "name": "webhookEndpoints_path_unique",
-          "columns": [
-            "path"
-          ]
+          "columns": ["path"]
         }
       },
       "checkConstraint": {}
@@ -5703,9 +5601,7 @@
       "compositePrimaryKeys": {
         "workspaceCommits_id": {
           "name": "workspaceCommits_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5794,9 +5690,7 @@
       "compositePrimaryKeys": {
         "workspaceFiles_id": {
           "name": "workspaceFiles_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5905,9 +5799,7 @@
       "compositePrimaryKeys": {
         "workspaceProcesses_id": {
           "name": "workspaceProcesses_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5997,17 +5889,13 @@
       "compositePrimaryKeys": {
         "workspaceTemplates_id": {
           "name": "workspaceTemplates_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "workspaceTemplates_templateId_unique": {
           "name": "workspaceTemplates_templateId_unique",
-          "columns": [
-            "templateId"
-          ]
+          "columns": ["templateId"]
         }
       },
       "checkConstraint": {}
@@ -6195,9 +6083,7 @@
       "compositePrimaryKeys": {
         "workspaces_id": {
           "name": "workspaces_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},

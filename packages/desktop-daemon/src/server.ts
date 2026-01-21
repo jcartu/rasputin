@@ -34,7 +34,7 @@ const MessageSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
-type Message = z.infer<typeof MessageSchema>;
+type _Message = z.infer<typeof MessageSchema>;
 
 export function startServer() {
   ToolRegistry.init();
@@ -81,11 +81,11 @@ export function startServer() {
     },
 
     websocket: {
-      open(ws) {
+      open(_ws) {
         console.log("[WS] Client connected");
       },
 
-      close(ws) {
+      close(_ws) {
         console.log("[WS] Client disconnected");
       },
 
@@ -190,7 +190,7 @@ async function handlePairing(req: Request): Promise<Response> {
 
     completePairing({ userId, username, serverUrl, token });
     return Response.json({ success: true });
-  } catch (error) {
+  } catch (_error) {
     return Response.json(
       { success: false, error: "Invalid request" },
       { status: 400 }

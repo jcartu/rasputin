@@ -187,7 +187,7 @@ WARNING: This tool can automate keyboard input. Use with caution.`,
       .describe("Delay between keystrokes in ms"),
   }),
 
-  async execute(args, ctx) {
+  async execute(args, _ctx) {
     if (args.action === "type") {
       if (!args.text) {
         throw new Error("Text is required for type action");

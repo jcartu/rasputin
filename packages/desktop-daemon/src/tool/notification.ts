@@ -45,7 +45,7 @@ Useful for alerting the user about completed tasks, important events, or requiri
       .describe("Play notification sound"),
   }),
 
-  async execute(args, ctx) {
+  async execute(args, _ctx) {
     await showNotification(args.title, args.message, {
       sound: args.sound,
       subtitle: args.subtitle,

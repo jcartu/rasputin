@@ -1,6 +1,8 @@
 import { EventEmitter } from "events";
-import { getGlobalPerceptionAdapter } from "../jarvis/v3/perceptionAdapter";
-import type { VisionAnalysisResult } from "../jarvis/v3/perceptionAdapter";
+import {
+  getGlobalPerceptionAdapter,
+  type VisionAnalysisResult,
+} from "../jarvis/v3/perceptionAdapter";
 import {
   fastVisionAnalyze,
   type VisionProvider,

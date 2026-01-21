@@ -1,4 +1,7 @@
-import type { ClassifiedError, ErrorClass } from "./errorClassification";
+import type {
+  ClassifiedError,
+  ErrorClass as _ErrorClass,
+} from "./errorClassification";
 
 export type Strategy =
   | "default"

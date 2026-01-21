@@ -278,7 +278,7 @@ export class FrontierAdapter {
     // Map friendly model names to Anthropic API model IDs
     const ANTHROPIC_MODEL_MAP: Record<string, string> = {
       "claude-sonnet-4.5": "claude-sonnet-4-5-20250929",
-      "claude-opus-4.5": "claude-opus-4-5-20250514",
+      "claude-opus-4.5": "claude-opus-4-5-20251101",
     };
     const apiModelId = ANTHROPIC_MODEL_MAP[modelId] || modelId;
 

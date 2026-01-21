@@ -1,15 +1,15 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 
-export type Theme = 
-  | "cyber-blue" 
-  | "code-red" 
-  | "matrix-green" 
-  | "void-purple" 
-  | "solar-gold" 
-  | "ice-white" 
-  | "stealth-obsidian" 
-  | "neon-pink" 
-  | "radioactive-orange" 
+export type Theme =
+  | "cyber-blue"
+  | "code-red"
+  | "matrix-green"
+  | "void-purple"
+  | "solar-gold"
+  | "ice-white"
+  | "stealth-obsidian"
+  | "neon-pink"
+  | "radioactive-orange"
   | "deep-ocean";
 
 interface ThemeContextType {
@@ -48,10 +48,10 @@ export function ThemeProvider({
       "theme-radioactive-orange",
       "theme-deep-ocean"
     );
-    
+
     // Add new theme class
     root.classList.add(`theme-${theme}`);
-    
+
     // Persist to local storage
     localStorage.setItem("rasputin-theme", theme);
   }, [theme]);

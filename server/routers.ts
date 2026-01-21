@@ -1195,7 +1195,7 @@ export const appRouter = router({
 
     getAsyncTaskStatus: protectedProcedure
       .input(z.object({ taskId: z.number() }))
-      .query(async ({ ctx, input }) => {
+      .query(async ({ ctx: _ctx, input }) => {
         const { taskQueue } = await import("./services/jarvis/taskQueue");
         const status = await taskQueue.getTaskStatus(input.taskId);
         if (!status) throw new Error("Task not found");
@@ -2832,7 +2832,7 @@ export const appRouter = router({
     // Delete webhook endpoint
     deleteWebhook: protectedProcedure
       .input(z.object({ endpointId: z.number() }))
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx: _ctx, input }) => {
         const { webhookHandler } = await import("./services/events");
         await webhookHandler.deleteEndpoint(input.endpointId);
         return { success: true };
@@ -2906,7 +2906,7 @@ export const appRouter = router({
           actionConfig: z.record(z.string(), z.unknown()),
         })
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx: _ctx, input }) => {
         const { eventExecutor } = await import("./services/events");
         return eventExecutor.createAction(
           input.triggerId,
@@ -2968,7 +2968,7 @@ export const appRouter = router({
     }),
 
     getQdrantCollections: protectedProcedure.query(async () => {
-      const vectorStore = await import("./services/memory/vectorStore");
+      const _vectorStore = await import("./services/memory/vectorStore");
       const { QdrantClient } = await import("@qdrant/js-client-rest");
       const client = new QdrantClient({
         url: process.env.QDRANT_URL || "http://localhost:6333",

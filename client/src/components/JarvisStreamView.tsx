@@ -38,6 +38,7 @@ import type {
 } from "@/hooks/useJarvisStream";
 import { ToolOutputPreview } from "./ToolOutputPreview";
 import { Streamdown } from "streamdown";
+import { StreamingMarkdown } from "./TypewriterText";
 
 function extractDisplayQuery(query: string): {
   displayQuery: string;
@@ -1195,51 +1196,28 @@ export function JarvisStreamView({
         success={state.success}
       />
 
-      {/* Prominent Streaming Thinking Display */}
       {state.isStreaming && latestThinking && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           className="relative"
         >
-          <Card className="border-purple-500/30 bg-gradient-to-br from-purple-500/5 via-transparent to-cyan-500/5 overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 via-cyan-500 to-purple-500 animate-pulse" />
-            <CardContent className="p-4">
-              <div className="flex items-start gap-3">
-                <motion.div
-                  animate={{
-                    scale: [1, 1.1, 1],
-                    rotate: [0, 5, -5, 0],
-                  }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  className="shrink-0 p-2 rounded-full bg-gradient-to-br from-purple-500/20 to-cyan-500/20"
-                >
-                  <Brain className="h-5 w-5 text-purple-400" />
-                </motion.div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm font-medium text-purple-400">
-                      JARVIS is thinking...
-                    </span>
-                    <motion.span
-                      animate={{ opacity: [1, 0.5, 1] }}
-                      transition={{ duration: 1.5, repeat: Infinity }}
-                      className="text-xs text-muted-foreground"
-                    >
-                      Streaming
-                    </motion.span>
-                  </div>
-
-                  <ReportPreview
+          <div className="flex gap-3">
+            <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-green-500 flex items-center justify-center">
+              <Brain className="h-4 w-4 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <Card className="border-cyan-500/30 bg-gradient-to-br from-cyan-500/5 via-transparent to-purple-500/5 overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-500 via-purple-500 to-cyan-500 animate-pulse" />
+                <CardContent className="p-4">
+                  <StreamingMarkdown
                     content={latestThinking}
-                    artifacts={artifacts}
                     isStreaming={true}
-                    className="mt-2"
                   />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </motion.div>
       )}
 

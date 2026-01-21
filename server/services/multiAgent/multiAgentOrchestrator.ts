@@ -10,7 +10,7 @@ import {
   TaskDelegation,
   AgentResult,
   Subtask,
-  AGENT_CONFIGS,
+  AGENT_CONFIGS as _AGENT_CONFIGS,
 } from "./types";
 import { invokeLLM } from "../../_core/llm";
 import { getDb } from "../../db";

@@ -7,7 +7,7 @@ import {
   runOrchestrator,
   type ToolCall,
   type ToolResult,
-  type OrchestratorCallbacks,
+  type OrchestratorCallbacks as _OrchestratorCallbacks,
 } from "./orchestrator";
 import { executeTool } from "./tools";
 
@@ -77,7 +77,7 @@ function createTeamCoordination(): TeamCoordination {
 }
 
 function buildDependencyOrder(subtasks: SubTask[]): SubTask[][] {
-  const taskMap = new Map(subtasks.map(t => [t.id, t]));
+  const _taskMap = new Map(subtasks.map(t => [t.id, t]));
   const completed = new Set<string>();
   const batches: SubTask[][] = [];
 

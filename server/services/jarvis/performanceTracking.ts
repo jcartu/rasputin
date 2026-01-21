@@ -45,7 +45,7 @@ export async function recordTaskPerformance(
   taskQuery: string,
   duration: number,
   success: boolean,
-  iterations: number
+  _iterations: number
 ): Promise<PerformanceComparison> {
   const signature = generateTaskSignature(taskQuery);
   const userKey = `${userId}:${signature}`;

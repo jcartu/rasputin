@@ -50,6 +50,14 @@ export interface JarvisErrorEvent {
   timestamp: number;
 }
 
+export interface JarvisMemoryEvent {
+  taskId: number;
+  type: "search" | "store" | "enrich";
+  message: string;
+  count?: number;
+  timestamp: number;
+}
+
 export interface StreamingToolCall {
   id: string;
   name: string;

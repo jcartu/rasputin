@@ -99,7 +99,7 @@ On macOS, requires screen recording permission.`,
       .describe("Region coordinates (required if target is 'region')"),
   }),
 
-  async execute(args, ctx) {
+  async execute(args, _ctx) {
     if (args.target === "region" && !args.region) {
       throw new Error("Region coordinates required when target is 'region'");
     }

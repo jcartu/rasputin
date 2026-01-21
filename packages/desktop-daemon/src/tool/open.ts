@@ -50,7 +50,7 @@ Optionally specify which application to use.`,
       .describe("Open in background without focusing (macOS only)"),
   }),
 
-  async execute(args, ctx) {
+  async execute(args, _ctx) {
     await openTarget(args.target, {
       app: args.app,
       background: args.background,

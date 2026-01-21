@@ -1,12 +1,13 @@
 import { nanoid } from "nanoid";
-import type {
-  ActionRequest,
-  ActionResponse,
-  ActionBatch,
-  ActionBatchResponse,
-  Action,
+import {
+  validateActionRequest,
+  validateBatchRequest,
+  type ActionRequest,
+  type ActionResponse,
+  type ActionBatch,
+  type ActionBatchResponse,
+  type Action,
 } from "./actionDSL";
-import { validateActionRequest, validateBatchRequest } from "./actionDSL";
 import { executeActionRequest, executeActionBatch } from "./executor";
 import {
   SharedMemoryBus,

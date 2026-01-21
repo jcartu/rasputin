@@ -21,7 +21,7 @@ graph TB
         Auth["Auth Middleware"]
         Lease["Lease Manager"]
         Audit["Audit Logger"]
-        
+
         subgraph Controllers["System Controllers"]
             Screen["Screen Controller"]
             Input["Input Controller"]
@@ -33,7 +33,7 @@ graph TB
             Clipboard["Clipboard Controller"]
         end
     end
-    
+
     subgraph SystemAPIs["System APIs"]
         X11["X11/XCB"]
         Wayland["Wayland"]
@@ -42,12 +42,12 @@ graph TB
         CDP["Chrome DevTools"]
         Pipewire["PipeWire"]
     end
-    
+
     GRPC --> Auth
     Auth --> Lease
     Lease --> Controllers
     Controllers --> Audit
-    
+
     Screen --> X11
     Screen --> Wayland
     Screen --> Pipewire
@@ -578,7 +578,7 @@ service DesktopDaemon {
   rpc ListDisplays(ListDisplaysRequest) returns (ListDisplaysResponse);
   rpc Screenshot(ScreenshotRequest) returns (Screenshot);
   rpc ScreenStream(ScreenStreamRequest) returns (stream ScreenFrame);
-  
+
   // Input
   rpc MouseMove(MouseMoveRequest) returns (Status);
   rpc MouseButton(MouseButtonRequest) returns (Status);
@@ -586,18 +586,18 @@ service DesktopDaemon {
   rpc KeyboardKey(KeyboardKeyRequest) returns (Status);
   rpc KeyboardType(KeyboardTypeRequest) returns (Status);
   rpc KeyboardShortcut(KeyboardShortcutRequest) returns (Status);
-  
+
   // Windows
   rpc ListWindows(ListWindowsRequest) returns (ListWindowsResponse);
   rpc FocusWindow(FocusWindowRequest) returns (Status);
   rpc MoveWindow(MoveWindowRequest) returns (Status);
   rpc WindowAction(WindowActionRequest) returns (Status);
-  
+
   // Accessibility
   rpc GetAccessibilityTree(GetAccessibilityTreeRequest) returns (GetAccessibilityTreeResponse);
   rpc FindAccessibilityNode(FindAccessibilityNodeRequest) returns (FindAccessibilityNodeResponse);
   rpc PerformAccessibilityAction(PerformAccessibilityActionRequest) returns (Status);
-  
+
   // File System
   rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
   rpc ReadFile(ReadFileRequest) returns (ReadFileResponse);
@@ -605,20 +605,20 @@ service DesktopDaemon {
   rpc DeleteFile(DeleteFileRequest) returns (Status);
   rpc CopyFile(CopyFileRequest) returns (Status);
   rpc MoveFile(MoveFileRequest) returns (Status);
-  
+
   // Processes
   rpc ListProcesses(ListProcessesRequest) returns (ListProcessesResponse);
   rpc StartProcess(StartProcessRequest) returns (StartProcessResponse);
   rpc KillProcess(KillProcessRequest) returns (Status);
-  
+
   // Shell
   rpc ShellExec(ShellExecRequest) returns (ShellExecResponse);
   rpc ShellExecStream(ShellExecRequest) returns (stream ShellExecChunk);
-  
+
   // Clipboard
   rpc GetClipboard(GetClipboardRequest) returns (GetClipboardResponse);
   rpc SetClipboard(SetClipboardRequest) returns (Status);
-  
+
   // Browser
   rpc BrowserOpen(BrowserOpenRequest) returns (BrowserOpenResponse);
   rpc BrowserNavigate(BrowserNavigateRequest) returns (BrowserNavigateResponse);
@@ -753,7 +753,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build server with auth interceptor
     let addr: SocketAddr = config.bind_address.parse()?;
-    
+
     Server::builder()
         .add_service(
             daemon_proto::desktop_daemon_server::DesktopDaemonServer::with_interceptor(
@@ -831,12 +831,12 @@ impl DaemonConfig {
     pub fn load() -> Result<Self, config::ConfigError> {
         let config_path = std::env::var("JARVIS_DAEMON_CONFIG")
             .unwrap_or_else(|_| "/etc/jarvis/daemon.toml".to_string());
-        
+
         let settings = config::Config::builder()
             .add_source(config::File::with_name(&config_path).required(false))
             .add_source(config::Environment::with_prefix("JARVIS_DAEMON"))
             .build()?;
-        
+
         settings.try_deserialize()
     }
 }
@@ -925,17 +925,17 @@ impl ScreenController {
                 }
             }
         };
-        
+
         Ok(Self { backend })
     }
-    
+
     pub fn list_displays(&self) -> Result<Vec<Display>, Box<dyn std::error::Error>> {
         match &self.backend {
             ScreenBackend::X11(x11) => x11.list_displays(),
             ScreenBackend::Wayland(wayland) => wayland.list_displays(),
         }
     }
-    
+
     pub fn capture(
         &self,
         display_id: i32,
@@ -953,7 +953,7 @@ impl ScreenController {
             }
         }
     }
-    
+
     pub fn stream(
         &self,
         display_id: i32,
@@ -965,15 +965,15 @@ impl ScreenController {
         delta_encoding: bool,
     ) -> mpsc::Receiver<ScreenFrame> {
         let (tx, rx) = mpsc::channel(fps as usize * 2);
-        
+
         let backend = self.backend.clone();
         tokio::spawn(async move {
             let interval = std::time::Duration::from_millis(1000 / fps as u64);
             let mut last_frame: Option<Vec<u8>> = None;
-            
+
             loop {
                 let start = std::time::Instant::now();
-                
+
                 let frame_data = match &backend {
                     ScreenBackend::X11(x11) => {
                         x11.capture(display_id, region.clone(), format, quality, include_cursor)
@@ -982,7 +982,7 @@ impl ScreenController {
                         wayland.capture(display_id, region.clone(), format, quality, include_cursor)
                     }
                 };
-                
+
                 if let Ok(data) = frame_data {
                     let frame = if delta_encoding && last_frame.is_some() {
                         // Compute delta (simplified - real impl would use proper diff)
@@ -1000,21 +1000,21 @@ impl ScreenController {
                             dirty_region: None,
                         }
                     };
-                    
+
                     last_frame = Some(data);
-                    
+
                     if tx.send(frame).await.is_err() {
                         break; // Receiver dropped
                     }
                 }
-                
+
                 let elapsed = start.elapsed();
                 if elapsed < interval {
                     tokio::time::sleep(interval - elapsed).await;
                 }
             }
         });
-        
+
         rx
     }
 }
@@ -1069,12 +1069,12 @@ impl InputController {
     pub fn new(config: &DaemonConfig) -> Result<Self, Box<dyn std::error::Error>> {
         let device = UinputDevice::new()?;
         info!("Input controller initialized with uinput");
-        
+
         Ok(Self {
             device: Arc::new(Mutex::new(device)),
         })
     }
-    
+
     pub async fn mouse_move(
         &self,
         x: i32,
@@ -1083,7 +1083,7 @@ impl InputController {
         duration_ms: u32,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut device = self.device.lock().await;
-        
+
         if duration_ms == 0 || relative {
             // Instant movement
             if relative {
@@ -1097,7 +1097,7 @@ impl InputController {
             let steps = (duration_ms / 16).max(1) as i32; // ~60fps
             let dx = (x - current.0) as f32 / steps as f32;
             let dy = (y - current.1) as f32 / steps as f32;
-            
+
             for i in 1..=steps {
                 let target_x = current.0 + (dx * i as f32) as i32;
                 let target_y = current.1 + (dy * i as f32) as i32;
@@ -1105,10 +1105,10 @@ impl InputController {
                 tokio::time::sleep(std::time::Duration::from_millis(16)).await;
             }
         }
-        
+
         Ok(())
     }
-    
+
     pub async fn mouse_button(
         &self,
         button: MouseButton,
@@ -1116,12 +1116,12 @@ impl InputController {
         position: Option<(i32, i32)>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut device = self.device.lock().await;
-        
+
         // Move to position if specified
         if let Some((x, y)) = position {
             device.mouse_move_absolute(x, y)?;
         }
-        
+
         match action {
             ButtonAction::Press => device.mouse_button_press(button)?,
             ButtonAction::Release => device.mouse_button_release(button)?,
@@ -1139,10 +1139,10 @@ impl InputController {
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     pub async fn mouse_scroll(
         &self,
         delta_x: i32,
@@ -1152,7 +1152,7 @@ impl InputController {
         device.mouse_scroll(delta_x, delta_y)?;
         Ok(())
     }
-    
+
     pub async fn keyboard_key(
         &self,
         key: &str,
@@ -1160,12 +1160,12 @@ impl InputController {
         modifiers: &[String],
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut device = self.device.lock().await;
-        
+
         // Press modifiers
         for modifier in modifiers {
             device.key_press(modifier)?;
         }
-        
+
         match action {
             KeyAction::Press => device.key_press(key)?,
             KeyAction::Release => device.key_release(key)?,
@@ -1175,50 +1175,50 @@ impl InputController {
                 device.key_release(key)?;
             }
         }
-        
+
         // Release modifiers in reverse order
         for modifier in modifiers.iter().rev() {
             device.key_release(modifier)?;
         }
-        
+
         Ok(())
     }
-    
+
     pub async fn keyboard_type(
         &self,
         text: &str,
         delay_ms: u32,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut device = self.device.lock().await;
-        
+
         for ch in text.chars() {
             device.type_char(ch)?;
             if delay_ms > 0 {
                 tokio::time::sleep(std::time::Duration::from_millis(delay_ms as u64)).await;
             }
         }
-        
+
         Ok(())
     }
-    
+
     pub async fn keyboard_shortcut(
         &self,
         keys: &[String],
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut device = self.device.lock().await;
-        
+
         // Press all keys
         for key in keys {
             device.key_press(key)?;
             tokio::time::sleep(std::time::Duration::from_millis(30)).await;
         }
-        
+
         // Release all keys in reverse order
         for key in keys.iter().rev() {
             device.key_release(key)?;
             tokio::time::sleep(std::time::Duration::from_millis(30)).await;
         }
-        
+
         Ok(())
     }
 }
@@ -1264,28 +1264,28 @@ impl AccessibilityController {
     pub fn new(config: &DaemonConfig) -> Result<Self, Box<dyn std::error::Error>> {
         let connection = Connection::new()?;
         info!("Accessibility controller initialized with AT-SPI");
-        
+
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
         })
     }
-    
+
     pub async fn get_tree(
         &self,
         window_id: Option<&str>,
         max_depth: i32,
     ) -> Result<AccessibilityNode, Box<dyn std::error::Error>> {
         let conn = self.connection.lock().await;
-        
+
         let root = if let Some(wid) = window_id {
             conn.get_accessible_by_id(wid)?
         } else {
             conn.get_focused_accessible()?
         };
-        
+
         self.build_tree(&root, max_depth, 0)
     }
-    
+
     fn build_tree(
         &self,
         accessible: &dyn AccessibleExt,
@@ -1293,7 +1293,7 @@ impl AccessibilityController {
         current_depth: i32,
     ) -> Result<AccessibilityNode, Box<dyn std::error::Error>> {
         let bounds = accessible.get_extents()?;
-        
+
         let children = if max_depth == 0 || current_depth < max_depth {
             accessible
                 .get_children()?
@@ -1305,7 +1305,7 @@ impl AccessibilityController {
         } else {
             vec![]
         };
-        
+
         Ok(AccessibilityNode {
             id: accessible.get_unique_id()?,
             role: accessible.get_role()?.to_string(),
@@ -1323,7 +1323,7 @@ impl AccessibilityController {
             children,
         })
     }
-    
+
     pub async fn find_nodes(
         &self,
         window_id: Option<&str>,
@@ -1332,3 +1332,4 @@ impl AccessibilityController {
         limit: i32,
     ) -> Result<Vec<AccessibilityNode>, Box<dyn std::error::Error>> {
         let tree = self.get_
+```

@@ -2,7 +2,7 @@ import { createHash } from "crypto";
 import { nanoid } from "nanoid";
 import { getDb } from "../../db";
 import { jarvisEventLog } from "../../../drizzle/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { getSharedMemoryBus } from "./redisBus";
 import type { EventType } from "./types";
 

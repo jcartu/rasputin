@@ -9,6 +9,7 @@ import {
   type ExtractedLearning,
   type ToolExecutionRecord,
 } from "./learningExtractor";
+import { getGlobalQdrantClient } from "./qdrantClient";
 
 export interface V3MemoryClient {
   storeLearning(learning: ExtractedLearning): Promise<void>;
@@ -128,6 +129,9 @@ export class V3MemoryIntegration implements V3MemoryClient {
   }
 
   async storeLearning(learning: ExtractedLearning): Promise<void> {
+    console.info(
+      `[V3Memory] Queuing learning for ${learning.rawPayload.toolName} (success: ${learning.rawPayload.success})`
+    );
     this.pendingLearnings.push(learning);
 
     if (this.pendingLearnings.length >= 10) {
@@ -150,6 +154,10 @@ export class V3MemoryIntegration implements V3MemoryClient {
   }
 
   private async persistLearning(learning: ExtractedLearning): Promise<void> {
+    console.info(
+      `[V3Memory] Persisting learning for ${learning.rawPayload.toolName} (memoryService: ${!!this.memoryService}, qdrant: ${!!this.qdrantClient})`
+    );
+
     if (!this.memoryService) {
       await this.persistToQdrant(learning);
       return;
@@ -185,8 +193,14 @@ export class V3MemoryIntegration implements V3MemoryClient {
   }
 
   private async persistToQdrant(learning: ExtractedLearning): Promise<void> {
-    if (!this.qdrantClient) return;
+    if (!this.qdrantClient) {
+      console.warn("[V3Memory] No Qdrant client - learning will not be stored");
+      return;
+    }
 
+    console.info(
+      `[V3Memory] Storing to Qdrant: ${learning.rawPayload.toolName}`
+    );
     const payload = learning.rawPayload;
     const vector = await this.generateSimpleEmbedding(
       `${payload.toolName} ${payload.taskContext} ${payload.inputSummary}`
@@ -499,6 +513,10 @@ export class V3MemoryIntegration implements V3MemoryClient {
   ): Promise<RelevantLearning[]> {
     const { limit = 10 } = options;
 
+    console.info(
+      `[V3Memory] Searching relevant learnings for query: "${query.slice(0, 100)}..."`
+    );
+
     if (this.memoryService) {
       try {
         const results = await this.memoryService.searchMemories({
@@ -507,20 +525,27 @@ export class V3MemoryIntegration implements V3MemoryClient {
           limit,
         });
 
+        console.info(
+          `[V3Memory] Found ${results.length} learnings from MemoryService`
+        );
+
         return results.map(r => ({
           type: r.memoryType as "episodic" | "semantic" | "procedural",
           content: JSON.stringify(r.memory),
           relevance: r.relevanceScore,
         }));
-      } catch {
-        void 0;
+      } catch (err) {
+        console.warn("[V3Memory] MemoryService search failed:", err);
       }
     }
 
     if (this.qdrantClient) {
-      return this.searchQdrant(query, limit);
+      const results = await this.searchQdrant(query, limit);
+      console.info(`[V3Memory] Found ${results.length} learnings from Qdrant`);
+      return results;
     }
 
+    console.warn("[V3Memory] No memory backend available for search");
     return [];
   }
 
@@ -627,12 +652,18 @@ export function createV3MemoryClient(
 }
 
 let globalMemoryClient: V3MemoryIntegration | null = null;
+let globalMemoryClientUserId: number | null = null;
 
 export async function getGlobalMemoryClient(
   userId: number
 ): Promise<V3MemoryIntegration> {
-  if (!globalMemoryClient) {
-    globalMemoryClient = new V3MemoryIntegration(userId);
+  if (!globalMemoryClient || globalMemoryClientUserId !== userId) {
+    if (globalMemoryClient) {
+      await globalMemoryClient.shutdown();
+    }
+    const qdrantClient = getGlobalQdrantClient(userId);
+    globalMemoryClient = new V3MemoryIntegration(userId, qdrantClient);
+    globalMemoryClientUserId = userId;
     await globalMemoryClient.initialize();
   }
   return globalMemoryClient;
@@ -645,16 +676,48 @@ export async function resetGlobalMemoryClient(): Promise<void> {
   }
 }
 
+export type MemoryEventCallback = (
+  type: "search" | "store" | "enrich",
+  message: string,
+  count?: number
+) => void;
+
 export async function enrichContextWithMemory(
   context: ExecutionContext,
-  taskDescription: string
+  taskDescription: string,
+  onMemoryEvent?: MemoryEventCallback
 ): Promise<ExecutionContext> {
+  console.info(
+    `[V3Memory] Enriching context for task: "${taskDescription.slice(0, 80)}..."`
+  );
+
+  onMemoryEvent?.("search", "Searching memory for relevant learnings...");
+
   const memoryClient = await getGlobalMemoryClient(context.userId);
 
   const relevantLearnings = await memoryClient.searchRelevantLearnings(
     taskDescription,
     { limit: 5 }
   );
+
+  if (relevantLearnings.length > 0) {
+    console.info(
+      `[V3Memory] Injecting ${relevantLearnings.length} relevant learnings into context`
+    );
+    for (const learning of relevantLearnings.slice(0, 3)) {
+      console.info(
+        `  - [${learning.type}] relevance=${learning.relevance.toFixed(2)} tool=${learning.toolName || "n/a"}`
+      );
+    }
+    onMemoryEvent?.(
+      "enrich",
+      `Found ${relevantLearnings.length} relevant learnings from past tasks`,
+      relevantLearnings.length
+    );
+  } else {
+    console.info("[V3Memory] No relevant learnings found for this task");
+    onMemoryEvent?.("enrich", "No relevant past learnings found", 0);
+  }
 
   const enrichment: Record<string, unknown> = {
     ...context.enrichment,

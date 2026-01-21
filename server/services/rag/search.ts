@@ -16,7 +16,7 @@ import {
   CodeRelationship,
   SearchResult,
   CodeContext,
-  ChunkMetadata,
+  ChunkMetadata as _ChunkMetadata,
 } from "./types";
 import { generateEmbedding, cosineSimilarity } from "./embeddings";
 

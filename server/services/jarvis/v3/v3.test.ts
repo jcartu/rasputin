@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   analyzeTask,
-  AgentCoordinator,
+  AgentCoordinator as _AgentCoordinator,
   getGlobalCoordinator,
   resetGlobalCoordinator,
   AGENT_DESCRIPTIONS,
@@ -24,7 +24,7 @@ import {
   selectToolsForAgent,
 } from "./agentBehaviors";
 import {
-  SwarmOrchestrator,
+  SwarmOrchestrator as _SwarmOrchestrator,
   getGlobalSwarmOrchestrator,
   resetGlobalSwarmOrchestrator,
   createFrontierExecutor,
@@ -38,7 +38,7 @@ import {
 } from "./perceptionAdapter";
 import {
   V3MemoryIntegration,
-  getGlobalMemoryClient,
+  getGlobalMemoryClient as _getGlobalMemoryClient,
   resetGlobalMemoryClient,
   enrichContextWithMemory,
 } from "./memoryIntegration";

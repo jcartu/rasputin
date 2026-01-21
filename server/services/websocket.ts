@@ -198,6 +198,13 @@ interface ServerToClientEvents {
     maxIterations: number;
     startedAt: number;
   }) => void;
+  "jarvis:memory": (data: {
+    taskId: number;
+    type: "search" | "store" | "enrich";
+    message: string;
+    count?: number;
+    timestamp: number;
+  }) => void;
   "approval:new": (data: {
     id: number;
     hostId: number;
@@ -999,6 +1006,20 @@ async function handleJarvisTask(
           socket.emit("jarvis:error", {
             taskId,
             error,
+            timestamp: Date.now(),
+          });
+        },
+        onMemory: (
+          type: "search" | "store" | "enrich",
+          message: string,
+          count?: number
+        ) => {
+          if (activeQueries.get(queryKey)?.cancelled) return;
+          socket.emit("jarvis:memory", {
+            taskId,
+            type,
+            message,
+            count,
             timestamp: Date.now(),
           });
         },

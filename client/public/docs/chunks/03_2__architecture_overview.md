@@ -78,17 +78,17 @@ flowchart TB
     Gateway --> Auth
     Auth --> Orchestrator
     Orchestrator --> Redis
-    
+
     SwarmLayer <--> Redis
     SwarmLayer <--> Qdrant
     SwarmLayer --> FrontierAPIs
     SwarmLayer --> LocalGPU
-    
+
     Executor --> DesktopDaemon
     Executor --> RasputinCore
-    
+
     DesktopDaemon --> LocalGPU
-    
+
     Orchestrator --> ObjectStore
     Orchestrator --> Postgres
 ```
@@ -117,7 +117,7 @@ sequenceDiagram
     P->>F: Reasoning (Claude/GPT)
     F-->>P: Task DAG
     P->>R: Publish Subtasks
-    
+
     par Parallel Execution
         R->>C: Code Tasks
         C->>F: Generate Code
@@ -129,12 +129,12 @@ sequenceDiagram
         D-->>E: Results
         E->>R: Execution Complete
     end
-    
+
     R->>V: Verify Results
     V->>F: Validation Logic
     F-->>V: Pass/Fail
     V->>R: Verification Report
-    
+
     alt Verification Failed
         R->>C: Retry with Feedback
     else Verification Passed
@@ -146,16 +146,15 @@ sequenceDiagram
 
 ## 2.3 Component Interaction Matrix
 
-| Component | Redis | Qdrant | Daemon | Frontier | Local GPU | Rasputin |
-|-----------|-------|--------|--------|----------|-----------|----------|
-| Orchestrator | R/W | R | - | - | - | - |
-| Planner | R/W | R | - | R | - | - |
-| Coder | R/W | R/W | - | R | R (CodeLM) | R (scaffold) |
-| Executor | R/W | R | R/W | - | R (Vision) | R/W (all) |
-| Verifier | R/W | R | R | R | - | R (tests) |
-| Researcher | R/W | R/W | R | R | - | R (search) |
-| Learner | R | R/W | - | R | R (Embed) | - |
-| Safety | R/W | R | - | R | - | - |
+| Component    | Redis | Qdrant | Daemon | Frontier | Local GPU  | Rasputin     |
+| ------------ | ----- | ------ | ------ | -------- | ---------- | ------------ |
+| Orchestrator | R/W   | R      | -      | -        | -          | -            |
+| Planner      | R/W   | R      | -      | R        | -          | -            |
+| Coder        | R/W   | R/W    | -      | R        | R (CodeLM) | R (scaffold) |
+| Executor     | R/W   | R      | R/W    | -        | R (Vision) | R/W (all)    |
+| Verifier     | R/W   | R      | R      | R        | -          | R (tests)    |
+| Researcher   | R/W   | R/W    | R      | R        | -          | R (search)   |
+| Learner      | R     | R/W    | -      | R        | R (Embed)  | -            |
+| Safety       | R/W   | R      | -      | R        | -          | -            |
 
 ---
-

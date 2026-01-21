@@ -14,7 +14,7 @@ interface TrayState {
   menuOpen: boolean;
 }
 
-const state: TrayState = {
+const _state: TrayState = {
   visible: true,
   menuOpen: false,
 };

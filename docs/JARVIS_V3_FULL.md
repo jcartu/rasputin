@@ -1,9 +1,13 @@
 # JARVIS ULTIMATE v3 - The MANUS Killer
+
 ## Synthesized from GPT-5.2 Pro, Claude 4.5 Opus, Gemini 3.0 Pro, Grok 4
+
 ## Preserving and Extending 83+ Existing Rasputin Tools
+
 ---
 
 # JARVIS v3: Ultimate Autonomous AI Operating System
+
 ## Complete Implementation Specification
 
 ---
@@ -22,15 +26,15 @@ JARVIS v3 transforms the existing Rasputin system from a capable AI assistant in
 
 ## 1.2 Key Differentiators vs. Competition
 
-| Capability | ChatGPT | MANUS | OpenCode | JARVIS v3 |
-|------------|---------|-------|----------|-----------|
-| Frontier Reasoning | ✅ | ❌ | ✅ | ✅ Multi-model consensus |
-| Desktop Control | ❌ | ✅ | ❌ | ✅ Privileged daemon |
-| Code Generation | ✅ | ❌ | ✅ | ✅ With execution |
-| Multi-Agent Swarm | ❌ | ❌ | ❌ | ✅ 7 specialized agents |
-| Episodic Memory | ❌ | ❌ | ❌ | ✅ Qdrant learning |
-| Local GPU Inference | ❌ | ❌ | ❌ | ✅ 96GB VRAM |
-| Full Deployment | ❌ | ❌ | Partial | ✅ End-to-end |
+| Capability          | ChatGPT | MANUS | OpenCode | JARVIS v3                |
+| ------------------- | ------- | ----- | -------- | ------------------------ |
+| Frontier Reasoning  | ✅      | ❌    | ✅       | ✅ Multi-model consensus |
+| Desktop Control     | ❌      | ✅    | ❌       | ✅ Privileged daemon     |
+| Code Generation     | ✅      | ❌    | ✅       | ✅ With execution        |
+| Multi-Agent Swarm   | ❌      | ❌    | ❌       | ✅ 7 specialized agents  |
+| Episodic Memory     | ❌      | ❌    | ❌       | ✅ Qdrant learning       |
+| Local GPU Inference | ❌      | ❌    | ❌       | ✅ 96GB VRAM             |
+| Full Deployment     | ❌      | ❌    | Partial  | ✅ End-to-end            |
 
 ## 1.3 Hardware Target Specifications
 
@@ -133,17 +137,17 @@ flowchart TB
     Gateway --> Auth
     Auth --> Orchestrator
     Orchestrator --> Redis
-    
+
     SwarmLayer <--> Redis
     SwarmLayer <--> Qdrant
     SwarmLayer --> FrontierAPIs
     SwarmLayer --> LocalGPU
-    
+
     Executor --> DesktopDaemon
     Executor --> RasputinCore
-    
+
     DesktopDaemon --> LocalGPU
-    
+
     Orchestrator --> ObjectStore
     Orchestrator --> Postgres
 ```
@@ -172,7 +176,7 @@ sequenceDiagram
     P->>F: Reasoning (Claude/GPT)
     F-->>P: Task DAG
     P->>R: Publish Subtasks
-    
+
     par Parallel Execution
         R->>C: Code Tasks
         C->>F: Generate Code
@@ -184,12 +188,12 @@ sequenceDiagram
         D-->>E: Results
         E->>R: Execution Complete
     end
-    
+
     R->>V: Verify Results
     V->>F: Validation Logic
     F-->>V: Pass/Fail
     V->>R: Verification Report
-    
+
     alt Verification Failed
         R->>C: Retry with Feedback
     else Verification Passed
@@ -201,16 +205,16 @@ sequenceDiagram
 
 ## 2.3 Component Interaction Matrix
 
-| Component | Redis | Qdrant | Daemon | Frontier | Local GPU | Rasputin |
-|-----------|-------|--------|--------|----------|-----------|----------|
-| Orchestrator | R/W | R | - | - | - | - |
-| Planner | R/W | R | - | R | - | - |
-| Coder | R/W | R/W | - | R | R (CodeLM) | R (scaffold) |
-| Executor | R/W | R | R/W | - | R (Vision) | R/W (all) |
-| Verifier | R/W | R | R | R | - | R (tests) |
-| Researcher | R/W | R/W | R | R | - | R (search) |
-| Learner | R | R/W | - | R | R (Embed) | - |
-| Safety | R/W | R | - | R | - | - |
+| Component    | Redis | Qdrant | Daemon | Frontier | Local GPU  | Rasputin     |
+| ------------ | ----- | ------ | ------ | -------- | ---------- | ------------ |
+| Orchestrator | R/W   | R      | -      | -        | -          | -            |
+| Planner      | R/W   | R      | -      | R        | -          | -            |
+| Coder        | R/W   | R/W    | -      | R        | R (CodeLM) | R (scaffold) |
+| Executor     | R/W   | R      | R/W    | -        | R (Vision) | R/W (all)    |
+| Verifier     | R/W   | R      | R      | R        | -          | R (tests)    |
+| Researcher   | R/W   | R/W    | R      | R        | -          | R (search)   |
+| Learner      | R     | R/W    | -      | R        | R (Embed)  | -            |
+| Safety       | R/W   | R      | -      | R        | -          | -            |
 
 ---
 
@@ -281,27 +285,35 @@ Each existing tool gets wrapped with JARVIS v3 metadata:
 
 ```typescript
 // jarvis/tools/wrapper.ts
-import { Tool, ToolResult } from '@rasputin/core';
+import { Tool, ToolResult } from "@rasputin/core";
 
 interface JARVISToolMetadata {
-  agentAffinity: ('planner' | 'coder' | 'executor' | 'verifier' | 'researcher' | 'learner' | 'safety')[];
-  requiresLease: string[];  // Resources that need locking
-  riskLevel: 'low' | 'medium' | 'high' | 'critical';
-  estimatedDuration: number;  // milliseconds
+  agentAffinity: (
+    | "planner"
+    | "coder"
+    | "executor"
+    | "verifier"
+    | "researcher"
+    | "learner"
+    | "safety"
+  )[];
+  requiresLease: string[]; // Resources that need locking
+  riskLevel: "low" | "medium" | "high" | "critical";
+  estimatedDuration: number; // milliseconds
   canParallelize: boolean;
-  qdrantCollections: string[];  // Collections to query/update
+  qdrantCollections: string[]; // Collections to query/update
 }
 
 interface JARVISToolWrapper<T extends Tool> {
   tool: T;
   metadata: JARVISToolMetadata;
-  
+
   // Pre-execution hooks
   beforeExecute(context: ExecutionContext): Promise<void>;
-  
+
   // Post-execution hooks
   afterExecute(result: ToolResult, context: ExecutionContext): Promise<void>;
-  
+
   // Learning hook
   extractLearning(result: ToolResult): Promise<LearningPayload | null>;
 }
@@ -310,47 +322,47 @@ interface JARVISToolWrapper<T extends Tool> {
 const scaffoldProjectWrapper: JARVISToolWrapper<typeof scaffold_project> = {
   tool: scaffold_project,
   metadata: {
-    agentAffinity: ['coder'],
-    requiresLease: ['filesystem:/workspaces'],
-    riskLevel: 'medium',
+    agentAffinity: ["coder"],
+    requiresLease: ["filesystem:/workspaces"],
+    riskLevel: "medium",
     estimatedDuration: 30000,
     canParallelize: false,
-    qdrantCollections: ['skills', 'code_snippets']
+    qdrantCollections: ["skills", "code_snippets"],
   },
-  
+
   async beforeExecute(context) {
     // Query Qdrant for similar past scaffolds
-    const similar = await context.qdrant.search('skills', {
+    const similar = await context.qdrant.search("skills", {
       vector: await embed(context.task.description),
-      filter: { domain: 'scaffolding' },
-      limit: 3
+      filter: { domain: "scaffolding" },
+      limit: 3,
     });
     context.enrichment = { similarProjects: similar };
   },
-  
+
   async afterExecute(result, context) {
     // Store successful scaffold as skill
     if (result.success) {
-      await context.qdrant.upsert('skills', {
+      await context.qdrant.upsert("skills", {
         id: uuid(),
         vector: await embed(JSON.stringify(result)),
         payload: {
-          type: 'scaffold',
+          type: "scaffold",
           params: context.params,
-          timestamp: Date.now()
-        }
+          timestamp: Date.now(),
+        },
       });
     }
   },
-  
+
   async extractLearning(result) {
     if (!result.success) return null;
     return {
-      type: 'scaffold_pattern',
+      type: "scaffold_pattern",
       pattern: result.generatedStructure,
-      successMetrics: result.metrics
+      successMetrics: result.metrics,
     };
-  }
+  },
 };
 ```
 
@@ -358,31 +370,39 @@ const scaffoldProjectWrapper: JARVISToolWrapper<typeof scaffold_project> = {
 
 ```typescript
 // jarvis/tools/registry.ts
-import { existingTools } from '@rasputin/tools';
-import { JARVISToolWrapper } from './wrapper';
+import { existingTools } from "@rasputin/tools";
+import { JARVISToolWrapper } from "./wrapper";
 
 class JARVISToolRegistry {
   private tools: Map<string, JARVISToolWrapper<any>> = new Map();
   private byAgent: Map<string, Set<string>> = new Map();
-  
+
   constructor() {
     // Initialize agent affinity maps
-    const agents = ['planner', 'coder', 'executor', 'verifier', 'researcher', 'learner', 'safety'];
+    const agents = [
+      "planner",
+      "coder",
+      "executor",
+      "verifier",
+      "researcher",
+      "learner",
+      "safety",
+    ];
     agents.forEach(a => this.byAgent.set(a, new Set()));
   }
-  
+
   register(name: string, wrapper: JARVISToolWrapper<any>) {
     this.tools.set(name, wrapper);
     wrapper.metadata.agentAffinity.forEach(agent => {
       this.byAgent.get(agent)!.add(name);
     });
   }
-  
+
   getToolsForAgent(agent: string): JARVISToolWrapper<any>[] {
     const toolNames = this.byAgent.get(agent) || new Set();
     return Array.from(toolNames).map(name => this.tools.get(name)!);
   }
-  
+
   async executeWithHooks(
     name: string,
     params: any,
@@ -390,23 +410,23 @@ class JARVISToolRegistry {
   ): Promise<ToolResult> {
     const wrapper = this.tools.get(name);
     if (!wrapper) throw new Error(`Tool ${name} not found`);
-    
+
     // Acquire leases
     for (const lease of wrapper.metadata.requiresLease) {
       await context.leaseManager.acquire(lease, context.sessionId);
     }
-    
+
     try {
       await wrapper.beforeExecute(context);
       const result = await wrapper.tool.execute(params);
       await wrapper.afterExecute(result, context);
-      
+
       // Extract learning asynchronously
       const learning = await wrapper.extractLearning(result);
       if (learning) {
-        context.redis.xadd('jarvis.learning.v1', '*', learning);
+        context.redis.xadd("jarvis.learning.v1", "*", learning);
       }
-      
+
       return result;
     } finally {
       // Release leases
@@ -437,11 +457,11 @@ Object.entries(existingTools).forEach(([name, tool]) => {
  */
 export class RasputinCompatLayer {
   private registry: JARVISToolRegistry;
-  
+
   constructor(registry: JARVISToolRegistry) {
     this.registry = registry;
   }
-  
+
   /**
    * Execute a tool exactly as Rasputin would
    * (no JARVIS hooks, no learning, no leases)
@@ -451,7 +471,7 @@ export class RasputinCompatLayer {
     if (!wrapper) throw new Error(`Tool ${toolName} not found`);
     return wrapper.tool.execute(params);
   }
-  
+
   /**
    * Execute with full JARVIS v3 capabilities
    */
@@ -462,14 +482,14 @@ export class RasputinCompatLayer {
   ): Promise<ToolResult> {
     return this.registry.executeWithHooks(toolName, params, context);
   }
-  
+
   /**
    * Get tool metadata for planning
    */
   getToolMetadata(toolName: string): JARVISToolMetadata | null {
     return this.registry.tools.get(toolName)?.metadata || null;
   }
-  
+
   /**
    * List all available tools with their capabilities
    */
@@ -478,7 +498,7 @@ export class RasputinCompatLayer {
       name,
       description: wrapper.tool.description,
       parameters: wrapper.tool.parameters,
-      metadata: wrapper.metadata
+      metadata: wrapper.metadata,
     }));
   }
 }
@@ -509,7 +529,7 @@ graph TB
         Auth["Auth Middleware"]
         Lease["Lease Manager"]
         Audit["Audit Logger"]
-        
+
         subgraph Controllers["System Controllers"]
             Screen["Screen Controller"]
             Input["Input Controller"]
@@ -521,7 +541,7 @@ graph TB
             Clipboard["Clipboard Controller"]
         end
     end
-    
+
     subgraph SystemAPIs["System APIs"]
         X11["X11/XCB"]
         Wayland["Wayland"]
@@ -530,12 +550,12 @@ graph TB
         CDP["Chrome DevTools"]
         Pipewire["PipeWire"]
     end
-    
+
     GRPC --> Auth
     Auth --> Lease
     Lease --> Controllers
     Controllers --> Audit
-    
+
     Screen --> X11
     Screen --> Wayland
     Screen --> Pipewire
@@ -1066,7 +1086,7 @@ service DesktopDaemon {
   rpc ListDisplays(ListDisplaysRequest) returns (ListDisplaysResponse);
   rpc Screenshot(ScreenshotRequest) returns (Screenshot);
   rpc ScreenStream(ScreenStreamRequest) returns (stream ScreenFrame);
-  
+
   // Input
   rpc MouseMove(MouseMoveRequest) returns (Status);
   rpc MouseButton(MouseButtonRequest) returns (Status);
@@ -1074,18 +1094,18 @@ service DesktopDaemon {
   rpc KeyboardKey(KeyboardKeyRequest) returns (Status);
   rpc KeyboardType(KeyboardTypeRequest) returns (Status);
   rpc KeyboardShortcut(KeyboardShortcutRequest) returns (Status);
-  
+
   // Windows
   rpc ListWindows(ListWindowsRequest) returns (ListWindowsResponse);
   rpc FocusWindow(FocusWindowRequest) returns (Status);
   rpc MoveWindow(MoveWindowRequest) returns (Status);
   rpc WindowAction(WindowActionRequest) returns (Status);
-  
+
   // Accessibility
   rpc GetAccessibilityTree(GetAccessibilityTreeRequest) returns (GetAccessibilityTreeResponse);
   rpc FindAccessibilityNode(FindAccessibilityNodeRequest) returns (FindAccessibilityNodeResponse);
   rpc PerformAccessibilityAction(PerformAccessibilityActionRequest) returns (Status);
-  
+
   // File System
   rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
   rpc ReadFile(ReadFileRequest) returns (ReadFileResponse);
@@ -1093,20 +1113,20 @@ service DesktopDaemon {
   rpc DeleteFile(DeleteFileRequest) returns (Status);
   rpc CopyFile(CopyFileRequest) returns (Status);
   rpc MoveFile(MoveFileRequest) returns (Status);
-  
+
   // Processes
   rpc ListProcesses(ListProcessesRequest) returns (ListProcessesResponse);
   rpc StartProcess(StartProcessRequest) returns (StartProcessResponse);
   rpc KillProcess(KillProcessRequest) returns (Status);
-  
+
   // Shell
   rpc ShellExec(ShellExecRequest) returns (ShellExecResponse);
   rpc ShellExecStream(ShellExecRequest) returns (stream ShellExecChunk);
-  
+
   // Clipboard
   rpc GetClipboard(GetClipboardRequest) returns (GetClipboardResponse);
   rpc SetClipboard(SetClipboardRequest) returns (Status);
-  
+
   // Browser
   rpc BrowserOpen(BrowserOpenRequest) returns (BrowserOpenResponse);
   rpc BrowserNavigate(BrowserNavigateRequest) returns (BrowserNavigateResponse);
@@ -1241,7 +1261,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build server with auth interceptor
     let addr: SocketAddr = config.bind_address.parse()?;
-    
+
     Server::builder()
         .add_service(
             daemon_proto::desktop_daemon_server::DesktopDaemonServer::with_interceptor(
@@ -1319,12 +1339,12 @@ impl DaemonConfig {
     pub fn load() -> Result<Self, config::ConfigError> {
         let config_path = std::env::var("JARVIS_DAEMON_CONFIG")
             .unwrap_or_else(|_| "/etc/jarvis/daemon.toml".to_string());
-        
+
         let settings = config::Config::builder()
             .add_source(config::File::with_name(&config_path).required(false))
             .add_source(config::Environment::with_prefix("JARVIS_DAEMON"))
             .build()?;
-        
+
         settings.try_deserialize()
     }
 }
@@ -1413,17 +1433,17 @@ impl ScreenController {
                 }
             }
         };
-        
+
         Ok(Self { backend })
     }
-    
+
     pub fn list_displays(&self) -> Result<Vec<Display>, Box<dyn std::error::Error>> {
         match &self.backend {
             ScreenBackend::X11(x11) => x11.list_displays(),
             ScreenBackend::Wayland(wayland) => wayland.list_displays(),
         }
     }
-    
+
     pub fn capture(
         &self,
         display_id: i32,
@@ -1441,7 +1461,7 @@ impl ScreenController {
             }
         }
     }
-    
+
     pub fn stream(
         &self,
         display_id: i32,
@@ -1453,15 +1473,15 @@ impl ScreenController {
         delta_encoding: bool,
     ) -> mpsc::Receiver<ScreenFrame> {
         let (tx, rx) = mpsc::channel(fps as usize * 2);
-        
+
         let backend = self.backend.clone();
         tokio::spawn(async move {
             let interval = std::time::Duration::from_millis(1000 / fps as u64);
             let mut last_frame: Option<Vec<u8>> = None;
-            
+
             loop {
                 let start = std::time::Instant::now();
-                
+
                 let frame_data = match &backend {
                     ScreenBackend::X11(x11) => {
                         x11.capture(display_id, region.clone(), format, quality, include_cursor)
@@ -1470,7 +1490,7 @@ impl ScreenController {
                         wayland.capture(display_id, region.clone(), format, quality, include_cursor)
                     }
                 };
-                
+
                 if let Ok(data) = frame_data {
                     let frame = if delta_encoding && last_frame.is_some() {
                         // Compute delta (simplified - real impl would use proper diff)
@@ -1488,21 +1508,21 @@ impl ScreenController {
                             dirty_region: None,
                         }
                     };
-                    
+
                     last_frame = Some(data);
-                    
+
                     if tx.send(frame).await.is_err() {
                         break; // Receiver dropped
                     }
                 }
-                
+
                 let elapsed = start.elapsed();
                 if elapsed < interval {
                     tokio::time::sleep(interval - elapsed).await;
                 }
             }
         });
-        
+
         rx
     }
 }
@@ -1557,12 +1577,12 @@ impl InputController {
     pub fn new(config: &DaemonConfig) -> Result<Self, Box<dyn std::error::Error>> {
         let device = UinputDevice::new()?;
         info!("Input controller initialized with uinput");
-        
+
         Ok(Self {
             device: Arc::new(Mutex::new(device)),
         })
     }
-    
+
     pub async fn mouse_move(
         &self,
         x: i32,
@@ -1571,7 +1591,7 @@ impl InputController {
         duration_ms: u32,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut device = self.device.lock().await;
-        
+
         if duration_ms == 0 || relative {
             // Instant movement
             if relative {
@@ -1585,7 +1605,7 @@ impl InputController {
             let steps = (duration_ms / 16).max(1) as i32; // ~60fps
             let dx = (x - current.0) as f32 / steps as f32;
             let dy = (y - current.1) as f32 / steps as f32;
-            
+
             for i in 1..=steps {
                 let target_x = current.0 + (dx * i as f32) as i32;
                 let target_y = current.1 + (dy * i as f32) as i32;
@@ -1593,10 +1613,10 @@ impl InputController {
                 tokio::time::sleep(std::time::Duration::from_millis(16)).await;
             }
         }
-        
+
         Ok(())
     }
-    
+
     pub async fn mouse_button(
         &self,
         button: MouseButton,
@@ -1604,12 +1624,12 @@ impl InputController {
         position: Option<(i32, i32)>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut device = self.device.lock().await;
-        
+
         // Move to position if specified
         if let Some((x, y)) = position {
             device.mouse_move_absolute(x, y)?;
         }
-        
+
         match action {
             ButtonAction::Press => device.mouse_button_press(button)?,
             ButtonAction::Release => device.mouse_button_release(button)?,
@@ -1627,10 +1647,10 @@ impl InputController {
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     pub async fn mouse_scroll(
         &self,
         delta_x: i32,
@@ -1640,7 +1660,7 @@ impl InputController {
         device.mouse_scroll(delta_x, delta_y)?;
         Ok(())
     }
-    
+
     pub async fn keyboard_key(
         &self,
         key: &str,
@@ -1648,12 +1668,12 @@ impl InputController {
         modifiers: &[String],
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut device = self.device.lock().await;
-        
+
         // Press modifiers
         for modifier in modifiers {
             device.key_press(modifier)?;
         }
-        
+
         match action {
             KeyAction::Press => device.key_press(key)?,
             KeyAction::Release => device.key_release(key)?,
@@ -1663,50 +1683,50 @@ impl InputController {
                 device.key_release(key)?;
             }
         }
-        
+
         // Release modifiers in reverse order
         for modifier in modifiers.iter().rev() {
             device.key_release(modifier)?;
         }
-        
+
         Ok(())
     }
-    
+
     pub async fn keyboard_type(
         &self,
         text: &str,
         delay_ms: u32,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut device = self.device.lock().await;
-        
+
         for ch in text.chars() {
             device.type_char(ch)?;
             if delay_ms > 0 {
                 tokio::time::sleep(std::time::Duration::from_millis(delay_ms as u64)).await;
             }
         }
-        
+
         Ok(())
     }
-    
+
     pub async fn keyboard_shortcut(
         &self,
         keys: &[String],
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut device = self.device.lock().await;
-        
+
         // Press all keys
         for key in keys {
             device.key_press(key)?;
             tokio::time::sleep(std::time::Duration::from_millis(30)).await;
         }
-        
+
         // Release all keys in reverse order
         for key in keys.iter().rev() {
             device.key_release(key)?;
             tokio::time::sleep(std::time::Duration::from_millis(30)).await;
         }
-        
+
         Ok(())
     }
 }
@@ -1752,28 +1772,28 @@ impl AccessibilityController {
     pub fn new(config: &DaemonConfig) -> Result<Self, Box<dyn std::error::Error>> {
         let connection = Connection::new()?;
         info!("Accessibility controller initialized with AT-SPI");
-        
+
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
         })
     }
-    
+
     pub async fn get_tree(
         &self,
         window_id: Option<&str>,
         max_depth: i32,
     ) -> Result<AccessibilityNode, Box<dyn std::error::Error>> {
         let conn = self.connection.lock().await;
-        
+
         let root = if let Some(wid) = window_id {
             conn.get_accessible_by_id(wid)?
         } else {
             conn.get_focused_accessible()?
         };
-        
+
         self.build_tree(&root, max_depth, 0)
     }
-    
+
     fn build_tree(
         &self,
         accessible: &dyn AccessibleExt,
@@ -1781,7 +1801,7 @@ impl AccessibilityController {
         current_depth: i32,
     ) -> Result<AccessibilityNode, Box<dyn std::error::Error>> {
         let bounds = accessible.get_extents()?;
-        
+
         let children = if max_depth == 0 || current_depth < max_depth {
             accessible
                 .get_children()?
@@ -1793,7 +1813,7 @@ impl AccessibilityController {
         } else {
             vec![]
         };
-        
+
         Ok(AccessibilityNode {
             id: accessible.get_unique_id()?,
             role: accessible.get_role()?.to_string(),
@@ -1811,7 +1831,7 @@ impl AccessibilityController {
             children,
         })
     }
-    
+
     pub async fn find_nodes(
         &self,
         window_id: Option<&str>,
@@ -1820,3 +1840,4 @@ impl AccessibilityController {
         limit: i32,
     ) -> Result<Vec<AccessibilityNode>, Box<dyn std::error::Error>> {
         let tree = self.get_
+```

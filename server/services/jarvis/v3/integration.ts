@@ -1,4 +1,8 @@
-import type { ExecutionContext, ToolExecutionEvent, AgentType } from "./types";
+import type {
+  ExecutionContext as _ExecutionContext,
+  ToolExecutionEvent,
+  AgentType,
+} from "./types";
 import { getGlobalRegistry, JARVISToolRegistry } from "./toolRegistry";
 import { getToolMetadataOrDefault } from "./toolMetadata";
 import { executeTool as legacyExecuteTool, getAvailableTools } from "../tools";

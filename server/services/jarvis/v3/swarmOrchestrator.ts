@@ -10,7 +10,7 @@ import type {
   ConsensusResult,
 } from "./types";
 import {
-  analyzeTask,
+  analyzeTask as _analyzeTask,
   getGlobalCoordinator,
   type TaskAnalysis,
   type AgentTask,
@@ -20,6 +20,7 @@ import { getAvailableTools } from "../tools";
 import {
   getGlobalMemoryClient,
   enrichContextWithMemory,
+  type MemoryEventCallback,
 } from "./memoryIntegration";
 import { extractLearningFromExecution } from "./learningExtractor";
 import {
@@ -31,7 +32,7 @@ import {
   getAgentBehavior,
   applyAgentPreProcess,
   applyAgentPostProcess,
-  getAgentMaxIterations,
+  getAgentMaxIterations as _getAgentMaxIterations,
 } from "./agentBehaviors";
 import {
   emitSwarmConsensusStart,
@@ -98,7 +99,7 @@ export interface AgentExecutor {
   ): Promise<ToolResult>;
 }
 
-type SwarmTaskStatus =
+type _SwarmTaskStatus =
   | "pending"
   | "claimed"
   | "running"
@@ -147,7 +148,8 @@ export class SwarmOrchestrator {
   async executeSwarmTask(
     task: string,
     context: ExecutionContext,
-    executor: AgentExecutor
+    executor: AgentExecutor,
+    onMemoryEvent?: MemoryEventCallback
   ): Promise<SwarmExecutionResult> {
     const startTime = Date.now();
     const agentsUsed: AgentType[] = [];
@@ -158,7 +160,11 @@ export class SwarmOrchestrator {
     let enrichedContext = context;
     if (this.config.enableMemoryEnrichment) {
       try {
-        enrichedContext = await enrichContextWithMemory(context, task);
+        enrichedContext = await enrichContextWithMemory(
+          context,
+          task,
+          onMemoryEvent
+        );
       } catch {
         void 0;
       }

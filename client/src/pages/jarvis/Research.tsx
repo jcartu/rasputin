@@ -1,24 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Brain,
   Network,
   Search,
   Zap,
   Database,
-  Cpu,
   Activity,
-  Lock,
-  Globe,
   FileText,
   CheckCircle,
-  AlertTriangle,
   Send,
   Mic,
-  StopCircle,
-  ChevronRight,
-  ChevronDown,
   Layers,
   GitMerge,
   Wifi,
@@ -137,10 +130,10 @@ export default function Research() {
   const [models, setModels] = useState<ModelStatus[]>([]);
   const [showDeepChat, setShowDeepChat] = useState(false);
   const [activeScenario, setActiveScenario] = useState<string>("");
-  const [pipelineStages, setPipelineStages] = useState<PipelineStageStatus[]>(
+  const [_pipelineStages, setPipelineStages] = useState<PipelineStageStatus[]>(
     []
   );
-  const [consensusInProgress, setConsensusInProgress] = useState(false);
+  const [_consensusInProgress, setConsensusInProgress] = useState(false);
   const [streamingContent, setStreamingContent] = useState<string>("");
 
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -149,7 +142,7 @@ export default function Research() {
 
   const utils = trpc.useUtils();
   const createChatMutation = trpc.chats.create.useMutation();
-  const updateChatMutation = trpc.chats.update.useMutation();
+  const _updateChatMutation = trpc.chats.update.useMutation();
   const generateTitleMutation = trpc.chats.generateTitle.useMutation();
 
   const { data: chats, isLoading: chatsLoading } = trpc.chats.list.useQuery(
@@ -166,10 +159,10 @@ export default function Research() {
 
   const {
     isConnected,
-    isQuerying,
-    logs: wsLogs,
+    isQuerying: _isQuerying,
+    logs: _wsLogs,
     startQuery,
-    cancelQuery,
+    cancelQuery: _cancelQuery,
     clearLogs,
   } = useWebSocket({
     onModelStatus: update => {
@@ -484,7 +477,7 @@ export default function Research() {
     speak(`Initiating ${scenario.title} protocol.`);
   };
 
-  const runConsensusDemo = (taskId: string) => {
+  const _runConsensusDemo = (taskId: string) => {
     setIsProcessing(true);
     setProgress(0);
     setLogs([]);
@@ -569,7 +562,7 @@ export default function Research() {
     }, 200);
   };
 
-  const runSynthesisDemo = (taskId: string, steps: any[]) => {
+  const _runSynthesisDemo = (taskId: string, steps: any[]) => {
     setIsProcessing(true);
     setProgress(0);
     setLogs([]);

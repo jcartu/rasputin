@@ -5,7 +5,7 @@
 
 import { invokeLLM } from "../../_core/llm";
 import { getDb } from "../../db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq as _eq, and as _and, sql } from "drizzle-orm";
 import * as vm from "vm";
 
 interface ToolParameter {

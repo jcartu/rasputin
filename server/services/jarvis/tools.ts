@@ -22,7 +22,7 @@ import {
 } from "../webApp/regionalMapScaffolder";
 import {
   scaffoldBusinessPortal,
-  type ScaffoldResult as PortalScaffoldResult,
+  type ScaffoldResult as _PortalScaffoldResult,
 } from "../webApp/portalScaffolder";
 import {
   createChinaRussiaConfig,
@@ -43,25 +43,25 @@ import {
   type TemplateType,
 } from "../webApp/documentTemplates";
 import {
-  getSelfEvolutionTools,
+  getSelfEvolutionTools as _getSelfEvolutionTools,
   executeSelfEvolutionTool,
 } from "../selfEvolution/tools";
 import {
   getSuggestedTasks,
   analyzeTaskPatterns,
-  predictNextTasks,
+  predictNextTasks as _predictNextTasks,
 } from "./predictiveTask";
 import {
   proactiveMonitor,
-  startProactiveMonitor,
-  stopProactiveMonitor,
+  startProactiveMonitor as _startProactiveMonitor,
+  stopProactiveMonitor as _stopProactiveMonitor,
   type MonitorConfig,
 } from "./proactiveMonitor";
 import { runAgentTeam, type TeamCallback } from "./agentTeams";
 import { webhookHandler } from "../events/webhookHandler";
 import { eventExecutor } from "../events/eventExecutor";
 import {
-  createProcedureFromTask,
+  createProcedureFromTask as _createProcedureFromTask,
   findMatchingProcedure,
 } from "./memoryIntegration";
 import { generateConsensus } from "../consensus";
@@ -94,12 +94,12 @@ import {
   initiateNegotiation,
   formAgentTeam,
   runConsensus,
-  type NegotiationBid,
-  type FormedTeam,
-  type SwarmDecision,
+  type NegotiationBid as _NegotiationBid,
+  type FormedTeam as _FormedTeam,
+  type SwarmDecision as _SwarmDecision,
 } from "../multiAgent/swarmIntelligence";
 import {
-  executeInSandbox,
+  executeInSandbox as _executeInSandbox,
   executePythonInSandbox,
   executeNodeInSandbox,
   executeShellInSandbox,
@@ -127,7 +127,7 @@ import { daemonClient } from "./daemonClient";
 import {
   callDesktopTool,
   getDesktopDaemonStatus,
-  listDesktopTools,
+  listDesktopTools as _listDesktopTools,
 } from "../desktop/remoteClient";
 
 const execAsync = promisify(exec);
@@ -223,7 +223,7 @@ async function verifyFileCreated(filePath: string): Promise<boolean> {
   }
 }
 
-async function verifyCommandOutput(
+async function _verifyCommandOutput(
   output: string,
   expectedPatterns: string[]
 ): Promise<{ verified: boolean; missing: string[] }> {
@@ -236,7 +236,7 @@ async function verifyCommandOutput(
   return { verified: missing.length === 0, missing };
 }
 
-async function verifyServerRunning(
+async function _verifyServerRunning(
   port: number,
   maxAttempts: number = 5
 ): Promise<boolean> {
@@ -2648,7 +2648,7 @@ function generateEChartsDiv(
       };
       break;
 
-    case "gauge":
+    case "gauge": {
       const gaugeVal = options?.gaugeValue ?? 0;
       const gaugeMax = options?.gaugeMax ?? 100;
       const pct = gaugeVal / gaugeMax;
@@ -2702,6 +2702,7 @@ function generateEChartsDiv(
         ],
       };
       break;
+    }
 
     default:
       return `<div style="color: red;">Unknown chart type: ${chartType}</div>`;
@@ -3101,7 +3102,7 @@ export async function createRichReport(
   let sectionIndex = 0;
   for (const section of options.sections) {
     switch (section.type) {
-      case "heading":
+      case "heading": {
         const tag = `h${Math.min(section.level || 2, 6)}`;
         const id =
           section.level && section.level <= 2
@@ -3109,6 +3110,7 @@ export async function createRichReport(
             : "";
         htmlContent += `  <${tag}${id}>${escapeHtml(section.content || "")}</${tag}>\n`;
         break;
+      }
 
       case "paragraph":
         htmlContent += `  <p>${formatMarkdownInline(section.content || "")}</p>\n`;
@@ -3122,7 +3124,7 @@ export async function createRichReport(
         htmlContent += `  </ul>\n`;
         break;
 
-      case "image":
+      case "image": {
         const imgSrc = generatedImages.get(section.imagePrompt || "");
         if (imgSrc) {
           htmlContent += `  <div class="image-container">\n`;
@@ -3138,8 +3140,9 @@ export async function createRichReport(
           htmlContent += `  </div>\n`;
         }
         break;
+      }
 
-      case "table":
+      case "table": {
         if (section.rows && section.rows.length > 0) {
           htmlContent += `  <table>\n`;
           const [header, ...rows] = section.rows;
@@ -3151,6 +3154,7 @@ export async function createRichReport(
           htmlContent += `    </tbody>\n  </table>\n`;
         }
         break;
+      }
 
       case "pie_chart":
         if (section.chartData && section.chartData.length > 0) {
@@ -3266,7 +3270,7 @@ export async function createRichReport(
         htmlContent += `  </div>\n`;
         break;
 
-      case "callout":
+      case "callout": {
         const calloutColors = {
           info: { bg: "#eff6ff", border: "#3b82f6", icon: "ℹ️" },
           warning: { bg: "#fffbeb", border: "#f59e0b", icon: "⚠️" },
@@ -3279,6 +3283,7 @@ export async function createRichReport(
         htmlContent += `    <span>${formatMarkdownInline(section.content || "")}</span>\n`;
         htmlContent += `  </div>\n`;
         break;
+      }
 
       case "quote":
         htmlContent += `  <blockquote style="border-left: 4px solid #6366f1; padding: 20px 30px; margin: 30px 0; background: #f8fafc; font-style: italic; font-size: 1.1em;">\n`;
@@ -3289,7 +3294,7 @@ export async function createRichReport(
         htmlContent += `  </blockquote>\n`;
         break;
 
-      case "comparison":
+      case "comparison": {
         if (section.comparisonItems && section.comparisonItems.length > 0) {
           const features = Object.keys(
             section.comparisonItems[0]?.features || {}
@@ -3318,11 +3323,13 @@ export async function createRichReport(
           htmlContent += `    </tbody>\n  </table>\n`;
         }
         break;
+      }
 
-      case "code":
+      case "code": {
         const lang = section.language || "text";
         htmlContent += `  <pre style="background: #1f2937; color: #e5e7eb; padding: 20px; border-radius: 8px; overflow-x: auto; font-family: 'SF Mono', Consolas, monospace; font-size: 14px;"><code class="language-${lang}">${escapeHtml(section.content || "")}</code></pre>\n`;
         break;
+      }
     }
   }
 
@@ -3356,7 +3363,9 @@ export async function createRichReport(
           fileSize: stats.size,
           source: "generated",
         });
-      } catch {}
+      } catch {
+        // Ignore file registration errors - report was still generated
+      }
     }
 
     const imageCount = generatedImages.size;
@@ -3605,7 +3614,7 @@ export async function tmuxList(): Promise<string> {
     );
 
     return stdout;
-  } catch (error) {
+  } catch (_error) {
     return "No JARVIS sessions running";
   }
 }
@@ -5177,7 +5186,7 @@ export async function compareScreenshot(
     const sizeDiff = Math.abs(baselineStats.size - currentStats.size);
     const sizeRatio = sizeDiff / baselineStats.size;
 
-    const diffPath = path.join(
+    const _diffPath = path.join(
       JARVIS_SANDBOX,
       `diff_${baselineName}_${Date.now()}.png`
     );
@@ -6874,7 +6883,7 @@ function markdownToHtml(md: string): string {
     .replace(/(<\/[hul][^>]*>)<\/p>/g, "$1");
 }
 
-async function startDevServerTool(
+async function _startDevServerTool(
   projectPath: string,
   command?: string
 ): Promise<string> {

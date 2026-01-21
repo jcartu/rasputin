@@ -81,6 +81,7 @@ drizzle/
 ## Code Style
 
 ### Formatting (Prettier)
+
 - Semicolons required
 - Double quotes
 - 80 char print width
@@ -89,16 +90,19 @@ drizzle/
 - Arrow parens avoided when possible
 
 ### TypeScript
+
 - Strict mode enabled
 - Use type imports: `import type { Foo } from "./types"`
 - Prefix unused vars with underscore: `_param`
 
 ### React
+
 - Functional components with hooks only
 - No `React.FC` type
 - Use `trpc.router.procedure.useQuery/useMutation()` for API calls
 
 ### Database (Drizzle)
+
 ```typescript
 import { db } from "./db";
 import { users } from "../drizzle/schema";
@@ -110,16 +114,19 @@ const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
 ## Adding New Features
 
 ### New tRPC endpoint
+
 1. Define Zod schema in `server/routers.ts`
 2. Add procedure using `publicProcedure` or `protectedProcedure`
 3. Call from client with `trpc.router.procedure.useQuery/useMutation()`
 
 ### New JARVIS tool
+
 1. Define tool schema in `server/services/jarvis/tools.ts`
 2. Implement tool executor function
 3. Add to available tools list
 
 ### New page
+
 1. Create component in `client/src/pages/`
 2. Add route in `client/src/App.tsx`
 
@@ -131,11 +138,13 @@ const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
 ## Environment Variables
 
 Required:
+
 - `ANTHROPIC_API_KEY` - Claude API
 - `OPENROUTER_API_KEY` - Multi-model routing
 - `DATABASE_URL` - MySQL/TiDB connection
 - `JWT_SECRET` - Session signing
 
 Optional:
+
 - `GEMINI_API_KEY`, `XAI_API_KEY`, `SONAR_API_KEY` - Additional models
 - `ELEVENLABS_API_KEY` - Text-to-speech

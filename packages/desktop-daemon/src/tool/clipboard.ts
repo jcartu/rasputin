@@ -49,7 +49,7 @@ Use action="write" with content parameter to set clipboard content.`,
       .describe("Content to write (required for write action)"),
   }),
 
-  async execute(args, ctx) {
+  async execute(args, _ctx) {
     if (args.action === "read") {
       const content = await readClipboard();
       return {

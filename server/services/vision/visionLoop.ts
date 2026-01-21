@@ -14,7 +14,7 @@ import * as crypto from "crypto";
 
 const MAX_ITERATIONS = 50;
 const MAX_REPEAT_STATE = 3;
-const SCREENSHOT_SIMILARITY_THRESHOLD = 0.95;
+const _SCREENSHOT_SIMILARITY_THRESHOLD = 0.95;
 
 export interface VisionLoopConfig {
   taskId: number;

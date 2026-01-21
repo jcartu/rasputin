@@ -52,7 +52,7 @@ const TOOL_CATEGORIES: Record<string, string[]> = {
 };
 
 export function assessComplexity(task: string): TaskComplexity {
-  const taskLower = task.toLowerCase();
+  const _taskLower = task.toLowerCase();
   const wordCount = task.split(/\s+/).length;
 
   for (const pattern of COMPLEXITY_INDICATORS.complex) {

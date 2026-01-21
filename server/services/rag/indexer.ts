@@ -15,7 +15,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import {
   CodebaseProject,
-  CodeChunk,
+  CodeChunk as _CodeChunk,
   ChunkType,
   SymbolType,
   ProjectSettings,
