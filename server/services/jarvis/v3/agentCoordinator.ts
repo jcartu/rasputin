@@ -164,7 +164,12 @@ export function analyzeTask(task: string): TaskAnalysis {
   if (
     isCalculationQuery &&
     !taskLower.includes("code") &&
-    !taskLower.includes("script")
+    !taskLower.includes("script") &&
+    !taskLower.includes("function") &&
+    !taskLower.includes("write") &&
+    !taskLower.includes("python") &&
+    !taskLower.includes("javascript") &&
+    !taskLower.includes("implement")
   ) {
     return {
       primaryAgent: "executor",
@@ -188,10 +193,20 @@ export function analyzeTask(task: string): TaskAnalysis {
     taskLower.includes("news") ||
     taskLower.includes("latest");
 
+  const hasMultiStepIndicators =
+    task.includes(" then ") ||
+    task.includes(" and finally ") ||
+    task.includes(";");
+
   if (
     isSearchQuery &&
     !taskLower.includes("file") &&
-    !taskLower.includes("code")
+    !taskLower.includes("code") &&
+    !taskLower.includes("write") &&
+    !taskLower.includes("build") &&
+    !taskLower.includes("create") &&
+    !taskLower.includes("test") &&
+    !hasMultiStepIndicators
   ) {
     return {
       primaryAgent: "researcher",
@@ -273,15 +288,43 @@ export function analyzeTask(task: string): TaskAnalysis {
       taskLower
     );
   const hasTrulyMultipleSteps =
-    (task.includes(" then ") || task.includes(";")) &&
+    (task.includes(" then ") ||
+      task.includes(";") ||
+      task.includes(" and finally ")) &&
     !isWeatherQuery &&
     !isImageQuery &&
     !isCalculationQuery;
 
+  const actionVerbs = [
+    "build",
+    "create",
+    "write",
+    "implement",
+    "test",
+    "deploy",
+    "verify",
+    "check",
+    "research",
+    "design",
+    "develop",
+  ];
+  const matchedActions = actionVerbs.filter(verb =>
+    new RegExp(`\\b${verb}\\b`, "i").test(taskLower)
+  );
+  const hasMultipleDistinctActions = matchedActions.length >= 2;
+
+  const hasComplexityIndicators =
+    /\b(complete|full|entire|comprehensive|end-to-end|with tests|with authentication|with deployment)\b/i.test(
+      taskLower
+    );
+
   const estimatedComplexity: TaskAnalysis["estimatedComplexity"] =
-    wordCount > 50 || hasTrulyMultipleSteps || isInherentlyComplex
+    wordCount > 50 ||
+    hasTrulyMultipleSteps ||
+    isInherentlyComplex ||
+    (hasMultipleDistinctActions && hasComplexityIndicators)
       ? "complex"
-      : wordCount > 20
+      : wordCount > 20 || hasMultipleDistinctActions
         ? "moderate"
         : "simple";
 
@@ -293,7 +336,8 @@ export function analyzeTask(task: string): TaskAnalysis {
   const requiresMultiAgent =
     explicitMultiAgent ||
     isInherentlyComplex ||
-    (estimatedComplexity === "complex" && secondaryAgents.length >= 2);
+    (hasTrulyMultipleSteps && hasMultipleDistinctActions) ||
+    (estimatedComplexity === "complex" && secondaryAgents.length >= 1);
 
   return {
     primaryAgent,
