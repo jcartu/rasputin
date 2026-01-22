@@ -3323,9 +3323,9 @@ export function EventCard({ event, index, today, isPast }: EventCardProps) {
   const endDate = event.endDate ? new Date(event.endDate) : null;
   const { text: relativeTime, urgent } = getRelativeTime(eventDate, endDate, today, isPast, t);
   
-  const title = getLocalizedField(event, 'title', locale);
-  const description = getLocalizedField(event, 'description', locale);
-  const location = getLocalizedField(event, 'location', locale);
+  const title = getLocalizedField(event as unknown as Record<string, unknown>, 'title', locale);
+  const description = getLocalizedField(event as unknown as Record<string, unknown>, 'description', locale);
+  const location = getLocalizedField(event as unknown as Record<string, unknown>, 'location', locale);
   
   const formatDateRange = () => {
     const start = eventDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -4250,8 +4250,8 @@ export function RegionDetail({ regionId }: RegionDetailProps) {
                   <span className="px-2 py-1 text-xs font-medium bg-slate-700 text-slate-300 rounded">{opp.sector}</span>
                   {getStatusBadge(opp.status)}
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">{getLocalizedField(opp, 'title', locale)}</h3>
-                <p className="text-slate-400 text-sm mb-4">{getLocalizedField(opp, 'description', locale)}</p>
+                <h3 className="text-lg font-semibold text-white mb-2">{getLocalizedField(opp as unknown as Record<string, unknown>, 'title', locale)}</h3>
+                <p className="text-slate-400 text-sm mb-4">{getLocalizedField(opp as unknown as Record<string, unknown>, 'description', locale)}</p>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center gap-2 text-slate-300">
                     <DollarSign className="w-4 h-4 text-green-500" />
