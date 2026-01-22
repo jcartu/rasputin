@@ -2715,7 +2715,7 @@ export function RegionMap({ onRegionClick, selectedRegion, cities }: RegionMapPr
           <Geographies geography={GEO_URLS[targetCountry]}>
             {({ geographies }) =>
               geographies.map((geo) => {
-                const name = String(geo.properties?.name || geo.properties?.NAME || geo.properties?.地名 || '');
+                const name = String(geo.properties?.name_latin || geo.properties?.name || geo.properties?.NAME || geo.properties?.地名 || '');
                 const isHovered = hoveredRegion === name;
                 const isSelected = selectedRegion === name;
                 
