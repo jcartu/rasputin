@@ -794,12 +794,6 @@ export async function scaffoldBusinessPortal(
 
     writeFile(
       projectPath,
-      "src/components/widgets/CurrencyConverter.tsx",
-      generateCurrencyConverter(),
-      filesCreated
-    );
-    writeFile(
-      projectPath,
       "src/components/widgets/NewsletterSignup.tsx",
       generateNewsletterSignup(),
       filesCreated
@@ -988,7 +982,7 @@ function generateTsConfig(): string {
   );
 }
 
-function generateNextConfig(locales: Locale[]): string {
+function generateNextConfig(_locales: Locale[]): string {
   return `import createNextIntlPlugin from 'next-intl/plugin';
 
 const withNextIntl = createNextIntlPlugin('./src/lib/i18n/request.ts');
@@ -1089,7 +1083,10 @@ function generateGitIgnore(): string {
 `;
 }
 
-function generateMiddleware(locales: Locale[], defaultLocale: Locale): string {
+function generateMiddleware(
+  _locales: Locale[],
+  _defaultLocale: Locale
+): string {
   return `import createMiddleware from 'next-intl/middleware';
 import { locales, defaultLocale } from '@/lib/i18n/config';
 
@@ -1164,8 +1161,8 @@ function generateMessages(
   branding: PortalScaffoldConfig["branding"],
   countryPair: PortalScaffoldConfig["countryPair"]
 ): string {
-  const countryAName = getCountryName(countryPair.countryA, locale);
-  const countryBName = getCountryName(countryPair.countryB, locale);
+  const _countryAName = getCountryName(countryPair.countryA, locale);
+  const _countryBName = getCountryName(countryPair.countryB, locale);
   const countryANameEn = getCountryName(countryPair.countryA, "en");
   const countryBNameEn = getCountryName(countryPair.countryB, "en");
   const countryANameRu = getCountryName(countryPair.countryA, "ru");
@@ -1318,6 +1315,33 @@ function generateMessages(
         successMessage: "Мы свяжемся с вами в ближайшее время.",
         sendAnother: "Отправить ещё",
         errorMessage: "Ошибка отправки. Попробуйте позже.",
+        investmentRanges: {
+          under1m: "Менее $1 млн",
+          "1to10m": "$1 - $10 млн",
+          "10to50m": "$10 - $50 млн",
+          "50to100m": "$50 - $100 млн",
+          over100m: "Более $100 млн",
+        },
+      },
+      calendarRelative: {
+        happeningNow: "Сейчас",
+        endedToday: "Закончилось сегодня",
+        endedYesterday: "Закончилось вчера",
+        daysAgo: "{days} дн. назад",
+        monthsAgo: "{months} мес. назад",
+        startsToday: "Сегодня",
+        startsTomorrow: "Завтра",
+        inDays: "Через {days} дн.",
+        inAboutMonth: "Примерно через месяц",
+        inMonths: "Через {months} мес.",
+      },
+      lawsGuide: {
+        comprehensiveGuide:
+          "Полное руководство по двусторонним соглашениям, визовым требованиям и бизнес-регулированию",
+        stepByStepGuide: "Пошаговое руководство по ведению бизнеса в {country}",
+        step: "Шаг {number}",
+        guideContent: "Содержание руководства...",
+        items: "{count} элементов",
       },
     },
     zh: {
@@ -1458,6 +1482,32 @@ function generateMessages(
         successMessage: "我们会尽快与您联系。",
         sendAnother: "再次提交",
         errorMessage: "提交失败，请稍后重试。",
+        investmentRanges: {
+          under1m: "少于100万美元",
+          "1to10m": "100万 - 1000万美元",
+          "10to50m": "1000万 - 5000万美元",
+          "50to100m": "5000万 - 1亿美元",
+          over100m: "超过1亿美元",
+        },
+      },
+      calendarRelative: {
+        happeningNow: "正在进行",
+        endedToday: "今日结束",
+        endedYesterday: "昨日结束",
+        daysAgo: "{days}天前",
+        monthsAgo: "{months}个月前",
+        startsToday: "今天开始",
+        startsTomorrow: "明天开始",
+        inDays: "{days}天后",
+        inAboutMonth: "约1个月后",
+        inMonths: "{months}个月后",
+      },
+      lawsGuide: {
+        comprehensiveGuide: "双边协议、签证要求和商业法规综合指南",
+        stepByStepGuide: "在{country}开展业务的分步指南",
+        step: "第{number}步",
+        guideContent: "指南内容...",
+        items: "{count}项",
       },
     },
     en: {
@@ -1604,6 +1654,33 @@ function generateMessages(
         successMessage: "We will get back to you shortly.",
         sendAnother: "Send Another",
         errorMessage: "Failed to send. Please try again later.",
+        investmentRanges: {
+          under1m: "< $1 Million",
+          "1to10m": "$1 - $10 Million",
+          "10to50m": "$10 - $50 Million",
+          "50to100m": "$50 - $100 Million",
+          over100m: "> $100 Million",
+        },
+      },
+      calendarRelative: {
+        happeningNow: "Happening now",
+        endedToday: "Ended today",
+        endedYesterday: "Ended yesterday",
+        daysAgo: "{days} days ago",
+        monthsAgo: "{months} months ago",
+        startsToday: "Starts today",
+        startsTomorrow: "Starts tomorrow",
+        inDays: "In {days} days",
+        inAboutMonth: "In about a month",
+        inMonths: "In {months} months",
+      },
+      lawsGuide: {
+        comprehensiveGuide:
+          "Comprehensive guide to bilateral agreements, visa requirements, and business regulations",
+        stepByStepGuide: "Step-by-step guide to doing business in {country}",
+        step: "Step {number}",
+        guideContent: "Guide content...",
+        items: "{count} items",
       },
     },
   };
@@ -1611,8 +1688,8 @@ function generateMessages(
 }
 
 function generateRootLayout(
-  branding: PortalScaffoldConfig["branding"],
-  countryPair: PortalScaffoldConfig["countryPair"]
+  _branding: PortalScaffoldConfig["branding"],
+  _countryPair: PortalScaffoldConfig["countryPair"]
 ): string {
   return `import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, getTranslations } from 'next-intl/server';
@@ -1785,7 +1862,7 @@ export default function HomePage() {
 
 function generateHeader(
   branding: PortalScaffoldConfig["branding"],
-  countryPair: PortalScaffoldConfig["countryPair"]
+  _countryPair: PortalScaffoldConfig["countryPair"]
 ): string {
   return `"use client";
 
@@ -2110,9 +2187,8 @@ function generateGlobe3D(
     })
     .join(",\n");
 
-  // Get country info for dynamic labels
-  const countryA = countryPair.countryA;
-  const countryB = countryPair.countryB;
+  const _countryA = countryPair.countryA;
+  const _countryB = countryPair.countryB;
 
   return `"use client";
 
@@ -2698,7 +2774,7 @@ export function RegionMap({ onRegionClick, selectedRegion, cities }: RegionMapPr
 `;
 }
 
-function generateCityMap(branding: PortalScaffoldConfig["branding"]): string {
+function generateCityMap(_branding: PortalScaffoldConfig["branding"]): string {
   return `"use client";
 
 interface CityMapProps {
@@ -3023,6 +3099,7 @@ import type { Locale } from '@/lib/i18n/config';
 
 export function BusinessGuide() {
   const t = useTranslations('laws');
+  const tGuide = useTranslations('lawsGuide');
   const params = useParams();
   const locale = params.locale as Locale;
   const targetCountry = getTargetCountry(locale);
@@ -3037,7 +3114,7 @@ export function BusinessGuide() {
     >
       <h2 className="text-2xl font-bold text-white mb-4">{t('guide')}</h2>
       <p className="text-slate-300 mb-6">
-        Step-by-step guide to doing business in {countryName}
+        {tGuide('stepByStepGuide', { country: countryName })}
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[1, 2, 3, 4].map((step) => (
@@ -3045,8 +3122,8 @@ export function BusinessGuide() {
             <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold mb-3">
               {step}
             </div>
-            <h4 className="text-white font-medium mb-1">Step {step}</h4>
-            <p className="text-slate-400 text-sm">Guide content...</p>
+            <h4 className="text-white font-medium mb-1">{tGuide('step', { number: step })}</h4>
+            <p className="text-slate-400 text-sm">{tGuide('guideContent')}</p>
           </div>
         ))}
       </div>
@@ -3169,16 +3246,36 @@ function generateEventCard(): string {
 
 import { motion } from 'framer-motion';
 import { Calendar, MapPin, ExternalLink, Clock } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { useParams } from 'next/navigation';
 
 interface Event {
   id: string;
   title: string;
+  titleZh?: string;
+  titleRu?: string;
   date: string;
   endDate?: string;
   location: string;
+  locationZh?: string;
+  locationRu?: string;
   description: string;
+  descriptionZh?: string;
+  descriptionRu?: string;
   url: string;
   country: string;
+}
+
+type Locale = 'en' | 'zh' | 'ru';
+
+function getLocalizedField<T extends Record<string, unknown>>(
+  obj: T, 
+  field: string, 
+  locale: Locale
+): string {
+  if (locale === 'zh' && obj[\`\${field}Zh\`]) return obj[\`\${field}Zh\`] as string;
+  if (locale === 'ru' && obj[\`\${field}Ru\`]) return obj[\`\${field}Ru\`] as string;
+  return obj[field] as string;
 }
 
 interface EventCardProps {
@@ -3188,37 +3285,47 @@ interface EventCardProps {
   isPast?: boolean;
 }
 
-function getRelativeTime(eventDate: Date, endDate: Date | null, today: Date, isPast?: boolean): { text: string; urgent: boolean } {
+function getRelativeTime(eventDate: Date, endDate: Date | null, today: Date, isPast?: boolean, t?: (key: string, params?: Record<string, number>) => string): { text: string; urgent: boolean } {
   const diffMs = eventDate.getTime() - today.getTime();
   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
   
+  const translate = (key: string, params?: Record<string, number>) => 
+    t ? t(key, params) : key;
+  
   if (endDate && today >= eventDate && today <= endDate) {
-    return { text: 'Happening now', urgent: true };
+    return { text: translate('happeningNow'), urgent: true };
   }
   
   if (isPast || diffDays < 0) {
     const pastDays = Math.abs(diffDays);
-    if (pastDays === 0) return { text: 'Ended today', urgent: false };
-    if (pastDays === 1) return { text: 'Ended yesterday', urgent: false };
-    if (pastDays < 30) return { text: \`\${pastDays} days ago\`, urgent: false };
+    if (pastDays === 0) return { text: translate('endedToday'), urgent: false };
+    if (pastDays === 1) return { text: translate('endedYesterday'), urgent: false };
+    if (pastDays < 30) return { text: translate('daysAgo', { days: pastDays }), urgent: false };
     const months = Math.floor(pastDays / 30);
-    return { text: \`\${months} month\${months > 1 ? 's' : ''} ago\`, urgent: false };
+    return { text: translate('monthsAgo', { months }), urgent: false };
   }
   
-  if (diffDays === 0) return { text: 'Starts today', urgent: true };
-  if (diffDays === 1) return { text: 'Starts tomorrow', urgent: true };
-  if (diffDays <= 7) return { text: \`In \${diffDays} days\`, urgent: true };
-  if (diffDays <= 30) return { text: \`In \${diffDays} days\`, urgent: false };
-  if (diffDays <= 60) return { text: 'In about a month', urgent: false };
+  if (diffDays === 0) return { text: translate('startsToday'), urgent: true };
+  if (diffDays === 1) return { text: translate('startsTomorrow'), urgent: true };
+  if (diffDays <= 7) return { text: translate('inDays', { days: diffDays }), urgent: true };
+  if (diffDays <= 30) return { text: translate('inDays', { days: diffDays }), urgent: false };
+  if (diffDays <= 60) return { text: translate('inAboutMonth'), urgent: false };
   const months = Math.floor(diffDays / 30);
-  return { text: \`In \${months} months\`, urgent: false };
+  return { text: translate('inMonths', { months }), urgent: false };
 }
 
 export function EventCard({ event, index, today, isPast }: EventCardProps) {
+  const t = useTranslations('calendarRelative');
+  const params = useParams();
+  const locale = (params.locale as Locale) || 'en';
   const countryFlag = event.country === 'CN' ? '🇨🇳' : '🇷🇺';
   const eventDate = new Date(event.date);
   const endDate = event.endDate ? new Date(event.endDate) : null;
-  const { text: relativeTime, urgent } = getRelativeTime(eventDate, endDate, today, isPast);
+  const { text: relativeTime, urgent } = getRelativeTime(eventDate, endDate, today, isPast, t);
+  
+  const title = getLocalizedField(event, 'title', locale);
+  const description = getLocalizedField(event, 'description', locale);
+  const location = getLocalizedField(event, 'location', locale);
   
   const formatDateRange = () => {
     const start = eventDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -3244,7 +3351,7 @@ export function EventCard({ event, index, today, isPast }: EventCardProps) {
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className="text-2xl">{countryFlag}</span>
             <h3 className={\`text-xl font-semibold transition-colors \${isPast ? 'text-slate-400' : 'text-white group-hover:text-primary'}\`}>
-              {event.title}
+              {title}
             </h3>
             {!isPast && (
               <span className={\`px-2 py-0.5 text-xs rounded-full flex items-center gap-1 \${urgent ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'}\`}>
@@ -3253,7 +3360,7 @@ export function EventCard({ event, index, today, isPast }: EventCardProps) {
               </span>
             )}
           </div>
-          <p className={\`mb-4 \${isPast ? 'text-slate-500' : 'text-slate-400'}\`}>{event.description}</p>
+          <p className={\`mb-4 \${isPast ? 'text-slate-500' : 'text-slate-400'}\`}>{description}</p>
           <div className={\`flex flex-wrap items-center gap-4 text-sm \${isPast ? 'text-slate-600' : 'text-slate-500'}\`}>
             <span className="flex items-center gap-1">
               <Calendar className="w-4 h-4" />
@@ -3261,7 +3368,7 @@ export function EventCard({ event, index, today, isPast }: EventCardProps) {
             </span>
             <span className="flex items-center gap-1">
               <MapPin className="w-4 h-4" />
-              {event.location}
+              {location}
             </span>
           </div>
         </div>
@@ -3307,7 +3414,19 @@ import { Building2, Globe, Phone, Mail, ExternalLink } from 'lucide-react';
 import { getTargetCountry } from '@/lib/i18n/config';
 import type { Locale } from '@/lib/i18n/config';
 
-const orgsByCountry: Record<string, Array<{ id: string; name: string; nameLocal?: string; level: string; website: string; description: string }>> = {
+type OrgLocale = 'en' | 'zh' | 'ru';
+
+function getLocalizedOrgField<T extends Record<string, unknown>>(
+  obj: T, 
+  field: string, 
+  locale: OrgLocale
+): string {
+  if (locale === 'zh' && obj[\`\${field}Zh\`]) return obj[\`\${field}Zh\`] as string;
+  if (locale === 'ru' && obj[\`\${field}Ru\`]) return obj[\`\${field}Ru\`] as string;
+  return obj[field] as string;
+}
+
+const orgsByCountry: Record<string, Array<{ id: string; name: string; nameLocal?: string; nameZh?: string; nameRu?: string; level: string; website: string; description: string; descriptionZh?: string; descriptionRu?: string }>> = {
   ${countryA}: ${orgsAJson},
   ${countryB}: ${orgsBJson},
 };
@@ -3356,12 +3475,12 @@ export function OrgDirectory() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h3 className="font-semibold text-white group-hover:text-purple-400 transition-colors">
-                        {org.name}
+                        {getLocalizedOrgField(org, 'name', locale as OrgLocale)}
                       </h3>
-                      {org.nameLocal && (
+                      {org.nameLocal && locale === 'en' && (
                         <p className="text-sm text-slate-500 mt-1">{org.nameLocal}</p>
                       )}
-                      <p className="text-slate-400 text-sm mt-2">{org.description}</p>
+                      <p className="text-slate-400 text-sm mt-2">{getLocalizedOrgField(org, 'description', locale as OrgLocale)}</p>
                     </div>
                     <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-purple-400 flex-shrink-0" />
                   </div>
@@ -3797,7 +3916,6 @@ import Link from 'next/link';
 import { getTargetCountry } from '@/lib/i18n/config';
 import type { Locale } from '@/lib/i18n/config';
 import { getRegionData, CHINA_REGIONS, RUSSIA_REGIONS, type MajorCity, type InvestmentOpportunity, type KeyProject, type CompetitiveAdvantage, type NotableEntrepreneur } from '@/data/regionData';
-import { CurrencyConverter } from '@/components/widgets/CurrencyConverter';
 import { RelatedRegions } from '@/components/widgets/RelatedRegions';
 import { SocialShare } from '@/components/widgets/SocialShare';
 import { Breadcrumbs } from '@/components/widgets/Breadcrumbs';
@@ -3857,6 +3975,16 @@ export function RegionDetail({ regionId }: RegionDetailProps) {
   const t = useTranslations('invest');
   const params = useParams();
   const locale = params.locale as Locale;
+  
+  function getLocalizedField<T extends Record<string, unknown>>(
+    obj: T, 
+    field: string, 
+    loc: Locale
+  ): string {
+    if (loc === 'zh' && obj[\`\${field}Zh\`]) return obj[\`\${field}Zh\`] as string;
+    if (loc === 'ru' && obj[\`\${field}Ru\`]) return obj[\`\${field}Ru\`] as string;
+    return obj[field] as string;
+  }
   const targetCountry = getTargetCountry(locale);
   const [pathData, setPathData] = useState<string>('');
   const [viewBox, setViewBox] = useState<string>('0 0 100 100');
@@ -4122,8 +4250,8 @@ export function RegionDetail({ regionId }: RegionDetailProps) {
                   <span className="px-2 py-1 text-xs font-medium bg-slate-700 text-slate-300 rounded">{opp.sector}</span>
                   {getStatusBadge(opp.status)}
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">{opp.title}</h3>
-                <p className="text-slate-400 text-sm mb-4">{opp.description}</p>
+                <h3 className="text-lg font-semibold text-white mb-2">{getLocalizedField(opp, 'title', locale)}</h3>
+                <p className="text-slate-400 text-sm mb-4">{getLocalizedField(opp, 'description', locale)}</p>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center gap-2 text-slate-300">
                     <DollarSign className="w-4 h-4 text-green-500" />
@@ -4369,15 +4497,6 @@ export function RegionDetail({ regionId }: RegionDetailProps) {
         </div>
       </motion.section>
 
-      <motion.section
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.8 }}
-        className="mt-8"
-      >
-        <CurrencyConverter />
-      </motion.section>
-
       <RelatedRegions 
         currentRegion={data} 
         allRegions={targetCountry === 'CN' ? CHINA_REGIONS : RUSSIA_REGIONS} 
@@ -4402,7 +4521,6 @@ import { getRegionData, type MajorCity, type InvestmentOpportunity } from '@/dat
 import { getTargetCountry } from '@/lib/i18n/config';
 import type { Locale } from '@/lib/i18n/config';
 import { SocialShare } from '@/components/widgets/SocialShare';
-import { CurrencyConverter } from '@/components/widgets/CurrencyConverter';
 
 interface CityDetailProps {
   regionId: string;
@@ -4587,14 +4705,6 @@ export function CityDetail({ regionId, cityId }: CityDetailProps) {
         </motion.div>
       )}
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="mt-10"
-        >
-          <CurrencyConverter />
-        </motion.div>
       </div>
     </div>
   );
@@ -4845,7 +4955,7 @@ export default defineConfig({
 }
 
 function generateSeedScript(
-  countryPair: PortalScaffoldConfig["countryPair"]
+  _countryPair: PortalScaffoldConfig["countryPair"]
 ): string {
   return `import { db } from "../src/lib/db/client";
 import { regions, events, organizations, laws } from "../src/lib/db/schema";
@@ -5152,18 +5262,18 @@ export const CHINA_REGIONS: Record<string, RegionData> = {
     taxBenefitsZh: ["高新技术企业15%企业所得税", "研发费用加计扣除", "人才激励政策"],
     majorCities: [
       { id: "haidian", name: "Haidian District", population: "3.5M", lat: 39.9593, lng: 116.2986, image: "https://images.unsplash.com/photo-1584464491033-06628f3a6b7b?w=1920&q=80", description: "China's Silicon Valley - home to Zhongguancun tech hub, Tsinghua University, Peking University, and 20,000+ high-tech companies. The epicenter of AI, software, and deeptech in China.", opportunities: [
-        { id: "hd-1", title: "Zhongguancun Software Park JV", sector: "Software", description: "Joint ventures with China's top software companies. Access to 30,000+ developers and government contracts.", investmentRange: "$2M - $30M", timeline: "1-2 years", status: "active" },
-        { id: "hd-2", title: "University Technology Transfer", sector: "DeepTech", description: "Commercialize patents from Tsinghua and Peking University. AI, quantum computing, new materials focus.", investmentRange: "$1M - $20M", timeline: "2-3 years", status: "priority" },
-        { id: "hd-3", title: "AI Research Lab Partnerships", sector: "AI", description: "Co-develop AI solutions with Baidu, ByteDance, and state research institutes located in Haidian.", investmentRange: "$5M - $50M", timeline: "1-3 years", status: "active" }
+        { id: "hd-1", title: "Zhongguancun Software Park JV", titleZh: "中关村软件园合资企业", titleRu: "СП в Технопарке Чжунгуаньцунь", sector: "Software", description: "Joint ventures with China's top software companies. Access to 30,000+ developers and government contracts.", descriptionZh: "与中国顶级软件公司成立合资企业。可接触30,000多名开发人员和政府合同。", descriptionRu: "Совместные предприятия с ведущими софтверными компаниями Китая. Доступ к 30 000+ разработчикам и государственным контрактам.", investmentRange: "$2M - $30M", timeline: "1-2 years", status: "active" },
+        { id: "hd-2", title: "University Technology Transfer", titleZh: "大学技术转让", titleRu: "Трансфер университетских технологий", sector: "DeepTech", description: "Commercialize patents from Tsinghua and Peking University. AI, quantum computing, new materials focus.", descriptionZh: "将清华大学和北京大学的专利商业化。专注于人工智能、量子计算和新材料。", descriptionRu: "Коммерциализация патентов Университетов Цинхуа и Пекина. Фокус на ИИ, квантовых вычислениях и новых материалах.", investmentRange: "$1M - $20M", timeline: "2-3 years", status: "priority" },
+        { id: "hd-3", title: "AI Research Lab Partnerships", titleZh: "人工智能研究实验室合作", titleRu: "Партнёрство с лабораториями ИИ", sector: "AI", description: "Co-develop AI solutions with Baidu, ByteDance, and state research institutes located in Haidian.", descriptionZh: "与百度、字节跳动及海淀区国家研究机构共同开发人工智能解决方案。", descriptionRu: "Совместная разработка ИИ-решений с Baidu, ByteDance и государственными НИИ в районе Хайдянь.", investmentRange: "$5M - $50M", timeline: "1-3 years", status: "active" }
       ]},
       { id: "chaoyang", name: "Chaoyang District", population: "3.9M", lat: 39.9219, lng: 116.4435, image: "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?w=1920&q=80", description: "Beijing's CBD and diplomatic center. Home to 170+ foreign embassies, Fortune 500 regional HQs, and luxury retail. The gateway for international business in China.", opportunities: [
-        { id: "cy-1", title: "CBD Grade A Office Development", sector: "Real Estate", description: "Premium office towers in Beijing's financial district. Strong demand from Russian and Central Asian firms.", investmentRange: "$50M - $300M", timeline: "3-5 years", status: "active" },
+        { id: "cy-1", title: "CBD Grade A Office Development", titleZh: "CBD甲级写字楼开发", titleRu: "Девелопмент офисов класса А в деловом центре", sector: "Real Estate", description: "Premium office towers in Beijing's financial district. Strong demand from Russian and Central Asian firms.", descriptionZh: "北京金融区优质写字楼。来自俄罗斯和中亚企业的强劲需求。", descriptionRu: "Премиальные офисные башни в финансовом районе Пекина. Высокий спрос со стороны российских и центральноазиатских компаний.", investmentRange: "$50M - $300M", timeline: "3-5 years", status: "active" },
         { id: "cy-2", title: "Russia-China Trade Service Center", titleRu: "Российско-китайский торговый сервисный центр", titleZh: "俄中贸易服务中心", sector: "Professional Services", description: "One-stop shop for bilateral trade: legal, accounting, consulting, and logistics coordination.", descriptionRu: "Универсальный центр для двусторонней торговли: юридические, бухгалтерские, консалтинговые и логистические услуги.", descriptionZh: "双边贸易一站式服务：法律、会计、咨询和物流协调。", investmentRange: "$2M - $10M", timeline: "1 year", status: "priority" },
-        { id: "cy-3", title: "798 Art District Cultural Exchange", sector: "Culture & Tourism", description: "Russia-China cultural center, gallery spaces, and creative industry incubator in famous art zone.", investmentRange: "$5M - $30M", timeline: "2-3 years", status: "upcoming" }
+        { id: "cy-3", title: "798 Art District Cultural Exchange", titleZh: "798艺术区文化交流", titleRu: "Культурный обмен в арт-районе 798", sector: "Culture & Tourism", description: "Russia-China cultural center, gallery spaces, and creative industry incubator in famous art zone.", descriptionZh: "在著名艺术区设立中俄文化中心、画廊空间和创意产业孵化器。", descriptionRu: "Российско-китайский культурный центр, галереи и инкубатор креативных индустрий в знаменитом арт-районе.", investmentRange: "$5M - $30M", timeline: "2-3 years", status: "upcoming" }
       ]},
       { id: "dongcheng", name: "Dongcheng District", population: "0.8M", lat: 39.9282, lng: 116.4160, image: "https://images.unsplash.com/photo-1537002295-36f0c5c56c97?w=1920&q=80", description: "Historic heart of Beijing with the Forbidden City, government ministries, and cultural heritage. Premium location for tourism, hospitality, and government relations.", opportunities: [
-        { id: "dc-1", title: "Heritage Hotel & Tourism", sector: "Hospitality", description: "Boutique hotels in historic hutong areas. Growing Russian tourist segment seeking cultural experiences.", investmentRange: "$10M - $50M", timeline: "2-3 years", status: "active" },
-        { id: "dc-2", title: "Government Affairs Advisory", sector: "Consulting", description: "Strategic advisory services for navigating China's regulatory landscape. Located near key ministries.", investmentRange: "$1M - $5M", timeline: "6-12 months", status: "active" }
+        { id: "dc-1", title: "Heritage Hotel & Tourism", titleZh: "传统酒店与旅游", titleRu: "Исторические отели и туризм", sector: "Hospitality", description: "Boutique hotels in historic hutong areas. Growing Russian tourist segment seeking cultural experiences.", descriptionZh: "在历史胡同区开设精品酒店。俄罗斯游客群体不断增长，寻求文化体验。", descriptionRu: "Бутик-отели в исторических районах хутунов. Растущий сегмент российских туристов, ищущих культурный опыт.", investmentRange: "$10M - $50M", timeline: "2-3 years", status: "active" },
+        { id: "dc-2", title: "Government Affairs Advisory", titleZh: "政府事务咨询", titleRu: "Консалтинг по работе с госорганами", sector: "Consulting", description: "Strategic advisory services for navigating China's regulatory landscape. Located near key ministries.", descriptionZh: "提供战略咨询服务，帮助企业应对中国监管环境。位于主要部委附近。", descriptionRu: "Стратегический консалтинг по навигации в регуляторной среде Китая. Расположение рядом с ключевыми министерствами.", investmentRange: "$1M - $5M", timeline: "6-12 months", status: "active" }
       ]}
     ],
     overview: "China's political and cultural capital, Beijing is a global hub for technology innovation, featuring Zhongguancun - Asia's Silicon Valley. The city leads in AI research, fintech, and biotech with unparalleled access to government resources and top universities.",
@@ -5171,10 +5281,10 @@ export const CHINA_REGIONS: Record<string, RegionData> = {
     overviewZh: "中国的政治和文化中心，北京是全球科技创新中心，拥有亚洲硅谷——中关村。该城市在人工智能研究、金融科技和生物技术方面处于领先地位，拥有无与伦比的政府资源和顶尖大学。",
     targetSectors: ["Artificial Intelligence", "Fintech", "Biotech & Pharmaceuticals", "New Energy Vehicles", "Digital Economy"],
     opportunities: [
-      { id: "bj-1", title: "Zhongguancun AI Innovation Hub", sector: "AI & Technology", description: "Joint venture opportunities in China's premier tech district. Access to 20,000+ high-tech companies, Tsinghua and Peking University talent pipeline, and government AI development fund.", investmentRange: "$5M - $100M", timeline: "2-3 years", status: "active" },
-      { id: "bj-2", title: "Beijing Daxing International Airport Economic Zone", sector: "Logistics & Aviation", description: "Duty-free retail, aircraft maintenance, and logistics hub development around the world's largest airport. Direct Russia cargo routes planned.", investmentRange: "$10M - $500M", timeline: "3-5 years", status: "priority" },
+      { id: "bj-1", title: "Zhongguancun AI Innovation Hub", titleZh: "中关村人工智能创新中心", titleRu: "Инновационный хаб ИИ Чжунгуаньцунь", sector: "AI & Technology", description: "Joint venture opportunities in China's premier tech district. Access to 20,000+ high-tech companies, Tsinghua and Peking University talent pipeline, and government AI development fund.", descriptionZh: "在中国首要科技园区的合资机会。可接触20,000多家高科技企业、清华北大人才渠道及政府人工智能发展基金。", descriptionRu: "Возможности СП в ведущем технологическом районе Китая. Доступ к 20 000+ высокотехнологичных компаний, кадровому резерву Цинхуа и Пекинского университетов и государственному фонду развития ИИ.", investmentRange: "$5M - $100M", timeline: "2-3 years", status: "active" },
+      { id: "bj-2", title: "Beijing Daxing International Airport Economic Zone", titleZh: "北京大兴国际机场经济区", titleRu: "Экономическая зона аэропорта Дасин", sector: "Logistics & Aviation", description: "Duty-free retail, aircraft maintenance, and logistics hub development around the world's largest airport. Direct Russia cargo routes planned.", descriptionZh: "在世界最大机场周边开发免税零售、飞机维护和物流中心。计划开通直达俄罗斯的货运航线。", descriptionRu: "Развитие беспошлинной торговли, техобслуживания самолётов и логистического хаба вокруг крупнейшего аэропорта мира. Планируются прямые грузовые маршруты в Россию.", investmentRange: "$10M - $500M", timeline: "3-5 years", status: "priority" },
       { id: "bj-3", title: "China-Russia Healthcare Innovation Center", titleRu: "Российско-китайский инновационный центр здравоохранения", titleZh: "中俄医疗创新中心", sector: "Biotech", description: "Bilateral medical technology development focusing on pharmaceuticals, medical devices, and telemedicine. Fast-track NMPA approval for Russian products.", descriptionRu: "Совместная разработка медицинских технологий: фармацевтика, медицинские изделия, телемедицина. Ускоренная регистрация российских продуктов в NMPA.", descriptionZh: "双边医疗技术开发，专注于制药、医疗器械和远程医疗。俄罗斯产品快速通过NMPA审批。", investmentRange: "$2M - $50M", timeline: "2-4 years", status: "active" },
-      { id: "bj-4", title: "Smart City Infrastructure Program", sector: "Smart City", description: "IoT sensors, 5G infrastructure, and urban AI management systems deployment across Beijing's new districts.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "upcoming" }
+      { id: "bj-4", title: "Smart City Infrastructure Program", titleZh: "智慧城市基础设施项目", titleRu: "Программа инфраструктуры умного города", sector: "Smart City", description: "IoT sensors, 5G infrastructure, and urban AI management systems deployment across Beijing's new districts.", descriptionZh: "在北京新区部署物联网传感器、5G基础设施和城市人工智能管理系统。", descriptionRu: "Развёртывание IoT-датчиков, 5G-инфраструктуры и систем городского ИИ-управления в новых районах Пекина.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "upcoming" }
     ],
     keyProjects: [
       { id: "bj-p1", name: "Beijing Universal Studios Phase 2", value: "$3.2 Billion", sector: "Tourism & Entertainment", description: "Expansion of the theme park with new attractions and hotels, seeking technology and content partners.", partners: ["Comcast NBCUniversal", "Beijing Tourism Group"], completionYear: "2028" },
@@ -5210,17 +5320,17 @@ export const CHINA_REGIONS: Record<string, RegionData> = {
     taxBenefitsZh: ["自贸区优惠政策", "合格企业15%企业所得税", "进口关税减免"],
     majorCities: [
       { id: "pudong", name: "Pudong New Area", population: "5.5M", lat: 31.2231, lng: 121.5440, image: "https://images.unsplash.com/photo-1538428494232-9c0d8a3ab403?w=1920&q=80", description: "China's financial powerhouse - home to Lujiazui financial district, Shanghai Stock Exchange, and Zhangjiang Hi-Tech Park. The Lingang Free Trade Zone offers unprecedented foreign investment openness.", opportunities: [
-        { id: "pd-1", title: "Lujiazui Financial Services", sector: "Finance", description: "Establish securities, asset management, or insurance operations in China's Wall Street. Full foreign ownership now permitted.", investmentRange: "$30M - $200M", timeline: "1-2 years", status: "priority" },
-        { id: "pd-2", title: "Zhangjiang Semiconductor Hub", sector: "Semiconductor", description: "IC design and manufacturing facilities with talent from SMIC, Huawei HiSilicon. Equipment import duty-free.", investmentRange: "$50M - $500M", timeline: "2-4 years", status: "priority" },
-        { id: "pd-3", title: "Lingang New Energy Vehicle Park", sector: "EV", description: "EV component manufacturing near Tesla Gigafactory. Supplier qualification assistance available.", investmentRange: "$20M - $100M", timeline: "1-3 years", status: "active" }
+        { id: "pd-1", title: "Lujiazui Financial Services", titleZh: "陆家嘴金融服务", titleRu: "Финансовые услуги Луцзяцзуй", sector: "Finance", description: "Establish securities, asset management, or insurance operations in China's Wall Street. Full foreign ownership now permitted.", descriptionZh: "在中国的华尔街设立证券、资产管理或保险业务。现已允许外资全资控股。", descriptionRu: "Создание операций по ценным бумагам, управлению активами или страхованию на китайской Уолл-стрит. Разрешено полное иностранное владение.", investmentRange: "$30M - $200M", timeline: "1-2 years", status: "priority" },
+        { id: "pd-2", title: "Zhangjiang Semiconductor Hub", titleZh: "张江半导体中心", titleRu: "Полупроводниковый хаб Чжанцзян", sector: "Semiconductor", description: "IC design and manufacturing facilities with talent from SMIC, Huawei HiSilicon. Equipment import duty-free.", descriptionZh: "集成电路设计和制造设施，拥有来自中芯国际、华为海思的人才。设备进口免税。", descriptionRu: "Проектирование и производство ИС с талантами из SMIC и Huawei HiSilicon. Беспошлинный импорт оборудования.", investmentRange: "$50M - $500M", timeline: "2-4 years", status: "priority" },
+        { id: "pd-3", title: "Lingang New Energy Vehicle Park", titleZh: "临港新能源汽车园区", titleRu: "Парк электромобилей Линьган", sector: "EV", description: "EV component manufacturing near Tesla Gigafactory. Supplier qualification assistance available.", descriptionZh: "靠近特斯拉超级工厂的电动汽车零部件制造。提供供应商资质认证协助。", descriptionRu: "Производство компонентов электромобилей рядом с гигафабрикой Tesla. Доступна помощь в квалификации поставщиков.", investmentRange: "$20M - $100M", timeline: "1-3 years", status: "active" }
       ]},
       { id: "huangpu", name: "Huangpu District", population: "0.7M", lat: 31.2304, lng: 121.4737, image: "https://images.unsplash.com/photo-1474181487882-5abf3f0ba6c2?w=1920&q=80", description: "The historic Bund and Nanjing Road - Shanghai's most prestigious address. Premium retail, hospitality, and luxury brands. Shanghai's original commercial center.", opportunities: [
-        { id: "hp-1", title: "The Bund Luxury Retail", sector: "Retail", description: "Flagship stores on China's most famous shopping street. Russian luxury brands seeking China entry.", investmentRange: "$10M - $50M", timeline: "1-2 years", status: "active" },
-        { id: "hp-2", title: "Historic Building Hospitality", sector: "Hospitality", description: "Boutique hotels and restaurants in protected heritage buildings. Premium tourism segment.", investmentRange: "$20M - $80M", timeline: "2-3 years", status: "active" }
+        { id: "hp-1", title: "The Bund Luxury Retail", titleZh: "外滩奢侈品零售", titleRu: "Люксовый ритейл на набережной Банд", sector: "Retail", description: "Flagship stores on China's most famous shopping street. Russian luxury brands seeking China entry.", descriptionZh: "在中国最著名的购物街开设旗舰店。俄罗斯奢侈品牌寻求进入中国市场。", descriptionRu: "Флагманские магазины на самой известной торговой улице Китая. Российские люксовые бренды, стремящиеся выйти на китайский рынок.", investmentRange: "$10M - $50M", timeline: "1-2 years", status: "active" },
+        { id: "hp-2", title: "Historic Building Hospitality", titleZh: "历史建筑酒店业", titleRu: "Гостиничный бизнес в исторических зданиях", sector: "Hospitality", description: "Boutique hotels and restaurants in protected heritage buildings. Premium tourism segment.", descriptionZh: "在受保护的历史建筑中开设精品酒店和餐厅。高端旅游市场。", descriptionRu: "Бутик-отели и рестораны в охраняемых исторических зданиях. Премиальный туристический сегмент.", investmentRange: "$20M - $80M", timeline: "2-3 years", status: "active" }
       ]},
       { id: "jing-an", name: "Jing'an District", population: "1.1M", image: "https://images.unsplash.com/photo-1545893835-abaa50cbe628?w=1920&q=80", description: "Shanghai's tech and creative hub - headquarters of many internet companies, creative agencies, and innovation centers. Excellent transport and lifestyle amenities.", opportunities: [
-        { id: "ja-1", title: "Tech Company Regional HQ", sector: "Technology", description: "Establish Asia-Pacific headquarters for Russian tech companies. Access to China's digital ecosystem.", investmentRange: "$5M - $30M", timeline: "1 year", status: "active" },
-        { id: "ja-2", title: "Creative Industry Incubator", sector: "Creative", description: "Design, gaming, and digital content studios. Strong local talent pool and government subsidies.", investmentRange: "$2M - $15M", timeline: "1-2 years", status: "upcoming" }
+        { id: "ja-1", title: "Tech Company Regional HQ", titleZh: "科技公司区域总部", titleRu: "Региональная штаб-квартира техкомпании", sector: "Technology", description: "Establish Asia-Pacific headquarters for Russian tech companies. Access to China's digital ecosystem.", descriptionZh: "为俄罗斯科技公司设立亚太总部。接入中国数字生态系统。", descriptionRu: "Создание азиатско-тихоокеанских штаб-квартир для российских технологических компаний. Доступ к цифровой экосистеме Китая.", investmentRange: "$5M - $30M", timeline: "1 year", status: "active" },
+        { id: "ja-2", title: "Creative Industry Incubator", titleZh: "创意产业孵化器", titleRu: "Инкубатор креативных индустрий", sector: "Creative", description: "Design, gaming, and digital content studios. Strong local talent pool and government subsidies.", descriptionZh: "设计、游戏和数字内容工作室。强大的本地人才库和政府补贴。", descriptionRu: "Студии дизайна, гейминга и цифрового контента. Сильный местный кадровый резерв и государственные субсидии.", investmentRange: "$2M - $15M", timeline: "1-2 years", status: "upcoming" }
       ]}
     ],
     overview: "China's financial capital and largest port city. Shanghai leads in international trade, financial services, and advanced manufacturing. The Lingang Free Trade Zone offers unprecedented openness for foreign investment with relaxed foreign ownership restrictions.",
@@ -5228,10 +5338,10 @@ export const CHINA_REGIONS: Record<string, RegionData> = {
     overviewZh: "中国的金融中心和最大的港口城市。上海在国际贸易、金融服务和先进制造业方面处于领先地位。临港自贸区为外国投资提供了前所未有的开放政策，放宽了外资所有权限制。",
     targetSectors: ["Financial Services", "Semiconductor & IC", "Biomedicine", "Smart Manufacturing", "International Trade"],
     opportunities: [
-      { id: "sh-1", title: "Lingang New Area Semiconductor Cluster", sector: "Semiconductor", description: "Build fabs and IC design centers in China's most open semiconductor zone. Full foreign ownership allowed, 15% CIT for 5 years, equipment import duty-free.", investmentRange: "$100M - $2B", timeline: "3-5 years", status: "priority" },
-      { id: "sh-2", title: "Shanghai International Financial Center", sector: "Finance", description: "Establish wholly foreign-owned securities, insurance, or asset management firms. Access to STAR Market listing, Cross-border RMB settlement, and Shanghai-London Stock Connect.", investmentRange: "$50M - $500M", timeline: "1-2 years", status: "active" },
-      { id: "sh-3", title: "Zhangjiang Biomedical Innovation Park", sector: "Biotech", description: "R&D facilities for drug development with accelerated clinical trial approvals. 400+ biotech companies, CRO services, and hospital partnerships.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "active" },
-      { id: "sh-4", title: "Yangshan Deep-Water Port Logistics", sector: "Logistics", description: "Automated container terminal operations and cold chain logistics for Russia-China trade. Direct shipping lanes to Vladivostok and St. Petersburg.", investmentRange: "$20M - $300M", timeline: "2-4 years", status: "active" }
+      { id: "sh-1", title: "Lingang New Area Semiconductor Cluster", titleZh: "临港新片区半导体集群", titleRu: "Полупроводниковый кластер Линьган", sector: "Semiconductor", description: "Build fabs and IC design centers in China's most open semiconductor zone. Full foreign ownership allowed, 15% CIT for 5 years, equipment import duty-free.", descriptionZh: "在中国最开放的半导体区建设晶圆厂和集成电路设计中心。允许外资全资控股，5年15%企业所得税，设备进口免税。", descriptionRu: "Строительство фабов и центров проектирования ИС в самой открытой полупроводниковой зоне Китая. Разрешено полное иностранное владение, 15% налога на 5 лет, беспошлинный импорт оборудования.", investmentRange: "$100M - $2B", timeline: "3-5 years", status: "priority" },
+      { id: "sh-2", title: "Shanghai International Financial Center", titleZh: "上海国际金融中心", titleRu: "Шанхайский международный финансовый центр", sector: "Finance", description: "Establish wholly foreign-owned securities, insurance, or asset management firms. Access to STAR Market listing, Cross-border RMB settlement, and Shanghai-London Stock Connect.", descriptionZh: "设立全外资证券、保险或资产管理公司。可上市科创板、跨境人民币结算和沪伦通。", descriptionRu: "Создание полностью иностранных компаний по ценным бумагам, страхованию или управлению активами. Доступ к листингу на STAR Market, трансграничным расчётам в юанях и Шанхай-Лондон Stock Connect.", investmentRange: "$50M - $500M", timeline: "1-2 years", status: "active" },
+      { id: "sh-3", title: "Zhangjiang Biomedical Innovation Park", titleZh: "张江生物医药创新园", titleRu: "Биомедицинский инновационный парк Чжанцзян", sector: "Biotech", description: "R&D facilities for drug development with accelerated clinical trial approvals. 400+ biotech companies, CRO services, and hospital partnerships.", descriptionZh: "药物研发设施，享有临床试验加速审批。400多家生物技术公司、CRO服务和医院合作。", descriptionRu: "Объекты R&D для разработки лекарств с ускоренным одобрением клинических испытаний. 400+ биотехнологических компаний, CRO-услуги и партнёрства с больницами.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "active" },
+      { id: "sh-4", title: "Yangshan Deep-Water Port Logistics", titleZh: "洋山深水港物流", titleRu: "Логистика глубоководного порта Яншань", sector: "Logistics", description: "Automated container terminal operations and cold chain logistics for Russia-China trade. Direct shipping lanes to Vladivostok and St. Petersburg.", descriptionZh: "自动化集装箱码头运营和中俄贸易冷链物流。直达符拉迪沃斯托克和圣彼得堡的航线。", descriptionRu: "Автоматизированные контейнерные терминалы и холодная логистика для российско-китайской торговли. Прямые судоходные линии во Владивосток и Санкт-Петербург.", investmentRange: "$20M - $300M", timeline: "2-4 years", status: "active" }
     ],
     keyProjects: [
       { id: "sh-p1", name: "Tesla Gigafactory Shanghai Expansion", value: "$1.2 Billion", sector: "EV Manufacturing", description: "Supplier opportunities for battery components, motors, and software systems.", partners: ["Tesla", "CATL"], completionYear: "2026" },
@@ -5262,20 +5372,20 @@ export const CHINA_REGIONS: Record<string, RegionData> = {
     taxBenefits: ["Shenzhen SEZ incentives", "15% CIT for high-tech", "Greater Bay Area benefits"],
     majorCities: [
       { id: "guangzhou", name: "Guangzhou", population: "18.7M", image: "https://images.unsplash.com/photo-1583394838336-acd977736f90?w=1920&q=80", description: "South China's commercial capital and Canton Fair host city. Major hub for automotive, trade, and logistics. Gateway to the Greater Bay Area with excellent connectivity.", opportunities: [
-        { id: "gz-1", title: "Canton Fair Permanent Exhibition", sector: "Trade", description: "Year-round exhibition space at world's largest trade fair. Priority access for Russian exporters.", investmentRange: "$5M - $30M", timeline: "1-2 years", status: "priority" },
-        { id: "gz-2", title: "Guangzhou Auto Parts Cluster", sector: "Automotive", description: "Tier 1/2 supplier facilities near GAC, Honda, Toyota, and Nissan assembly plants.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" },
-        { id: "gz-3", title: "Nansha International Logistics Hub", sector: "Logistics", description: "Bonded warehousing and distribution center for Russia-China trade. Cold chain facilities available.", investmentRange: "$15M - $100M", timeline: "1-2 years", status: "active" }
+        { id: "gz-1", title: "Canton Fair Permanent Exhibition", titleZh: "广交会常设展馆", titleRu: "Постоянная выставка Кантонской ярмарки", sector: "Trade", description: "Year-round exhibition space at world's largest trade fair. Priority access for Russian exporters.", descriptionZh: "在世界最大贸易展会上的全年展览空间。俄罗斯出口商优先入驻。", descriptionRu: "Круглогодичное выставочное пространство на крупнейшей в мире торговой ярмарке. Приоритетный доступ для российских экспортёров.", investmentRange: "$5M - $30M", timeline: "1-2 years", status: "priority" },
+        { id: "gz-2", title: "Guangzhou Auto Parts Cluster", titleZh: "广州汽车零部件集群", titleRu: "Кластер автокомпонентов Гуанчжоу", sector: "Automotive", description: "Tier 1/2 supplier facilities near GAC, Honda, Toyota, and Nissan assembly plants.", descriptionZh: "靠近广汽、本田、丰田和日产装配厂的一级/二级供应商设施。", descriptionRu: "Объекты поставщиков Tier 1/2 рядом со сборочными заводами GAC, Honda, Toyota и Nissan.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" },
+        { id: "gz-3", title: "Nansha International Logistics Hub", titleZh: "南沙国际物流中心", titleRu: "Международный логистический хаб Наньша", sector: "Logistics", description: "Bonded warehousing and distribution center for Russia-China trade. Cold chain facilities available.", descriptionZh: "中俄贸易保税仓储和配送中心。提供冷链设施。", descriptionRu: "Таможенное складирование и распределительный центр для российско-китайской торговли. Доступны холодильные мощности.", investmentRange: "$15M - $100M", timeline: "1-2 years", status: "active" }
       ]},
       { id: "shenzhen", name: "Shenzhen", population: "17.6M", image: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1920&q=80", description: "Global hardware capital and home to Huawei, Tencent, BYD, and DJI. World-leading electronics manufacturing ecosystem with same-day prototyping capabilities. China's most innovative city.", opportunities: [
-        { id: "sz-1", title: "Huaqiangbei Electronics Hub", sector: "Electronics", description: "World's largest electronics market - source components or establish trading operations. Instant access to any electronic part.", investmentRange: "$1M - $20M", timeline: "6-12 months", status: "active" },
-        { id: "sz-2", title: "Shenzhen Hardware Accelerator", sector: "Hardware", description: "Bring hardware products from prototype to mass production. Access to 10,000+ component suppliers within 1 hour.", investmentRange: "$500K - $10M", timeline: "6-18 months", status: "priority" },
-        { id: "sz-3", title: "Qianhai Fintech Zone", sector: "Fintech", description: "Cross-border fintech operations with RMB settlement capabilities. Blockchain and digital currency pilots.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" },
-        { id: "sz-4", title: "BYD EV Supply Partnership", sector: "EV", description: "Direct supplier partnerships with world's largest EV company. Battery, motors, and software components.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "priority" }
+        { id: "sz-1", title: "Huaqiangbei Electronics Hub", titleZh: "华强北电子市场", titleRu: "Электронный хаб Хуацянбэй", sector: "Electronics", description: "World's largest electronics market - source components or establish trading operations. Instant access to any electronic part.", descriptionZh: "世界最大的电子市场——采购元器件或建立贸易业务。即时获取任何电子零部件。", descriptionRu: "Крупнейший в мире электронный рынок — закупка компонентов или торговые операции. Мгновенный доступ к любым электронным деталям.", investmentRange: "$1M - $20M", timeline: "6-12 months", status: "active" },
+        { id: "sz-2", title: "Shenzhen Hardware Accelerator", titleZh: "深圳硬件加速器", titleRu: "Аппаратный акселератор Шэньчжэня", sector: "Hardware", description: "Bring hardware products from prototype to mass production. Access to 10,000+ component suppliers within 1 hour.", descriptionZh: "将硬件产品从原型推向量产。1小时内可接触10,000多家元器件供应商。", descriptionRu: "От прототипа до массового производства аппаратных продуктов. Доступ к 10 000+ поставщикам компонентов в радиусе 1 часа.", investmentRange: "$500K - $10M", timeline: "6-18 months", status: "priority" },
+        { id: "sz-3", title: "Qianhai Fintech Zone", titleZh: "前海金融科技区", titleRu: "Финтех-зона Цяньхай", sector: "Fintech", description: "Cross-border fintech operations with RMB settlement capabilities. Blockchain and digital currency pilots.", descriptionZh: "跨境金融科技业务，支持人民币结算。区块链和数字货币试点。", descriptionRu: "Трансграничные финтех-операции с возможностью расчётов в юанях. Пилоты блокчейна и цифровых валют.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" },
+        { id: "sz-4", title: "BYD EV Supply Partnership", titleZh: "比亚迪电动汽车供应合作", titleRu: "Партнёрство с BYD по поставкам для электромобилей", sector: "EV", description: "Direct supplier partnerships with world's largest EV company. Battery, motors, and software components.", descriptionZh: "与全球最大电动汽车公司直接建立供应商合作关系。电池、电机和软件组件。", descriptionRu: "Прямое партнёрство с крупнейшим в мире производителем электромобилей. Аккумуляторы, моторы и программные компоненты.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "priority" }
       ]},
       { id: "dongguan", name: "Dongguan", population: "10.5M", image: "https://images.unsplash.com/photo-1553697388-94e804e2f0f6?w=1920&q=80", description: "World's factory floor - the manufacturing powerhouse producing everything from electronics to furniture. Undergoing Industry 4.0 transformation with government subsidies for automation.", opportunities: [
-        { id: "dg-1", title: "Smart Factory Transformation", sector: "Manufacturing", description: "Upgrade 10,000+ factories with robotics and IoT. Government subsidizes 30% of automation costs.", investmentRange: "$2M - $30M", timeline: "1-2 years", status: "priority" },
-        { id: "dg-2", title: "Contract Manufacturing Partnership", sector: "Manufacturing", description: "OEM/ODM partnerships for consumer products. Furniture, toys, electronics, textiles expertise.", investmentRange: "$1M - $20M", timeline: "6-12 months", status: "active" },
-        { id: "dg-3", title: "Huawei Songshan Lake Campus", sector: "Technology", description: "R&D facilities near Huawei's spectacular European-style headquarters. Tech supplier opportunities.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" }
+        { id: "dg-1", title: "Smart Factory Transformation", titleZh: "智能工厂升级改造", titleRu: "Трансформация в умные фабрики", sector: "Manufacturing", description: "Upgrade 10,000+ factories with robotics and IoT. Government subsidizes 30% of automation costs.", descriptionZh: "为10,000多家工厂进行机器人和物联网升级。政府补贴30%的自动化成本。", descriptionRu: "Модернизация 10 000+ фабрик с помощью робототехники и IoT. Государство субсидирует 30% затрат на автоматизацию.", investmentRange: "$2M - $30M", timeline: "1-2 years", status: "priority" },
+        { id: "dg-2", title: "Contract Manufacturing Partnership", titleZh: "代工制造合作", titleRu: "Партнёрство по контрактному производству", sector: "Manufacturing", description: "OEM/ODM partnerships for consumer products. Furniture, toys, electronics, textiles expertise.", descriptionZh: "消费品OEM/ODM合作。家具、玩具、电子产品、纺织品专业制造。", descriptionRu: "OEM/ODM партнёрства по потребительским товарам. Экспертиза в мебели, игрушках, электронике, текстиле.", investmentRange: "$1M - $20M", timeline: "6-12 months", status: "active" },
+        { id: "dg-3", title: "Huawei Songshan Lake Campus", titleZh: "华为松山湖园区", titleRu: "Кампус Huawei Суншань Лейк", sector: "Technology", description: "R&D facilities near Huawei's spectacular European-style headquarters. Tech supplier opportunities.", descriptionZh: "靠近华为壮观欧式总部的研发设施。科技供应商机会。", descriptionRu: "Объекты R&D рядом со впечатляющей европейской штаб-квартирой Huawei. Возможности для техно-поставщиков.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" }
       ]}
     ],
     overview: "China's richest province and the heart of the Greater Bay Area - a megalopolis rivaling Tokyo and New York. Shenzhen is the global hardware capital; Guangzhou is a trade hub; Dongguan is the world's factory floor. Combined, they form an unmatched manufacturing and innovation ecosystem.",
@@ -5283,10 +5393,10 @@ export const CHINA_REGIONS: Record<string, RegionData> = {
     overviewZh: "中国最富裕的省份，也是粤港澳大湾区的核心——这个超级都市群可与东京和纽约媲美。深圳是全球硬件之都；广州是贸易中心；东莞是世界工厂。它们共同构成了无与伦比的制造和创新生态系统。",
     targetSectors: ["Consumer Electronics", "5G & Telecom", "Electric Vehicles", "Smart Manufacturing", "Cross-border E-commerce"],
     opportunities: [
-      { id: "gd-1", title: "Greater Bay Area Tech Corridor", sector: "Technology", description: "R&D centers with access to Huawei, Tencent, BYD, and DJI ecosystems. Shenzhen-Hong Kong-Macau innovation triangle participation.", investmentRange: "$5M - $200M", timeline: "1-3 years", status: "priority" },
-      { id: "gd-2", title: "Dongguan Smart Factory Transformation", sector: "Manufacturing", description: "Industry 4.0 upgrades for 10,000+ factories. Robotics, IoT, and AI integration opportunities. Government subsidizes 30% of upgrade costs.", investmentRange: "$2M - $50M", timeline: "1-2 years", status: "active" },
-      { id: "gd-3", title: "Qianhai Shenzhen-Hong Kong Cooperation Zone", sector: "Finance & Services", description: "Professional services, fintech, and cross-border business zone. HK-style tax regime (15% CIT), RMB cross-border lending.", investmentRange: "$10M - $100M", timeline: "1-2 years", status: "active" },
-      { id: "gd-4", title: "BYD EV Supply Chain Cluster", sector: "Electric Vehicles", description: "Tier 1/2 supplier opportunities for world's largest EV manufacturer. Battery materials, motors, electronics, and software.", investmentRange: "$20M - $500M", timeline: "2-4 years", status: "priority" }
+      { id: "gd-1", title: "Greater Bay Area Tech Corridor", titleZh: "粤港澳大湾区科技走廊", titleRu: "Технологический коридор Большого залива", sector: "Technology", description: "R&D centers with access to Huawei, Tencent, BYD, and DJI ecosystems. Shenzhen-Hong Kong-Macau innovation triangle participation.", descriptionZh: "可接入华为、腾讯、比亚迪和大疆生态系统的研发中心。参与深港澳创新三角。", descriptionRu: "R&D-центры с доступом к экосистемам Huawei, Tencent, BYD и DJI. Участие в инновационном треугольнике Шэньчжэнь-Гонконг-Макао.", investmentRange: "$5M - $200M", timeline: "1-3 years", status: "priority" },
+      { id: "gd-2", title: "Dongguan Smart Factory Transformation", titleZh: "东莞智能工厂转型", titleRu: "Трансформация умных фабрик Дунгуаня", sector: "Manufacturing", description: "Industry 4.0 upgrades for 10,000+ factories. Robotics, IoT, and AI integration opportunities. Government subsidizes 30% of upgrade costs.", descriptionZh: "为10,000多家工厂进行工业4.0升级。机器人、物联网和人工智能集成机会。政府补贴30%升级成本。", descriptionRu: "Модернизация Индустрии 4.0 для 10 000+ фабрик. Возможности интеграции робототехники, IoT и ИИ. Государство субсидирует 30% затрат.", investmentRange: "$2M - $50M", timeline: "1-2 years", status: "active" },
+      { id: "gd-3", title: "Qianhai Shenzhen-Hong Kong Cooperation Zone", titleZh: "前海深港合作区", titleRu: "Зона сотрудничества Цяньхай Шэньчжэнь-Гонконг", sector: "Finance & Services", description: "Professional services, fintech, and cross-border business zone. HK-style tax regime (15% CIT), RMB cross-border lending.", descriptionZh: "专业服务、金融科技和跨境商务区。香港式税制（15%企业所得税），跨境人民币贷款。", descriptionRu: "Зона профессиональных услуг, финтеха и трансграничного бизнеса. Гонконгский налоговый режим (15% налога), трансграничное кредитование в юанях.", investmentRange: "$10M - $100M", timeline: "1-2 years", status: "active" },
+      { id: "gd-4", title: "BYD EV Supply Chain Cluster", titleZh: "比亚迪电动汽车供应链集群", titleRu: "Кластер цепочки поставок электромобилей BYD", sector: "Electric Vehicles", description: "Tier 1/2 supplier opportunities for world's largest EV manufacturer. Battery materials, motors, electronics, and software.", descriptionZh: "为全球最大电动汽车制造商提供一级/二级供应商机会。电池材料、电机、电子设备和软件。", descriptionRu: "Возможности поставщиков Tier 1/2 для крупнейшего в мире производителя электромобилей. Материалы для батарей, моторы, электроника и ПО.", investmentRange: "$20M - $500M", timeline: "2-4 years", status: "priority" }
     ],
     keyProjects: [
       { id: "gd-p1", name: "Hong Kong-Zhuhai-Macau Bridge Economic Zone", value: "$20 Billion", sector: "Infrastructure", description: "Development zones around the 55km sea bridge. Logistics, tourism, and tech park opportunities.", partners: ["HKSAR Government", "Macau SAR"], completionYear: "2030" },
@@ -5319,28 +5429,28 @@ export const CHINA_REGIONS: Record<string, RegionData> = {
     taxBenefits: ["Suzhou Industrial Park benefits", "Export processing zones", "High-tech park incentives"],
     majorCities: [
       { id: "nanjing", name: "Nanjing", population: "9.3M", image: "https://images.unsplash.com/photo-1599571234909-29ed5d1321d6?w=1920&q=80", description: "Historic capital of six dynasties and Jiangsu's provincial capital. Major center for education, research, and software development with 80+ universities and strong aerospace and automotive industries.", opportunities: [
-        { id: "nj-1", title: "Nanjing Software Valley Expansion", sector: "Software", description: "China's second-largest software park. AI, cloud computing, and enterprise software development. 200,000+ IT professionals.", investmentRange: "$3M - $50M", timeline: "1-2 years", status: "active" },
-        { id: "nj-2", title: "Jiangbei New Area Innovation Hub", sector: "Technology", description: "National-level new area focusing on integrated circuits, life sciences, and new finance. Generous tax incentives.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "priority" },
-        { id: "nj-3", title: "Aerospace & Defense Industrial Park", sector: "Aerospace", description: "Partnerships with AVIC and COMAC supply chain. Avionics, materials, and precision components.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "active" }
+        { id: "nj-1", title: "Nanjing Software Valley Expansion", titleZh: "南京软件谷扩展", titleRu: "Расширение Долины ПО Нанкина", sector: "Software", description: "China's second-largest software park. AI, cloud computing, and enterprise software development. 200,000+ IT professionals.", descriptionZh: "中国第二大软件园区。人工智能、云计算和企业软件开发。20万+IT专业人员。", descriptionRu: "Второй по величине софтверный парк Китая. ИИ, облачные вычисления и корпоративное ПО. 200 000+ ИТ-специалистов.", investmentRange: "$3M - $50M", timeline: "1-2 years", status: "active" },
+        { id: "nj-2", title: "Jiangbei New Area Innovation Hub", titleZh: "江北新区创新中心", titleRu: "Инновационный хаб новой зоны Цзянбэй", sector: "Technology", description: "National-level new area focusing on integrated circuits, life sciences, and new finance. Generous tax incentives.", descriptionZh: "国家级新区，专注于集成电路、生命科学和新金融。优厚的税收优惠。", descriptionRu: "Национальная новая зона с фокусом на интегральные схемы, науки о жизни и новые финансы. Щедрые налоговые льготы.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "priority" },
+        { id: "nj-3", title: "Aerospace & Defense Industrial Park", titleZh: "航空航天与国防工业园", titleRu: "Промышленный парк авиакосмической и оборонной отрасли", sector: "Aerospace", description: "Partnerships with AVIC and COMAC supply chain. Avionics, materials, and precision components.", descriptionZh: "与中航工业和中国商飞供应链合作。航空电子设备、材料和精密部件。", descriptionRu: "Партнёрства с цепочками поставок AVIC и COMAC. Авионика, материалы и прецизионные компоненты.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "active" }
       ]},
       { id: "suzhou", name: "Suzhou", population: "12.7M", image: "https://images.unsplash.com/photo-1567253508485-0e0a4e3c4024?w=1920&q=80", description: "The Venice of the East - ancient gardens meet cutting-edge industry. Suzhou Industrial Park is China's most successful foreign investment zone with 5,000+ foreign enterprises and a 30-year track record.", opportunities: [
-        { id: "sz-sip-1", title: "Suzhou Industrial Park Biotech Bay", sector: "Biotech", description: "Asia's premier biotech cluster with 500+ companies. Direct NMPA engagement, Cold Spring Harbor partnership.", investmentRange: "$10M - $200M", timeline: "2-4 years", status: "priority" },
-        { id: "sz-sip-2", title: "Suzhou Nanotechnology Hub", sector: "Advanced Materials", description: "China's national nanotechnology center. Research partnerships and commercialization support.", investmentRange: "$5M - $80M", timeline: "2-3 years", status: "active" },
-        { id: "sz-sip-3", title: "Precision Manufacturing Cluster", sector: "Manufacturing", description: "World-class precision machining and automation. Supply chain for semiconductor equipment, medical devices.", investmentRange: "$3M - $50M", timeline: "1-2 years", status: "active" }
+        { id: "sz-sip-1", title: "Suzhou Industrial Park Biotech Bay", titleZh: "苏州工业园区生物科技湾", titleRu: "Биотехнологический залив промпарка Сучжоу", sector: "Biotech", description: "Asia's premier biotech cluster with 500+ companies. Direct NMPA engagement, Cold Spring Harbor partnership.", descriptionZh: "亚洲顶级生物技术集群，拥有500多家企业。直接对接国家药监局，与冷泉港合作。", descriptionRu: "Ведущий биотехнологический кластер Азии с 500+ компаниями. Прямое взаимодействие с NMPA, партнёрство с Cold Spring Harbor.", investmentRange: "$10M - $200M", timeline: "2-4 years", status: "priority" },
+        { id: "sz-sip-2", title: "Suzhou Nanotechnology Hub", titleZh: "苏州纳米技术中心", titleRu: "Центр нанотехнологий Сучжоу", sector: "Advanced Materials", description: "China's national nanotechnology center. Research partnerships and commercialization support.", descriptionZh: "中国国家纳米技术中心。研究合作和商业化支持。", descriptionRu: "Национальный центр нанотехнологий Китая. Исследовательские партнёрства и поддержка коммерциализации.", investmentRange: "$5M - $80M", timeline: "2-3 years", status: "active" },
+        { id: "sz-sip-3", title: "Precision Manufacturing Cluster", titleZh: "精密制造集群", titleRu: "Кластер прецизионного производства", sector: "Manufacturing", description: "World-class precision machining and automation. Supply chain for semiconductor equipment, medical devices.", descriptionZh: "世界级精密加工和自动化。半导体设备和医疗器械供应链。", descriptionRu: "Прецизионная обработка и автоматизация мирового класса. Цепочка поставок для полупроводникового оборудования и медицинских устройств.", investmentRange: "$3M - $50M", timeline: "1-2 years", status: "active" }
       ]},
       { id: "wuxi", name: "Wuxi", population: "7.5M", image: "https://images.unsplash.com/photo-1598887142487-3c854d51d678?w=1920&q=80", description: "China's national IoT demonstration city and semiconductor base. Beautiful lakeside location with strong manufacturing tradition now transforming into high-tech hub.", opportunities: [
-        { id: "wx-1", title: "Wuxi IoT Valley", sector: "IoT", description: "China's largest IoT industrial base. Sensors, connectivity, and smart city applications. National demonstration zone.", investmentRange: "$5M - $100M", timeline: "1-3 years", status: "priority" },
-        { id: "wx-2", title: "Integrated Circuit Design Center", sector: "Semiconductor", description: "IC design services and fabless semiconductor companies. Partnership with local foundries.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" },
-        { id: "wx-3", title: "New Energy Equipment Manufacturing", sector: "Clean Energy", description: "Solar panel components, wind turbine parts, and energy storage systems manufacturing.", investmentRange: "$15M - $120M", timeline: "2-4 years", status: "active" }
+        { id: "wx-1", title: "Wuxi IoT Valley", titleZh: "无锡物联网谷", titleRu: "Долина IoT Уси", sector: "IoT", description: "China's largest IoT industrial base. Sensors, connectivity, and smart city applications. National demonstration zone.", descriptionZh: "中国最大的物联网产业基地。传感器、连接和智慧城市应用。国家示范区。", descriptionRu: "Крупнейшая в Китае промышленная база IoT. Датчики, связь и приложения умного города. Национальная демонстрационная зона.", investmentRange: "$5M - $100M", timeline: "1-3 years", status: "priority" },
+        { id: "wx-2", title: "Integrated Circuit Design Center", titleZh: "集成电路设计中心", titleRu: "Центр проектирования интегральных схем", sector: "Semiconductor", description: "IC design services and fabless semiconductor companies. Partnership with local foundries.", descriptionZh: "集成电路设计服务和无晶圆厂半导体公司。与本地晶圆厂合作。", descriptionRu: "Услуги проектирования ИС и fabless полупроводниковые компании. Партнёрство с местными фабами.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" },
+        { id: "wx-3", title: "New Energy Equipment Manufacturing", titleZh: "新能源设备制造", titleRu: "Производство оборудования для новой энергетики", sector: "Clean Energy", description: "Solar panel components, wind turbine parts, and energy storage systems manufacturing.", descriptionZh: "太阳能电池板组件、风力涡轮机部件和储能系统制造。", descriptionRu: "Производство компонентов солнечных панелей, деталей ветрогенераторов и систем хранения энергии.", investmentRange: "$15M - $120M", timeline: "2-4 years", status: "active" }
       ]}
     ],
     overview: "China's second-richest province and manufacturing powerhouse. Suzhou Industrial Park is the gold standard for foreign investment zones, home to 5,000+ foreign enterprises. Strong in precision manufacturing, chemicals, and increasingly in biotech and IC design.",
     targetSectors: ["Precision Manufacturing", "Biotech", "IC Design", "New Materials", "Advanced Chemicals"],
     opportunities: [
-      { id: "js-1", title: "Suzhou Industrial Park Biotech Valley", sector: "Biotech", description: "500+ biotech companies, world-class CRO/CDMO services, and direct NMPA engagement. Partnership with Cold Spring Harbor Laboratory.", investmentRange: "$10M - $200M", timeline: "2-4 years", status: "active" },
-      { id: "js-2", title: "Wuxi IoT Innovation Center", sector: "IoT", description: "China's national IoT demonstration zone. Sensor manufacturing, smart city applications, and industrial IoT platforms.", investmentRange: "$5M - $100M", timeline: "1-3 years", status: "active" },
-      { id: "js-3", title: "Nanjing Software Valley", sector: "Software", description: "70,000+ software engineers, AI and cloud computing focus. Partnerships with Alibaba Cloud, Huawei Cloud available.", investmentRange: "$3M - $50M", timeline: "1-2 years", status: "active" },
-      { id: "js-4", title: "Yangtze River Chemical Industry Transformation", sector: "Chemicals", description: "Green chemistry and specialty chemicals investment. Government relocating polluting plants, opening space for advanced chemical manufacturing.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" }
+      { id: "js-1", title: "Suzhou Industrial Park Biotech Valley", titleZh: "苏州工业园区生物技术谷", titleRu: "Биотехнологическая долина промпарка Сучжоу", sector: "Biotech", description: "500+ biotech companies, world-class CRO/CDMO services, and direct NMPA engagement. Partnership with Cold Spring Harbor Laboratory.", descriptionZh: "500多家生物技术企业，世界级CRO/CDMO服务，直接对接国家药监局。与冷泉港实验室合作。", descriptionRu: "500+ биотех-компаний, услуги CRO/CDMO мирового класса и прямое взаимодействие с NMPA. Партнёрство с лабораторией Cold Spring Harbor.", investmentRange: "$10M - $200M", timeline: "2-4 years", status: "active" },
+      { id: "js-2", title: "Wuxi IoT Innovation Center", titleZh: "无锡物联网创新中心", titleRu: "Инновационный центр IoT Уси", sector: "IoT", description: "China's national IoT demonstration zone. Sensor manufacturing, smart city applications, and industrial IoT platforms.", descriptionZh: "中国国家物联网示范区。传感器制造、智慧城市应用和工业物联网平台。", descriptionRu: "Национальная демонстрационная зона IoT Китая. Производство датчиков, приложения умного города и промышленные IoT-платформы.", investmentRange: "$5M - $100M", timeline: "1-3 years", status: "active" },
+      { id: "js-3", title: "Nanjing Software Valley", titleZh: "南京软件谷", titleRu: "Долина ПО Нанкина", sector: "Software", description: "70,000+ software engineers, AI and cloud computing focus. Partnerships with Alibaba Cloud, Huawei Cloud available.", descriptionZh: "7万多名软件工程师，专注于人工智能和云计算。可与阿里云、华为云合作。", descriptionRu: "70 000+ инженеров-программистов, фокус на ИИ и облачных вычислениях. Доступны партнёрства с Alibaba Cloud и Huawei Cloud.", investmentRange: "$3M - $50M", timeline: "1-2 years", status: "active" },
+      { id: "js-4", title: "Yangtze River Chemical Industry Transformation", titleZh: "长江化工产业转型", titleRu: "Трансформация химической промышленности Янцзы", sector: "Chemicals", description: "Green chemistry and specialty chemicals investment. Government relocating polluting plants, opening space for advanced chemical manufacturing.", descriptionZh: "绿色化学和特种化学品投资。政府搬迁污染工厂，为先进化工制造腾出空间。", descriptionRu: "Инвестиции в зелёную химию и специальные химикаты. Правительство переносит загрязняющие предприятия, открывая пространство для передового химического производства.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" }
     ],
     keyProjects: [
       { id: "js-p1", name: "Samsung Suzhou Semiconductor Expansion", value: "$8 Billion", sector: "Semiconductor", description: "NAND flash expansion creating massive supply chain opportunities.", partners: ["Samsung Electronics"], completionYear: "2027" },
@@ -5365,28 +5475,28 @@ export const CHINA_REGIONS: Record<string, RegionData> = {
     taxBenefits: ["Qingdao FTZ benefits", "Agricultural tax incentives", "Industrial zone benefits"],
     majorCities: [
       { id: "jinan", name: "Jinan", population: "9.2M", image: "https://images.unsplash.com/photo-1584464491033-06628f3a6b7b?w=1920&q=80", description: "The City of Springs - Shandong's capital with 72 famous springs. Major center for heavy industry, software, and government services. Growing focus on quantum computing and AI.", opportunities: [
-        { id: "jn-1", title: "Jinan Quantum Valley", sector: "Quantum Technology", description: "China's quantum computing and communication research center. Partnership with University of Science and Technology of China.", investmentRange: "$10M - $100M", timeline: "3-5 years", status: "priority" },
-        { id: "jn-2", title: "Heavy Equipment Modernization", sector: "Manufacturing", description: "Upgrade traditional machinery manufacturing with smart factory solutions. Local government subsidies available.", investmentRange: "$5M - $80M", timeline: "2-3 years", status: "active" }
+        { id: "jn-1", title: "Jinan Quantum Valley", titleZh: "济南量子谷", titleRu: "Квантовая долина Цзинань", sector: "Quantum Technology", description: "China's quantum computing and communication research center. Partnership with University of Science and Technology of China.", descriptionZh: "中国量子计算和通信研究中心。与中国科学技术大学合作。", descriptionRu: "Центр исследований квантовых вычислений и связи Китая. Партнёрство с Университетом науки и технологий Китая.", investmentRange: "$10M - $100M", timeline: "3-5 years", status: "priority" },
+        { id: "jn-2", title: "Heavy Equipment Modernization", titleZh: "重型设备现代化", titleRu: "Модернизация тяжёлого оборудования", sector: "Manufacturing", description: "Upgrade traditional machinery manufacturing with smart factory solutions. Local government subsidies available.", descriptionZh: "用智能工厂解决方案升级传统机械制造业。可获得地方政府补贴。", descriptionRu: "Модернизация традиционного машиностроения с решениями умных фабрик. Доступны субсидии местного правительства.", investmentRange: "$5M - $80M", timeline: "2-3 years", status: "active" }
       ]},
       { id: "qingdao", name: "Qingdao", population: "10.1M", image: "https://images.unsplash.com/photo-1569155235789-b0d2e6ea6cb7?w=1920&q=80", description: "Beautiful coastal city with German heritage, home to Tsingtao Beer, Haier, and Hisense. Major port and SCO cooperation hub. Excellent quality of life with beaches and mountains.", opportunities: [
-        { id: "qd-1", title: "SCO Local Cooperation Demonstration Zone", sector: "Trade", description: "Dedicated zone for SCO member trade. Fast customs, RMB settlement, preferential policies for Russian goods.", investmentRange: "$5M - $100M", timeline: "1-2 years", status: "priority" },
-        { id: "qd-2", title: "Haier Smart Manufacturing Partnership", sector: "Manufacturing", description: "Supply chain and technology partnerships with world's largest appliance maker. Industry 4.0 showcase.", investmentRange: "$10M - $150M", timeline: "2-3 years", status: "active" },
-        { id: "qd-3", title: "Marine Technology & Blue Economy", sector: "Marine", description: "Ocean observation equipment, marine biotech, and offshore engineering. Partnership with Ocean University of China.", investmentRange: "$5M - $80M", timeline: "2-4 years", status: "active" },
-        { id: "qd-4", title: "Craft Brewing & Food Processing", sector: "Food & Beverage", description: "Premium food and beverage manufacturing. Leverage Tsingtao Beer heritage and local agriculture.", investmentRange: "$2M - $30M", timeline: "1-2 years", status: "active" }
+        { id: "qd-1", title: "SCO Local Cooperation Demonstration Zone", titleZh: "上合组织地方合作示范区", titleRu: "Демонстрационная зона сотрудничества ШОС", sector: "Trade", description: "Dedicated zone for SCO member trade. Fast customs, RMB settlement, preferential policies for Russian goods.", descriptionZh: "上合组织成员国贸易专区。快速通关、人民币结算、俄罗斯商品优惠政策。", descriptionRu: "Специальная зона для торговли стран ШОС. Быстрое таможенное оформление, расчёты в юанях, преференции для российских товаров.", investmentRange: "$5M - $100M", timeline: "1-2 years", status: "priority" },
+        { id: "qd-2", title: "Haier Smart Manufacturing Partnership", titleZh: "海尔智能制造合作", titleRu: "Партнёрство по умному производству с Haier", sector: "Manufacturing", description: "Supply chain and technology partnerships with world's largest appliance maker. Industry 4.0 showcase.", descriptionZh: "与全球最大家电制造商的供应链和技术合作。工业4.0展示。", descriptionRu: "Партнёрства по цепочке поставок и технологиям с крупнейшим в мире производителем бытовой техники. Витрина Индустрии 4.0.", investmentRange: "$10M - $150M", timeline: "2-3 years", status: "active" },
+        { id: "qd-3", title: "Marine Technology & Blue Economy", titleZh: "海洋科技与蓝色经济", titleRu: "Морские технологии и голубая экономика", sector: "Marine", description: "Ocean observation equipment, marine biotech, and offshore engineering. Partnership with Ocean University of China.", descriptionZh: "海洋观测设备、海洋生物技术和海洋工程。与中国海洋大学合作。", descriptionRu: "Оборудование для наблюдения за океаном, морские биотехнологии и офшорная инженерия. Партнёрство с Океанским университетом Китая.", investmentRange: "$5M - $80M", timeline: "2-4 years", status: "active" },
+        { id: "qd-4", title: "Craft Brewing & Food Processing", titleZh: "精酿啤酒与食品加工", titleRu: "Крафтовое пивоварение и пищевая промышленность", sector: "Food & Beverage", description: "Premium food and beverage manufacturing. Leverage Tsingtao Beer heritage and local agriculture.", descriptionZh: "优质食品饮料制造。利用青岛啤酒传统和当地农业。", descriptionRu: "Производство премиальных продуктов питания и напитков. Использование наследия Tsingtao Beer и местного сельского хозяйства.", investmentRange: "$2M - $30M", timeline: "1-2 years", status: "active" }
       ]},
       { id: "yantai", name: "Yantai", population: "7.1M", image: "https://images.unsplash.com/photo-1569947609091-b29675c88880?w=1920&q=80", description: "China's wine capital and major seafood producer. Beautiful coastal city with strong ties to South Korea. Growing in automotive components and precision manufacturing.", opportunities: [
-        { id: "yt-1", title: "Yantai Wine Industry Development", sector: "Wine & Agriculture", description: "China's premier wine region. Vineyard acquisition, winery partnerships, and wine tourism development.", investmentRange: "$5M - $50M", timeline: "2-3 years", status: "active" },
-        { id: "yt-2", title: "Seafood Processing & Cold Chain", sector: "Food Processing", description: "Modern seafood processing facilities for Russia-sourced products. Cold chain infrastructure for export.", investmentRange: "$10M - $80M", timeline: "1-3 years", status: "priority" },
-        { id: "yt-3", title: "Automotive Components Hub", sector: "Automotive", description: "Tier 1/2 supplier facilities near Hyundai, GM, and BYD plants. Growing EV component demand.", investmentRange: "$8M - $60M", timeline: "2-3 years", status: "active" }
+        { id: "yt-1", title: "Yantai Wine Industry Development", titleZh: "烟台葡萄酒产业发展", titleRu: "Развитие винодельческой отрасли Яньтай", sector: "Wine & Agriculture", description: "China's premier wine region. Vineyard acquisition, winery partnerships, and wine tourism development.", descriptionZh: "中国首要葡萄酒产区。葡萄园收购、酒庄合作和葡萄酒旅游开发。", descriptionRu: "Ведущий винодельческий регион Китая. Приобретение виноградников, партнёрства с винодельнями и развитие винного туризма.", investmentRange: "$5M - $50M", timeline: "2-3 years", status: "active" },
+        { id: "yt-2", title: "Seafood Processing & Cold Chain", titleZh: "海鲜加工与冷链", titleRu: "Переработка морепродуктов и холодовая цепь", sector: "Food Processing", description: "Modern seafood processing facilities for Russia-sourced products. Cold chain infrastructure for export.", descriptionZh: "为俄罗斯采购产品提供现代海鲜加工设施。出口冷链基础设施。", descriptionRu: "Современные мощности по переработке морепродуктов для российской продукции. Инфраструктура холодовой цепи для экспорта.", investmentRange: "$10M - $80M", timeline: "1-3 years", status: "priority" },
+        { id: "yt-3", title: "Automotive Components Hub", titleZh: "汽车零部件中心", titleRu: "Хаб автомобильных компонентов", sector: "Automotive", description: "Tier 1/2 supplier facilities near Hyundai, GM, and BYD plants. Growing EV component demand.", descriptionZh: "靠近现代、通用和比亚迪工厂的一级/二级供应商设施。电动汽车零部件需求不断增长。", descriptionRu: "Объекты поставщиков Tier 1/2 рядом с заводами Hyundai, GM и BYD. Растущий спрос на компоненты электромобилей.", investmentRange: "$8M - $60M", timeline: "2-3 years", status: "active" }
       ]}
     ],
     overview: "China's third-largest economy and agricultural heartland. Shandong bridges North and East China with strong heavy industry, petrochemicals, and food processing. Qingdao is a major port city with German heritage and brewing tradition; Yantai excels in wine and seafood.",
     targetSectors: ["Petrochemicals", "Marine Economy", "High-end Equipment", "Food Processing", "New Energy"],
     opportunities: [
-      { id: "sd-1", title: "Qingdao SCO Demonstration Zone", sector: "Trade & Logistics", description: "Dedicated zone for Shanghai Cooperation Organization trade. Fast customs clearance for Russia-origin goods, RMB settlement, and logistics hub.", investmentRange: "$10M - $200M", timeline: "1-3 years", status: "priority" },
-      { id: "sd-2", title: "Yantai LNG Terminal & Petrochemical Complex", sector: "Energy", description: "Russia-sourced LNG receiving and processing. Integrate with Siberia-China pipeline network.", investmentRange: "$100M - $1B", timeline: "3-5 years", status: "active" },
-      { id: "sd-3", title: "Shandong Marine Ranching Program", sector: "Fisheries", description: "Modern aquaculture, offshore platforms, and seafood processing. Technical partnerships with Russian Far East fisheries.", investmentRange: "$5M - $100M", timeline: "2-4 years", status: "active" },
-      { id: "sd-4", title: "Weifang Hydrogen Economy Pilot", sector: "New Energy", description: "Green hydrogen production, fuel cell manufacturing, and hydrogen vehicle deployment.", investmentRange: "$20M - $300M", timeline: "3-5 years", status: "upcoming" }
+      { id: "sd-1", title: "Qingdao SCO Demonstration Zone", titleZh: "青岛上合示范区", titleRu: "Демонстрационная зона ШОС Циндао", sector: "Trade & Logistics", description: "Dedicated zone for Shanghai Cooperation Organization trade. Fast customs clearance for Russia-origin goods, RMB settlement, and logistics hub.", descriptionZh: "上海合作组织贸易专区。俄罗斯原产地商品快速清关、人民币结算和物流中心。", descriptionRu: "Специальная зона для торговли ШОС. Быстрое таможенное оформление товаров российского происхождения, расчёты в юанях и логистический хаб.", investmentRange: "$10M - $200M", timeline: "1-3 years", status: "priority" },
+      { id: "sd-2", title: "Yantai LNG Terminal & Petrochemical Complex", titleZh: "烟台LNG接收站与石化综合体", titleRu: "СПГ-терминал и нефтехимический комплекс Яньтай", sector: "Energy", description: "Russia-sourced LNG receiving and processing. Integrate with Siberia-China pipeline network.", descriptionZh: "俄罗斯来源的LNG接收和加工。与西伯利亚-中国管道网络整合。", descriptionRu: "Приём и переработка СПГ из России. Интеграция с газопроводной сетью Сибирь-Китай.", investmentRange: "$100M - $1B", timeline: "3-5 years", status: "active" },
+      { id: "sd-3", title: "Shandong Marine Ranching Program", titleZh: "山东海洋牧场项目", titleRu: "Программа морского фермерства Шаньдун", sector: "Fisheries", description: "Modern aquaculture, offshore platforms, and seafood processing. Technical partnerships with Russian Far East fisheries.", descriptionZh: "现代水产养殖、海上平台和海鲜加工。与俄罗斯远东渔业技术合作。", descriptionRu: "Современная аквакультура, офшорные платформы и переработка морепродуктов. Технические партнёрства с рыболовством Дальнего Востока России.", investmentRange: "$5M - $100M", timeline: "2-4 years", status: "active" },
+      { id: "sd-4", title: "Weifang Hydrogen Economy Pilot", titleZh: "潍坊氢能经济试点", titleRu: "Пилот водородной экономики Вэйфан", sector: "New Energy", description: "Green hydrogen production, fuel cell manufacturing, and hydrogen vehicle deployment.", descriptionZh: "绿色氢气生产、燃料电池制造和氢能汽车部署。", descriptionRu: "Производство зелёного водорода, изготовление топливных элементов и развёртывание водородных автомобилей.", investmentRange: "$20M - $300M", timeline: "3-5 years", status: "upcoming" }
     ],
     keyProjects: [
       { id: "sd-p1", name: "Qingdao Sino-Russian Local Cooperation Park", value: "$500 Million", sector: "Manufacturing", description: "Dedicated industrial park for Russian manufacturing enterprises in China.", completionYear: "2027" },
@@ -5411,29 +5521,29 @@ export const CHINA_REGIONS: Record<string, RegionData> = {
     taxBenefits: ["Hangzhou digital economy incentives", "Cross-border e-commerce benefits", "Small business tax breaks"],
     majorCities: [
       { id: "hangzhou", name: "Hangzhou", population: "12.2M", image: "https://images.unsplash.com/photo-1599571234909-29ed5d1321d6?w=1920&q=80", description: "China's digital capital and home to Alibaba, Ant Group, and NetEase. Historic city with UNESCO World Heritage West Lake. 2022 Asian Games host with world-class infrastructure.", opportunities: [
-        { id: "hz-1", title: "Alibaba Ecosystem Partnership", sector: "E-commerce", description: "Launch on Tmall Global, access Alibaba Cloud, and leverage Cainiao logistics. Direct partnership support.", investmentRange: "$1M - $50M", timeline: "6-18 months", status: "priority" },
-        { id: "hz-2", title: "Hangzhou AI Town", sector: "AI", description: "1,000-hectare AI innovation zone with DAMO Academy. Computing infrastructure, talent programs, and funding.", investmentRange: "$5M - $100M", timeline: "2-4 years", status: "active" },
-        { id: "hz-3", title: "Digital Healthcare Hub", sector: "HealthTech", description: "Internet hospital platforms, medical AI, and digital therapeutics. Partnership with top hospitals.", investmentRange: "$3M - $60M", timeline: "1-3 years", status: "active" },
-        { id: "hz-4", title: "Fintech & Digital Payments", sector: "Fintech", description: "Payment solutions, blockchain applications, and digital banking. Ant Group ecosystem access.", investmentRange: "$5M - $80M", timeline: "1-2 years", status: "active" }
+        { id: "hz-1", title: "Alibaba Ecosystem Partnership", titleZh: "阿里巴巴生态合作", titleRu: "Партнёрство с экосистемой Alibaba", sector: "E-commerce", description: "Launch on Tmall Global, access Alibaba Cloud, and leverage Cainiao logistics. Direct partnership support.", descriptionZh: "入驻天猫国际，接入阿里云，利用菜鸟物流。直接合作支持。", descriptionRu: "Запуск на Tmall Global, доступ к Alibaba Cloud и логистике Cainiao. Прямая партнёрская поддержка.", investmentRange: "$1M - $50M", timeline: "6-18 months", status: "priority" },
+        { id: "hz-2", title: "Hangzhou AI Town", titleZh: "杭州人工智能小镇", titleRu: "Городок ИИ в Ханчжоу", sector: "AI", description: "1,000-hectare AI innovation zone with DAMO Academy. Computing infrastructure, talent programs, and funding.", descriptionZh: "与达摩院合作的1000公顷人工智能创新区。计算基础设施、人才计划和资金支持。", descriptionRu: "1000-гектарная зона инноваций ИИ с Академией DAMO. Вычислительная инфраструктура, программы для талантов и финансирование.", investmentRange: "$5M - $100M", timeline: "2-4 years", status: "active" },
+        { id: "hz-3", title: "Digital Healthcare Hub", titleZh: "数字医疗中心", titleRu: "Центр цифрового здравоохранения", sector: "HealthTech", description: "Internet hospital platforms, medical AI, and digital therapeutics. Partnership with top hospitals.", descriptionZh: "互联网医院平台、医疗人工智能和数字疗法。与顶级医院合作。", descriptionRu: "Платформы интернет-больниц, медицинский ИИ и цифровая терапия. Партнёрства с ведущими больницами.", investmentRange: "$3M - $60M", timeline: "1-3 years", status: "active" },
+        { id: "hz-4", title: "Fintech & Digital Payments", titleZh: "金融科技与数字支付", titleRu: "Финтех и цифровые платежи", sector: "Fintech", description: "Payment solutions, blockchain applications, and digital banking. Ant Group ecosystem access.", descriptionZh: "支付解决方案、区块链应用和数字银行。接入蚂蚁集团生态系统。", descriptionRu: "Платёжные решения, блокчейн-приложения и цифровой банкинг. Доступ к экосистеме Ant Group.", investmentRange: "$5M - $80M", timeline: "1-2 years", status: "active" }
       ]},
       { id: "ningbo", name: "Ningbo", population: "9.4M", image: "https://images.unsplash.com/photo-1544550581-5f7ceaf7f992?w=1920&q=80", description: "World's largest port by cargo tonnage and China's private enterprise capital. Strong manufacturing base with excellent logistics. Gateway for Russia-China maritime trade.", opportunities: [
-        { id: "nb-1", title: "Ningbo Port Russia Trade Hub", sector: "Logistics", description: "Bonded warehousing and distribution for Russia-China trade. Connect Trans-Siberian Railway to maritime routes.", investmentRange: "$10M - $150M", timeline: "2-3 years", status: "priority" },
-        { id: "nb-2", title: "Auto Parts & Mold Manufacturing", sector: "Manufacturing", description: "China's mold-making capital with precision manufacturing. Automotive and appliance component clusters.", investmentRange: "$5M - $80M", timeline: "1-3 years", status: "active" },
-        { id: "nb-3", title: "Petrochemical & New Materials", sector: "Chemicals", description: "Integration with Zhenhai Refinery complex. Specialty chemicals and advanced polymers.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "active" }
+        { id: "nb-1", title: "Ningbo Port Russia Trade Hub", titleZh: "宁波港俄罗斯贸易中心", titleRu: "Торговый хаб Россия в порту Нинбо", sector: "Logistics", description: "Bonded warehousing and distribution for Russia-China trade. Connect Trans-Siberian Railway to maritime routes.", descriptionZh: "中俄贸易保税仓储和配送。连接西伯利亚大铁路与海运航线。", descriptionRu: "Таможенное складирование и дистрибуция для российско-китайской торговли. Соединение Транссиба с морскими маршрутами.", investmentRange: "$10M - $150M", timeline: "2-3 years", status: "priority" },
+        { id: "nb-2", title: "Auto Parts & Mold Manufacturing", titleZh: "汽车零部件与模具制造", titleRu: "Производство автозапчастей и пресс-форм", sector: "Manufacturing", description: "China's mold-making capital with precision manufacturing. Automotive and appliance component clusters.", descriptionZh: "中国模具之都，精密制造。汽车和家电零部件集群。", descriptionRu: "Столица Китая по производству пресс-форм с прецизионным производством. Кластеры автомобильных и бытовых компонентов.", investmentRange: "$5M - $80M", timeline: "1-3 years", status: "active" },
+        { id: "nb-3", title: "Petrochemical & New Materials", titleZh: "石化与新材料", titleRu: "Нефтехимия и новые материалы", sector: "Chemicals", description: "Integration with Zhenhai Refinery complex. Specialty chemicals and advanced polymers.", descriptionZh: "与镇海炼化综合体整合。特种化学品和先进聚合物。", descriptionRu: "Интеграция с НПЗ-комплексом Чжэньхай. Специальные химикаты и передовые полимеры.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "active" }
       ]},
       { id: "wenzhou", name: "Wenzhou", population: "9.6M", image: "https://images.unsplash.com/photo-1516483638261-f4dbaf036963?w=1920&q=80", description: "China's entrepreneurship capital - birthplace of private enterprise. Famous for shoes, leather goods, and eyewear. Strong overseas Chinese network with global trade connections.", opportunities: [
-        { id: "wz-1", title: "Fashion & Footwear Innovation", sector: "Fashion", description: "Partner with China's largest shoe manufacturing cluster. Smart manufacturing and sustainable materials.", investmentRange: "$2M - $40M", timeline: "1-2 years", status: "active" },
-        { id: "wz-2", title: "Eyewear Manufacturing Hub", sector: "Manufacturing", description: "World's largest eyewear production base. OEM/ODM for global brands and own-brand development.", investmentRange: "$3M - $50M", timeline: "1-2 years", status: "active" },
-        { id: "wz-3", title: "Cross-border E-commerce Pilot", sector: "E-commerce", description: "Leverage Wenzhou merchant networks for Russia market entry. Established trade channels to CIS countries.", investmentRange: "$1M - $20M", timeline: "6-12 months", status: "priority" }
+        { id: "wz-1", title: "Fashion & Footwear Innovation", titleZh: "时尚与鞋业创新", titleRu: "Инновации в моде и обуви", sector: "Fashion", description: "Partner with China's largest shoe manufacturing cluster. Smart manufacturing and sustainable materials.", descriptionZh: "与中国最大的鞋业制造集群合作。智能制造和可持续材料。", descriptionRu: "Партнёрство с крупнейшим в Китае обувным кластером. Умное производство и экологичные материалы.", investmentRange: "$2M - $40M", timeline: "1-2 years", status: "active" },
+        { id: "wz-2", title: "Eyewear Manufacturing Hub", titleZh: "眼镜制造中心", titleRu: "Хаб производства очков", sector: "Manufacturing", description: "World's largest eyewear production base. OEM/ODM for global brands and own-brand development.", descriptionZh: "全球最大的眼镜生产基地。为全球品牌OEM/ODM和自主品牌开发。", descriptionRu: "Крупнейшая в мире база производства очков. OEM/ODM для мировых брендов и развитие собственного бренда.", investmentRange: "$3M - $50M", timeline: "1-2 years", status: "active" },
+        { id: "wz-3", title: "Cross-border E-commerce Pilot", titleZh: "跨境电商试点", titleRu: "Пилот трансграничной электронной коммерции", sector: "E-commerce", description: "Leverage Wenzhou merchant networks for Russia market entry. Established trade channels to CIS countries.", descriptionZh: "利用温州商人网络进入俄罗斯市场。已建立通往独联体国家的贸易渠道。", descriptionRu: "Использование торговых сетей Вэньчжоу для выхода на российский рынок. Налаженные торговые каналы в страны СНГ.", investmentRange: "$1M - $20M", timeline: "6-12 months", status: "priority" }
       ]}
     ],
     overview: "Home to Alibaba and China's most dynamic private sector. Zhejiang leads in e-commerce, digital payments, and private entrepreneurship. Hangzhou hosts Alibaba, Ant Group, and NetEase; Ningbo is a major port; Wenzhou is famous for private enterprise.",
     targetSectors: ["Digital Economy", "E-commerce", "Fashion & Textiles", "Smart Manufacturing", "Cross-border Trade"],
     opportunities: [
-      { id: "zj-1", title: "Alibaba Cross-border E-commerce Ecosystem", sector: "E-commerce", description: "Launch on Tmall Global, AliExpress, and Lazada. Warehouse and fulfillment services in Hangzhou Cross-border E-commerce Comprehensive Zone.", investmentRange: "$1M - $50M", timeline: "6-18 months", status: "active" },
-      { id: "zj-2", title: "Ningbo Russia Trade Logistics Center", sector: "Logistics", description: "Bonded warehouse and distribution center for Russia-China trade. Connect Trans-Siberian Railway to Ningbo Port.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "priority" },
-      { id: "zj-3", title: "Hangzhou AI Town", sector: "AI", description: "1,000-hectare AI innovation zone with Alibaba DAMO Academy partnership. Computing infrastructure and talent programs.", investmentRange: "$5M - $100M", timeline: "2-4 years", status: "active" },
-      { id: "zj-4", title: "Zhejiang Fashion Industry Upgrade", sector: "Textiles", description: "Smart garment manufacturing, sustainable textiles, and fashion tech. Partnerships with 50,000+ textile factories.", investmentRange: "$3M - $50M", timeline: "1-3 years", status: "active" }
+      { id: "zj-1", title: "Alibaba Cross-border E-commerce Ecosystem", titleZh: "阿里巴巴跨境电商生态系统", titleRu: "Экосистема трансграничной электронной коммерции Alibaba", sector: "E-commerce", description: "Launch on Tmall Global, AliExpress, and Lazada. Warehouse and fulfillment services in Hangzhou Cross-border E-commerce Comprehensive Zone.", descriptionZh: "入驻天猫国际、速卖通和Lazada。杭州跨境电商综合试验区仓储和履约服务。", descriptionRu: "Запуск на Tmall Global, AliExpress и Lazada. Складские и фулфилмент-услуги в комплексной зоне трансграничной электронной коммерции Ханчжоу.", investmentRange: "$1M - $50M", timeline: "6-18 months", status: "active" },
+      { id: "zj-2", title: "Ningbo Russia Trade Logistics Center", titleZh: "宁波俄罗斯贸易物流中心", titleRu: "Логистический центр российской торговли в Нинбо", sector: "Logistics", description: "Bonded warehouse and distribution center for Russia-China trade. Connect Trans-Siberian Railway to Ningbo Port.", descriptionZh: "中俄贸易保税仓库和配送中心。连接西伯利亚大铁路与宁波港。", descriptionRu: "Таможенный склад и распределительный центр для российско-китайской торговли. Соединение Транссиба с портом Нинбо.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "priority" },
+      { id: "zj-3", title: "Hangzhou AI Town", titleZh: "杭州人工智能小镇", titleRu: "Городок ИИ в Ханчжоу", sector: "AI", description: "1,000-hectare AI innovation zone with Alibaba DAMO Academy partnership. Computing infrastructure and talent programs.", descriptionZh: "与阿里巴巴达摩院合作的1000公顷人工智能创新区。计算基础设施和人才计划。", descriptionRu: "1000-гектарная зона инноваций ИИ в партнёрстве с Академией DAMO Alibaba. Вычислительная инфраструктура и программы для талантов.", investmentRange: "$5M - $100M", timeline: "2-4 years", status: "active" },
+      { id: "zj-4", title: "Zhejiang Fashion Industry Upgrade", titleZh: "浙江时尚产业升级", titleRu: "Модернизация модной индустрии Чжэцзяна", sector: "Textiles", description: "Smart garment manufacturing, sustainable textiles, and fashion tech. Partnerships with 50,000+ textile factories.", descriptionZh: "智能服装制造、可持续纺织品和时尚科技。与50,000多家纺织工厂合作。", descriptionRu: "Умное производство одежды, экологичный текстиль и модные технологии. Партнёрства с 50 000+ текстильными фабриками.", investmentRange: "$3M - $50M", timeline: "1-3 years", status: "active" }
     ],
     keyProjects: [
       { id: "zj-p1", name: "Ant Group Digital Finance Platform", value: "$2 Billion", sector: "Fintech", description: "Cross-border payment and digital banking partnerships for Russia-China trade.", partners: ["Ant Group"], completionYear: "Ongoing" },
@@ -5902,14 +6012,14 @@ export const RUSSIA_REGIONS: Record<string, RegionData> = {
     taxBenefitsZh: ["特别投资合同", "科技园区优惠", "研发激励政策"],
     majorCities: [
       { id: "central-ao", name: "Central Administrative Okrug", population: "0.8M", lat: 55.7539, lng: 37.6208, image: "https://images.unsplash.com/photo-1513326738677-b964603b136d?w=1920&q=80", description: "The heart of Moscow with Red Square, the Kremlin, and Tverskaya Street. Russia's political and business epicenter with the highest concentration of headquarters and luxury retail.", opportunities: [
-        { id: "msc-c-1", title: "Tverskaya Premium Retail", sector: "Retail", description: "Flagship stores on Russia's most prestigious shopping street. Chinese luxury brands entering Russian market.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" },
-        { id: "msc-c-2", title: "Moscow City Business Center", sector: "Real Estate", description: "Grade A office space in Russia's Manhattan. Chinese company regional headquarters.", investmentRange: "$20M - $200M", timeline: "2-3 years", status: "active" }
+        { id: "msc-c-1", title: "Tverskaya Premium Retail", titleZh: "特维尔大街高端零售", titleRu: "Премиальный ритейл на Тверской", sector: "Retail", description: "Flagship stores on Russia's most prestigious shopping street. Chinese luxury brands entering Russian market.", descriptionZh: "在俄罗斯最负盛名的购物街开设旗舰店。中国奢侈品牌进入俄罗斯市场。", descriptionRu: "Флагманские магазины на самой престижной торговой улице России. Китайские люксовые бренды, выходящие на российский рынок.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" },
+        { id: "msc-c-2", title: "Moscow City Business Center", titleZh: "莫斯科城商务中心", titleRu: "Деловой центр Москва-Сити", sector: "Real Estate", description: "Grade A office space in Russia's Manhattan. Chinese company regional headquarters.", descriptionZh: "俄罗斯曼哈顿的甲级写字楼。中国公司区域总部。", descriptionRu: "Офисы класса А в российском Манхэттене. Региональные штаб-квартиры китайских компаний.", investmentRange: "$20M - $200M", timeline: "2-3 years", status: "active" }
       ]},
       { id: "northern-ao", name: "Northern Administrative Okrug", population: "1.2M", image: "https://images.unsplash.com/photo-1520106212299-d99c443e4568?w=1920&q=80", description: "Major industrial and residential district with Sheremetyevo Airport connection. Home to tech parks and manufacturing zones near key transportation infrastructure.", opportunities: [
-        { id: "msc-n-1", title: "Sheremetyevo Logistics Zone", sector: "Logistics", description: "Air cargo and distribution facilities near Russia's largest airport. E-commerce fulfillment center.", investmentRange: "$15M - $150M", timeline: "2-3 years", status: "priority" }
+        { id: "msc-n-1", title: "Sheremetyevo Logistics Zone", titleZh: "谢列梅捷沃物流区", titleRu: "Логистическая зона Шереметьево", sector: "Logistics", description: "Air cargo and distribution facilities near Russia's largest airport. E-commerce fulfillment center.", descriptionZh: "靠近俄罗斯最大机场的航空货运和配送设施。电商履约中心。", descriptionRu: "Объекты авиагрузов и дистрибуции рядом с крупнейшим аэропортом России. Фулфилмент-центр электронной коммерции.", investmentRange: "$15M - $150M", timeline: "2-3 years", status: "priority" }
       ]},
       { id: "southern-ao", name: "Southern Administrative Okrug", population: "1.8M", image: "https://images.unsplash.com/photo-1547448415-e9f5b28e570d?w=1920&q=80", description: "Growing residential and commercial district with major industrial heritage. Home to technology parks and research institutes.", opportunities: [
-        { id: "msc-s-1", title: "Skolkovo Innovation Center", sector: "Technology", description: "Russia's Silicon Valley. Tech startups, R&D centers, and university partnerships.", investmentRange: "$5M - $80M", timeline: "1-3 years", status: "priority" }
+        { id: "msc-s-1", title: "Skolkovo Innovation Center", titleZh: "斯科尔科沃创新中心", titleRu: "Инновационный центр Сколково", sector: "Technology", description: "Russia's Silicon Valley. Tech startups, R&D centers, and university partnerships.", descriptionZh: "俄罗斯的硅谷。科技初创企业、研发中心和大学合作。", descriptionRu: "Российская Кремниевая долина. Технологические стартапы, R&D-центры и университетские партнёрства.", investmentRange: "$5M - $80M", timeline: "1-3 years", status: "priority" }
       ]}
     ],
     overview: "Russia's capital and largest city, Moscow is the undisputed political, economic, and cultural center. Home to the Kremlin, major banks, tech companies (Yandex, Mail.ru), and serves as headquarters for most Russian-Chinese joint ventures. Key gateway for Chinese investment into Russia.",
@@ -5917,10 +6027,10 @@ export const RUSSIA_REGIONS: Record<string, RegionData> = {
     overviewZh: "俄罗斯首都和最大城市，莫斯科是无可争议的政治、经济和文化中心。这里是克里姆林宫、主要银行、科技公司（Yandex、Mail.ru）的所在地，也是大多数中俄合资企业的总部所在地。是中国投资进入俄罗斯的重要门户。",
     targetSectors: ["Fintech", "E-commerce", "IT Services", "Real Estate", "Consumer Goods"],
     opportunities: [
-      { id: "msk-1", title: "Moscow International Financial Center", sector: "Finance", description: "Establish banking, insurance, or asset management presence. RMB clearing center and SPFS payment system integration for China trade.", investmentRange: "$20M - $500M", timeline: "1-2 years", status: "priority" },
-      { id: "msk-2", title: "Skolkovo Innovation Center", sector: "Technology", description: "Russia's Silicon Valley with tax-free status. AI, biotech, and IT partnerships with major Russian tech companies.", investmentRange: "$5M - $100M", timeline: "1-3 years", status: "active" },
-      { id: "msk-3", title: "Moscow E-commerce & Logistics", sector: "E-commerce", description: "Last-mile delivery and fulfillment centers for Chinese goods. Partnership with Ozon, Wildberries marketplaces.", investmentRange: "$10M - $100M", timeline: "1-2 years", status: "active" },
-      { id: "msk-4", title: "Moscow Real Estate Development", sector: "Real Estate", description: "Commercial and residential development in expanding Moscow. Chinese construction technology and materials.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" }
+      { id: "msk-1", title: "Moscow International Financial Center", titleZh: "莫斯科国际金融中心", titleRu: "Московский международный финансовый центр", sector: "Finance", description: "Establish banking, insurance, or asset management presence. RMB clearing center and SPFS payment system integration for China trade.", descriptionZh: "建立银行、保险或资产管理业务。人民币清算中心和SPFS支付系统集成，服务中国贸易。", descriptionRu: "Создание банковского, страхового или инвестиционного присутствия. Клиринговый центр юаня и интеграция с платёжной системой СПФС для торговли с Китаем.", investmentRange: "$20M - $500M", timeline: "1-2 years", status: "priority" },
+      { id: "msk-2", title: "Skolkovo Innovation Center", titleZh: "斯科尔科沃创新中心", titleRu: "Инновационный центр Сколково", sector: "Technology", description: "Russia's Silicon Valley with tax-free status. AI, biotech, and IT partnerships with major Russian tech companies.", descriptionZh: "俄罗斯的硅谷，享有免税地位。与俄罗斯主要科技公司的人工智能、生物技术和IT合作。", descriptionRu: "Российская Кремниевая долина с безналоговым статусом. Партнёрства в области ИИ, биотехнологий и ИТ с ведущими российскими технологическими компаниями.", investmentRange: "$5M - $100M", timeline: "1-3 years", status: "active" },
+      { id: "msk-3", title: "Moscow E-commerce & Logistics", titleZh: "莫斯科电商与物流", titleRu: "Московская электронная коммерция и логистика", sector: "E-commerce", description: "Last-mile delivery and fulfillment centers for Chinese goods. Partnership with Ozon, Wildberries marketplaces.", descriptionZh: "中国商品的最后一公里配送和履约中心。与Ozon、Wildberries电商平台合作。", descriptionRu: "Центры доставки последней мили и фулфилмента для китайских товаров. Партнёрство с маркетплейсами Ozon и Wildberries.", investmentRange: "$10M - $100M", timeline: "1-2 years", status: "active" },
+      { id: "msk-4", title: "Moscow Real Estate Development", titleZh: "莫斯科房地产开发", titleRu: "Девелопмент недвижимости в Москве", sector: "Real Estate", description: "Commercial and residential development in expanding Moscow. Chinese construction technology and materials.", descriptionZh: "在不断扩张的莫斯科进行商业和住宅开发。中国建筑技术和材料。", descriptionRu: "Коммерческая и жилая застройка расширяющейся Москвы. Китайские строительные технологии и материалы.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" }
     ],
     keyProjects: [
       { id: "msk-p1", name: "Moscow-Beijing High-Speed Rail Planning", value: "$242 Billion", sector: "Infrastructure", description: "Planning phase for 7,000km HSR connection. Feasibility studies and route planning.", partners: ["Russian Railways", "China Railway"], completionYear: "2035" },
@@ -5951,15 +6061,15 @@ export const RUSSIA_REGIONS: Record<string, RegionData> = {
     taxBenefits: ["SEZ benefits", "IT park incentives", "Cultural industry support"],
     majorCities: [
       { id: "admiralteysky", name: "Admiralteysky District", population: "0.16M", lat: 59.9311, lng: 30.3150, image: "https://images.unsplash.com/photo-1556610961-2fecc5927173?w=1920&q=80", description: "Historic heart of St. Petersburg with the Admiralty, St. Isaac's Cathedral, and the Hermitage. Russia's cultural capital and UNESCO World Heritage site.", opportunities: [
-        { id: "spb-a-1", title: "Heritage Tourism Development", sector: "Tourism", description: "Boutique hotels and cultural tourism near Hermitage and Palace Square. Growing Chinese tourist segment.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" },
-        { id: "spb-a-2", title: "Luxury Hospitality", sector: "Hospitality", description: "5-star hotels and restaurants catering to high-end Chinese tourists. WeChat/Alipay integration.", investmentRange: "$20M - $150M", timeline: "2-4 years", status: "active" }
+{ id: "spb-a-1", title: "Heritage Tourism Development", titleZh: "遗产旅游开发", titleRu: "Развитие наследия туризма", sector: "Tourism", description: "Boutique hotels and cultural tourism near Hermitage and Palace Square. Growing Chinese tourist segment.", descriptionZh: "靠近冬宫和宫殿广场的精品酒店和文化旅游。中国游客群体不断增长。", descriptionRu: "Бутик-отели и культурный туризм рядом с Эрмитажем и Дворцовой площадью. Растущий сегмент китайских туристов.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" },
+         { id: "spb-a-2", title: "Luxury Hospitality", titleZh: "豪华酒店业", titleRu: "Люксовое гостеприимство", sector: "Hospitality", description: "5-star hotels and restaurants catering to high-end Chinese tourists. WeChat/Alipay integration.", descriptionZh: "面向高端中国游客的五星级酒店和餐厅。微信/支付宝集成。", descriptionRu: "5-звёздочные отели и рестораны для состоятельных китайских туристов. Интеграция WeChat/Alipay.", investmentRange: "$20M - $150M", timeline: "2-4 years", status: "active" }
       ]},
       { id: "vasileostrovsky", name: "Vasileostrovsky Island", population: "0.21M", image: "https://images.unsplash.com/photo-1548834925-e48f8a27ae1f?w=1920&q=80", description: "Historic island district with the Rostral Columns, universities, and emerging tech scene. Major port facilities and the new Lakhta Center (Gazprom HQ).", opportunities: [
-        { id: "spb-v-1", title: "Baltic Port Development", sector: "Logistics", description: "Container terminal and logistics facilities. Direct shipping connections to China.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "priority" },
-        { id: "spb-v-2", title: "St. Petersburg IT Cluster", sector: "IT", description: "Software development and gaming studios. JetBrains and Vkontakte ecosystem.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" }
+{ id: "spb-v-1", title: "Baltic Port Development", titleZh: "波罗的海港口开发", titleRu: "Развитие Балтийского порта", sector: "Logistics", description: "Container terminal and logistics facilities. Direct shipping connections to China.", descriptionZh: "集装箱码头和物流设施。与中国的直达海运连接。", descriptionRu: "Контейнерный терминал и логистические объекты. Прямые морские маршруты в Китай.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "priority" },
+         { id: "spb-v-2", title: "St. Petersburg IT Cluster", titleZh: "圣彼得堡IT集群", titleRu: "IT-кластер Санкт-Петербурга", sector: "IT", description: "Software development and gaming studios. JetBrains and Vkontakte ecosystem.", descriptionZh: "软件开发和游戏工作室。JetBrains和VKontakte生态系统。", descriptionRu: "Разработка ПО и игровые студии. Экосистема JetBrains и ВКонтакте.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" }
       ]},
       { id: "petrogradsky", name: "Petrogradsky District", population: "0.13M", image: "https://images.unsplash.com/photo-1553877522-43269d4ea984?w=1920&q=80", description: "Historic district with the Peter and Paul Fortress and growing residential development. Mix of heritage sites and modern apartments.", opportunities: [
-        { id: "spb-p-1", title: "Mixed-Use Development", sector: "Real Estate", description: "Premium residential and retail development in historic settings.", investmentRange: "$15M - $100M", timeline: "3-4 years", status: "active" }
+        { id: "spb-p-1", title: "Mixed-Use Development", titleZh: "综合开发", titleRu: "Многофункциональная застройка", sector: "Real Estate", description: "Premium residential and retail development in historic settings.", descriptionZh: "在历史环境中的高端住宅和零售开发。", descriptionRu: "Премиальная жилая и торговая застройка в историческом окружении.", investmentRange: "$15M - $100M", timeline: "3-4 years", status: "active" }
       ]}
     ],
     overview: "Russia's cultural capital and second-largest city. Major port on the Baltic Sea with strong shipbuilding, automotive (Toyota, Hyundai, Nissan plants), and IT sectors. Historic architecture attracts millions of Chinese tourists annually. Hosts St. Petersburg International Economic Forum.",
@@ -5967,10 +6077,10 @@ export const RUSSIA_REGIONS: Record<string, RegionData> = {
     overviewZh: "俄罗斯的文化之都和第二大城市。波罗的海主要港口，拥有发达的造船业、汽车制造业（丰田、现代、日产工厂）和IT行业。历史建筑每年吸引数百万中国游客。圣彼得堡国际经济论坛的举办地。",
     targetSectors: ["Shipbuilding", "Automotive", "IT & Software", "Tourism", "Pharmaceuticals"],
     opportunities: [
-      { id: "spb-1", title: "Baltic Shipyard Modernization", sector: "Shipbuilding", description: "Icebreaker and LNG carrier construction partnerships. Russian Arctic fleet expansion.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" },
-      { id: "spb-2", title: "St. Petersburg IT Cluster", sector: "IT", description: "Software development, gaming, and fintech. Partnerships with JetBrains, Vkontakte, and gaming studios.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" },
-      { id: "spb-3", title: "Chinese Tourism Infrastructure", sector: "Tourism", description: "Hotels, restaurants, and tourism services for 1 million+ Chinese visitors. WeChat/Alipay integration.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "active" },
-      { id: "spb-4", title: "Pharmaceutical Production", sector: "Pharma", description: "Generic drug manufacturing and biotech. Partnerships with Russian pharmaceutical companies.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "active" }
+{ id: "spb-1", title: "Baltic Shipyard Modernization", titleZh: "波罗的海造船厂现代化", titleRu: "Модернизация Балтийского судостроительного завода", sector: "Shipbuilding", description: "Icebreaker and LNG carrier construction partnerships. Russian Arctic fleet expansion.", descriptionZh: "破冰船和LNG运输船建造合作。俄罗斯北极船队扩张。", descriptionRu: "Партнёрства по строительству ледоколов и СПГ-танкеров. Расширение российского арктического флота.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" },
+       { id: "spb-2", title: "St. Petersburg IT Cluster", titleZh: "圣彼得堡IT集群", titleRu: "IT-кластер Санкт-Петербурга", sector: "IT", description: "Software development, gaming, and fintech. Partnerships with JetBrains, Vkontakte, and gaming studios.", descriptionZh: "软件开发、游戏和金融科技。与JetBrains、VKontakte和游戏工作室合作。", descriptionRu: "Разработка ПО, гейминг и финтех. Партнёрства с JetBrains, ВКонтакте и игровыми студиями.", investmentRange: "$5M - $50M", timeline: "1-2 years", status: "active" },
+       { id: "spb-3", title: "Chinese Tourism Infrastructure", titleZh: "中国旅游基础设施", titleRu: "Инфраструктура для китайского туризма", sector: "Tourism", description: "Hotels, restaurants, and tourism services for 1 million+ Chinese visitors. WeChat/Alipay integration.", descriptionZh: "为100万+中国游客提供酒店、餐厅和旅游服务。微信/支付宝集成。", descriptionRu: "Отели, рестораны и туристические услуги для 1+ млн китайских посетителей. Интеграция WeChat/Alipay.", investmentRange: "$10M - $100M", timeline: "2-3 years", status: "active" },
+       { id: "spb-4", title: "Pharmaceutical Production", titleZh: "制药生产", titleRu: "Фармацевтическое производство", sector: "Pharma", description: "Generic drug manufacturing and biotech. Partnerships with Russian pharmaceutical companies.", descriptionZh: "仿制药生产和生物技术。与俄罗斯制药公司合作。", descriptionRu: "Производство дженериков и биотехнологии. Партнёрства с российскими фармацевтическими компаниями.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "active" }
     ],
     keyProjects: [
       { id: "spb-p1", name: "Lakhta Center Phase 2", value: "$2 Billion", sector: "Real Estate", description: "Gazprom headquarters expansion. Commercial and residential development.", partners: ["Gazprom"], completionYear: "2028" },
@@ -6038,19 +6148,19 @@ export const RUSSIA_REGIONS: Record<string, RegionData> = {
     majorCities: [
       { id: "kazan", name: "Kazan", population: "1.3M", lat: 55.7887, lng: 49.1221, image: "https://images.unsplash.com/photo-1561627358-3e27ef39c9dd?w=1920&q=80", description: "Capital of Tatarstan and Russia's sports capital. Beautiful UNESCO World Heritage Kremlin, emerging IT hub (Innopolis nearby), and Haier manufacturing base. Model for Russian regional development.", opportunities: [
         { id: "kzn-1", title: "Kazan IT Park", titleRu: "Казанский IT-парк", titleZh: "喀山IT园区", sector: "IT", description: "Software development and tech services. Gateway to Innopolis ecosystem with tax incentives.", descriptionRu: "Разработка программного обеспечения и IT-услуги. Доступ к экосистеме Иннополиса с налоговыми льготами.", descriptionZh: "软件开发和技术服务。通往伊诺波利斯生态系统的门户，享受税收优惠。", investmentRange: "$3M - $40M", timeline: "1-2 years", status: "priority" },
-        { id: "kzn-2", title: "Haier Ecosystem Expansion", sector: "Manufacturing", description: "Supply chain partnerships with Haier's Russian manufacturing base. Appliance components.", investmentRange: "$5M - $60M", timeline: "1-2 years", status: "active" },
-        { id: "kzn-3", title: "Kazan Sports Tourism", sector: "Tourism", description: "Sports facilities and tourism from World Cup and Universiade legacy. Chinese sports partnerships.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" },
-        { id: "kzn-4", title: "Halal Industry Development", sector: "Food", description: "Halal food production and certification. Gateway to Muslim markets globally.", investmentRange: "$5M - $50M", timeline: "2-3 years", status: "active" }
+{ id: "kzn-2", title: "Haier Ecosystem Expansion", titleZh: "海尔生态扩展", titleRu: "Расширение экосистемы Haier", sector: "Manufacturing", description: "Supply chain partnerships with Haier's Russian manufacturing base. Appliance components.", descriptionZh: "与海尔俄罗斯制造基地的供应链合作。家电零部件。", descriptionRu: "Партнёрства по цепочке поставок с российской производственной базой Haier. Компоненты бытовой техники.", investmentRange: "$5M - $60M", timeline: "1-2 years", status: "active" },
+         { id: "kzn-3", title: "Kazan Sports Tourism", titleZh: "喀山体育旅游", titleRu: "Спортивный туризм Казани", sector: "Tourism", description: "Sports facilities and tourism from World Cup and Universiade legacy. Chinese sports partnerships.", descriptionZh: "世界杯和大运会遗产的体育设施和旅游。中国体育合作。", descriptionRu: "Спортивные объекты и туризм как наследие Чемпионата мира и Универсиады. Китайские спортивные партнёрства.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" },
+         { id: "kzn-4", title: "Halal Industry Development", titleZh: "清真产业发展", titleRu: "Развитие халяльной индустрии", sector: "Food", description: "Halal food production and certification. Gateway to Muslim markets globally.", descriptionZh: "清真食品生产和认证。通往全球穆斯林市场的门户。", descriptionRu: "Производство и сертификация халяльной продукции. Ворота на мировые мусульманские рынки.", investmentRange: "$5M - $50M", timeline: "2-3 years", status: "active" }
       ]},
       { id: "naberezhnye-chelny", name: "Naberezhnye Chelny", population: "0.5M", image: "https://images.unsplash.com/photo-1547981609-4b6bfe67ca0b?w=1920&q=80", description: "Home of KAMAZ - Russia's largest truck manufacturer. Industrial city with strong automotive supply chain and Alabuga SEZ nearby.", opportunities: [
-        { id: "nch-1", title: "KAMAZ EV Partnership", sector: "Automotive", description: "Electric truck development with Russia's largest truck maker. Battery and powertrain components.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "priority" },
-        { id: "nch-2", title: "Alabuga SEZ Manufacturing", sector: "Manufacturing", description: "Russia's best SEZ: 0% profit tax 10 years, 0% property tax. Turnkey factory facilities.", investmentRange: "$10M - $150M", timeline: "1-2 years", status: "priority" },
-        { id: "nch-3", title: "Automotive Components Cluster", sector: "Automotive", description: "Tier 1/2 supplier facilities for KAMAZ and nearby automakers.", investmentRange: "$5M - $80M", timeline: "1-3 years", status: "active" }
+{ id: "nch-1", title: "KAMAZ EV Partnership", titleZh: "卡玛斯电动汽车合作", titleRu: "Партнёрство с КАМАЗ по электромобилям", sector: "Automotive", description: "Electric truck development with Russia's largest truck maker. Battery and powertrain components.", descriptionZh: "与俄罗斯最大卡车制造商合作开发电动卡车。电池和动力总成部件。", descriptionRu: "Разработка электрогрузовиков с крупнейшим российским производителем грузовиков. Компоненты батарей и силовых агрегатов.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "priority" },
+         { id: "nch-2", title: "Alabuga SEZ Manufacturing", titleZh: "阿拉布加经济特区制造", titleRu: "Производство в ОЭЗ Алабуга", sector: "Manufacturing", description: "Russia's best SEZ: 0% profit tax 10 years, 0% property tax. Turnkey factory facilities.", descriptionZh: "俄罗斯最好的经济特区：10年零利润税，零房产税。交钥匙工厂设施。", descriptionRu: "Лучшая ОЭЗ России: 0% налога на прибыль 10 лет, 0% налога на имущество. Заводы под ключ.", investmentRange: "$10M - $150M", timeline: "1-2 years", status: "priority" },
+         { id: "nch-3", title: "Automotive Components Cluster", titleZh: "汽车零部件集群", titleRu: "Кластер автокомпонентов", sector: "Automotive", description: "Tier 1/2 supplier facilities for KAMAZ and nearby automakers.", descriptionZh: "为卡玛斯和附近汽车制造商提供一级/二级供应商设施。", descriptionRu: "Объекты поставщиков Tier 1/2 для КАМАЗа и ближайших автопроизводителей.", investmentRange: "$5M - $80M", timeline: "1-3 years", status: "active" }
       ]},
       { id: "nizhnekamsk", name: "Nizhnekamsk", population: "0.2M", image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=1920&q=80", description: "Petrochemical capital of Tatarstan. Home to TATNEFT and SIBUR facilities. Major polymer and rubber production center.", opportunities: [
-        { id: "nzk-1", title: "SIBUR Polymer Partnership", sector: "Petrochemicals", description: "Ethylene and polyethylene production. World-scale petrochemical complex.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" },
-        { id: "nzk-2", title: "Specialty Chemicals Production", sector: "Chemicals", description: "High-value chemical products leveraging local feedstock and infrastructure.", investmentRange: "$20M - $150M", timeline: "2-4 years", status: "active" },
-        { id: "nzk-3", title: "Tire & Rubber Manufacturing", sector: "Manufacturing", description: "Tire production and rubber products for domestic and export markets.", investmentRange: "$15M - $100M", timeline: "2-3 years", status: "active" }
+{ id: "nzk-1", title: "SIBUR Polymer Partnership", titleZh: "西布尔聚合物合作", titleRu: "Полимерное партнёрство с СИБУРом", sector: "Petrochemicals", description: "Ethylene and polyethylene production. World-scale petrochemical complex.", descriptionZh: "乙烯和聚乙烯生产。世界级石化综合体。", descriptionRu: "Производство этилена и полиэтилена. Нефтехимический комплекс мирового масштаба.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" },
+         { id: "nzk-2", title: "Specialty Chemicals Production", titleZh: "特种化学品生产", titleRu: "Производство специальных химикатов", sector: "Chemicals", description: "High-value chemical products leveraging local feedstock and infrastructure.", descriptionZh: "利用当地原料和基础设施生产高价值化学产品。", descriptionRu: "Высокомаржинальные химические продукты с использованием местного сырья и инфраструктуры.", investmentRange: "$20M - $150M", timeline: "2-4 years", status: "active" },
+         { id: "nzk-3", title: "Tire & Rubber Manufacturing", titleZh: "轮胎和橡胶制造", titleRu: "Производство шин и резины", sector: "Manufacturing", description: "Tire production and rubber products for domestic and export markets.", descriptionZh: "面向国内和出口市场的轮胎和橡胶制品生产。", descriptionRu: "Производство шин и резиновых изделий для внутреннего рынка и экспорта.", investmentRange: "$15M - $100M", timeline: "2-3 years", status: "active" }
       ]}
     ],
     overview: "Russia's most successful regional economy and investment destination. Alabuga SEZ is Russia's best-performing special economic zone. Innopolis is Russia's IT city. KAMAZ truck manufacturing and TATNEFT oil production. Strong Chinese investment track record.",
@@ -6058,10 +6168,10 @@ export const RUSSIA_REGIONS: Record<string, RegionData> = {
     overviewZh: "俄罗斯最成功的区域经济体和投资目的地。阿拉布加经济特区是俄罗斯表现最好的经济特区。伊诺波利斯是俄罗斯的IT城市。卡玛斯卡车制造和鞑靼石油生产。拥有良好的中国投资记录。",
     targetSectors: ["Petrochemicals", "Automotive Components", "IT", "Halal Industry", "Advanced Manufacturing"],
     opportunities: [
-      { id: "tt-1", title: "Alabuga Special Economic Zone", sector: "Manufacturing", description: "Russia's top SEZ with 0% profit tax for 10 years, 0% property tax, subsidized utilities. 100+ residents including Chinese companies.", investmentRange: "$10M - $300M", timeline: "1-3 years", status: "priority" },
-      { id: "tt-2", title: "Innopolis IT City", sector: "IT", description: "Russia's purpose-built tech city. AI, blockchain, and software development. Tax-free zone for IT companies.", investmentRange: "$5M - $100M", timeline: "1-2 years", status: "priority" },
-      { id: "tt-3", title: "KAMAZ Electric Truck Partnership", sector: "Automotive", description: "Electric truck development and component manufacturing with Russia's largest truck maker.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" },
-      { id: "tt-4", title: "Nizhnekamsk Petrochemical Expansion", sector: "Petrochemicals", description: "SIBUR and TATNEFT petrochemical projects. Polymer and specialty chemical production.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" }
+{ id: "tt-1", title: "Alabuga Special Economic Zone", titleZh: "阿拉布加经济特区", titleRu: "Особая экономическая зона Алабуга", sector: "Manufacturing", description: "Russia's top SEZ with 0% profit tax for 10 years, 0% property tax, subsidized utilities. 100+ residents including Chinese companies.", descriptionZh: "俄罗斯顶级经济特区，10年零利润税，零房产税，公用事业补贴。100多家入驻企业包括中国公司。", descriptionRu: "Лучшая ОЭЗ России: 0% налога на прибыль 10 лет, 0% налога на имущество, субсидированные коммунальные услуги. 100+ резидентов, включая китайские компании.", investmentRange: "$10M - $300M", timeline: "1-3 years", status: "priority" },
+       { id: "tt-2", title: "Innopolis IT City", titleZh: "伊诺波利斯IT城", titleRu: "IT-город Иннополис", sector: "IT", description: "Russia's purpose-built tech city. AI, blockchain, and software development. Tax-free zone for IT companies.", descriptionZh: "俄罗斯专为科技而建的城市。人工智能、区块链和软件开发。IT公司免税区。", descriptionRu: "Специально построенный технологический город России. ИИ, блокчейн и разработка ПО. Безналоговая зона для IT-компаний.", investmentRange: "$5M - $100M", timeline: "1-2 years", status: "priority" },
+       { id: "tt-3", title: "KAMAZ Electric Truck Partnership", titleZh: "卡玛斯电动卡车合作", titleRu: "Партнёрство по электрогрузовикам КАМАЗ", sector: "Automotive", description: "Electric truck development and component manufacturing with Russia's largest truck maker.", descriptionZh: "与俄罗斯最大卡车制造商合作开发电动卡车和零部件制造。", descriptionRu: "Разработка электрогрузовиков и производство компонентов с крупнейшим российским производителем грузовиков.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" },
+       { id: "tt-4", title: "Nizhnekamsk Petrochemical Expansion", titleZh: "尼日涅卡姆斯克石化扩展", titleRu: "Расширение нефтехимии Нижнекамска", sector: "Petrochemicals", description: "SIBUR and TATNEFT petrochemical projects. Polymer and specialty chemical production.", descriptionZh: "西布尔和鞑靼石油的石化项目。聚合物和特种化学品生产。", descriptionRu: "Нефтехимические проекты СИБУРа и ТАТНЕФТи. Производство полимеров и специальных химикатов.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" }
     ],
     keyProjects: [
       { id: "tt-p1", name: "Haier Industrial Park Kazan", value: "$200 Million", sector: "Electronics", description: "Chinese home appliance manufacturing base for Russia market.", partners: ["Haier"], completionYear: "2026" },
@@ -6092,24 +6202,24 @@ export const RUSSIA_REGIONS: Record<string, RegionData> = {
     taxBenefits: ["Industrial cluster benefits", "Mining incentives", "Titanium Valley SEZ"],
     majorCities: [
       { id: "yekaterinburg", name: "Yekaterinburg", population: "1.5M", image: "https://images.unsplash.com/photo-1558985212-1512ae10b850?w=1920&q=80", description: "Russia's 4th largest city and industrial capital of the Urals. Historic gateway between Europe and Asia on Trans-Siberian Railway. Hosts annual INNOPROM industrial fair - Russia's main platform for China partnerships.", opportunities: [
-        { id: "ykt-1", title: "INNOPROM Industrial Partnership", sector: "Manufacturing", description: "Annual industrial fair connecting Chinese and Russian manufacturers. Technology transfer and JV platform.", investmentRange: "$5M - $100M", timeline: "1-2 years", status: "priority" },
-        { id: "ykt-2", title: "Urals Heavy Industry Modernization", sector: "Machinery", description: "Industry 4.0 upgrades for metallurgy and machinery. Smart manufacturing solutions.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" },
-        { id: "ykt-3", title: "Yekaterinburg Tech Hub", sector: "IT", description: "Software development and IT services. Growing startup ecosystem.", investmentRange: "$3M - $40M", timeline: "1-2 years", status: "active" }
+        { id: "ykt-1", title: "INNOPROM Industrial Partnership", titleZh: "中国国际工业博览会产业合作", titleRu: "Промышленное партнёрство ИННОПРОМ", sector: "Manufacturing", description: "Annual industrial fair connecting Chinese and Russian manufacturers. Technology transfer and JV platform.", descriptionZh: "连接中俄制造商的年度工业博览会。技术转让和合资企业平台。", descriptionRu: "Ежегодная промышленная выставка, соединяющая китайских и российских производителей. Платформа для трансфера технологий и создания СП.", investmentRange: "$5M - $100M", timeline: "1-2 years", status: "priority" },
+        { id: "ykt-2", title: "Urals Heavy Industry Modernization", titleZh: "乌拉尔重工业现代化", titleRu: "Модернизация тяжёлой промышленности Урала", sector: "Machinery", description: "Industry 4.0 upgrades for metallurgy and machinery. Smart manufacturing solutions.", descriptionZh: "冶金和机械行业的工业4.0升级。智能制造解决方案。", descriptionRu: "Модернизация металлургии и машиностроения по стандартам Индустрии 4.0. Решения для умного производства.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" },
+        { id: "ykt-3", title: "Yekaterinburg Tech Hub", titleZh: "叶卡捷琳堡科技中心", titleRu: "Технологический хаб Екатеринбурга", sector: "IT", description: "Software development and IT services. Growing startup ecosystem.", descriptionZh: "软件开发和IT服务。蓬勃发展的初创企业生态系统。", descriptionRu: "Разработка ПО и ИТ-услуги. Растущая стартап-экосистема.", investmentRange: "$3M - $40M", timeline: "1-2 years", status: "active" }
       ]},
       { id: "nizhny-tagil", name: "Nizhny Tagil", population: "0.3M", image: "https://images.unsplash.com/photo-1590244840770-b9a0a36a3a83?w=1920&q=80", description: "Major metallurgical center home to EVRAZ steel operations. Historic arms manufacturing city now diversifying into civilian products and green steel.", opportunities: [
-        { id: "ntg-1", title: "EVRAZ Green Steel Partnership", sector: "Steel", description: "Low-carbon steel production and rail manufacturing. Technology and supply partnerships.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "priority" },
-        { id: "ntg-2", title: "Defense Conversion Manufacturing", sector: "Manufacturing", description: "Civilian applications for defense industry capabilities. Precision machinery.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
+        { id: "ntg-1", title: "EVRAZ Green Steel Partnership", titleZh: "EVRAZ绿色钢铁合作", titleRu: "Партнёрство ЕВРАЗ по зелёной стали", sector: "Steel", description: "Low-carbon steel production and rail manufacturing. Technology and supply partnerships.", descriptionZh: "低碳钢生产和铁路制造。技术和供应合作。", descriptionRu: "Производство низкоуглеродной стали и железнодорожной продукции. Технологическое и снабженческое партнёрство.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "priority" },
+        { id: "ntg-2", title: "Defense Conversion Manufacturing", titleZh: "国防工业民用化生产", titleRu: "Конверсия оборонного производства", sector: "Manufacturing", description: "Civilian applications for defense industry capabilities. Precision machinery.", descriptionZh: "国防工业能力的民用化应用。精密机械制造。", descriptionRu: "Гражданское применение возможностей оборонной промышленности. Точное машиностроение.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
       ]},
       { id: "kamensk-uralsky", name: "Kamensk-Uralsky", population: "0.2M", image: "https://images.unsplash.com/photo-1597473322203-2c4f0e36e1c3?w=1920&q=80", description: "Aluminum and titanium processing center. Key supplier for aerospace and defense industries with VSMPO-AVISMA operations nearby.", opportunities: [
-        { id: "kmu-1", title: "Titanium Valley Partnership", sector: "Aerospace", description: "Titanium processing and aerospace components. VSMPO-AVISMA ecosystem.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "priority" }
+        { id: "kmu-1", title: "Titanium Valley Partnership", titleZh: "钛谷合作项目", titleRu: "Партнёрство Титановой долины", sector: "Aerospace", description: "Titanium processing and aerospace components. VSMPO-AVISMA ecosystem.", descriptionZh: "钛材加工和航空航天部件。VSMPO-AVISMA生态系统。", descriptionRu: "Переработка титана и производство аэрокосмических компонентов. Экосистема ВСМПО-АВИСМА.", investmentRange: "$20M - $200M", timeline: "3-5 years", status: "priority" }
       ]}
     ],
     overview: "Industrial heartland of the Urals and Russia's fourth-largest city (Yekaterinburg). Major metallurgy center (EVRAZ, UMMC), heavy machinery, and defense industry. Hosts annual INNOPROM industrial exhibition. Titanium Valley SEZ for aerospace.",
     targetSectors: ["Metallurgy", "Heavy Machinery", "Titanium & Aerospace", "Mining Equipment", "Industrial IoT"],
     opportunities: [
-      { id: "sv-1", title: "Titanium Valley SEZ", sector: "Aerospace", description: "Titanium processing and aerospace component manufacturing. VSMPO-AVISMA partnership opportunities.", investmentRange: "$20M - $300M", timeline: "3-5 years", status: "priority" },
-      { id: "sv-2", title: "INNOPROM Industrial Partnership", sector: "Manufacturing", description: "Annual industrial exhibition - platform for China-Russia manufacturing partnerships.", investmentRange: "$5M - $100M", timeline: "1-2 years", status: "active" },
-      { id: "sv-3", title: "Urals Mining Equipment", sector: "Mining", description: "Mining machinery and equipment manufacturing for Russia's resource sector.", investmentRange: "$10M - $150M", timeline: "2-4 years", status: "active" }
+      { id: "sv-1", title: "Titanium Valley SEZ", titleZh: "钛谷经济特区", titleRu: "ОЭЗ Титановая долина", sector: "Aerospace", description: "Titanium processing and aerospace component manufacturing. VSMPO-AVISMA partnership opportunities.", descriptionZh: "钛材加工和航空航天部件制造。VSMPO-AVISMA合作机会。", descriptionRu: "Переработка титана и производство аэрокосмических компонентов. Возможности партнёрства с ВСМПО-АВИСМА.", investmentRange: "$20M - $300M", timeline: "3-5 years", status: "priority" },
+      { id: "sv-2", title: "INNOPROM Industrial Partnership", titleZh: "中国国际工业博览会产业合作", titleRu: "Промышленное партнёрство ИННОПРОМ", sector: "Manufacturing", description: "Annual industrial exhibition - platform for China-Russia manufacturing partnerships.", descriptionZh: "年度工业展览会——中俄制造业合作平台。", descriptionRu: "Ежегодная промышленная выставка — платформа для китайско-российского производственного партнёрства.", investmentRange: "$5M - $100M", timeline: "1-2 years", status: "active" },
+      { id: "sv-3", title: "Urals Mining Equipment", titleZh: "乌拉尔矿业设备", titleRu: "Горное оборудование Урала", sector: "Mining", description: "Mining machinery and equipment manufacturing for Russia's resource sector.", descriptionZh: "为俄罗斯资源行业制造矿山机械和设备。", descriptionRu: "Производство горнодобывающей техники и оборудования для ресурсного сектора России.", investmentRange: "$10M - $150M", timeline: "2-4 years", status: "active" }
     ],
     keyProjects: [
       { id: "sv-p1", name: "EVRAZ Nizhny Tagil Modernization", value: "$2 Billion", sector: "Steel", description: "Green steel production and rail manufacturing.", partners: ["EVRAZ"], completionYear: "2028" }
@@ -6132,24 +6242,24 @@ export const RUSSIA_REGIONS: Record<string, RegionData> = {
     taxBenefits: ["Resource extraction benefits", "Arctic development incentives", "Hydropower support"],
     majorCities: [
       { id: "krasnoyarsk", name: "Krasnoyarsk", population: "1.1M", image: "https://images.unsplash.com/photo-1589308078059-be1415eab4c3?w=1920&q=80", description: "Siberia's largest city on the Yenisei River. Major aluminum production (RUSAL) and hydropower hub. Gateway to vast mineral resources of northern Siberia.", opportunities: [
-        { id: "kry-1", title: "RUSAL Aluminum Partnership", sector: "Aluminum", description: "World's lowest-cost aluminum production using hydropower. Processing and export.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "active" },
-        { id: "kry-2", title: "Siberian Hydropower Projects", sector: "Energy", description: "New hydropower development and integration with mining operations.", investmentRange: "$50M - $500M", timeline: "5-10 years", status: "upcoming" },
-        { id: "kry-3", title: "Forestry & Wood Processing", sector: "Forestry", description: "Sustainable forestry and wood products export to China.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
+        { id: "kry-1", title: "RUSAL Aluminum Partnership", titleZh: "俄铝合作项目", titleRu: "Партнёрство с РУСАЛом", sector: "Aluminum", description: "World's lowest-cost aluminum production using hydropower. Processing and export.", descriptionZh: "利用水力发电的全球最低成本铝生产。加工和出口。", descriptionRu: "Производство алюминия с самой низкой себестоимостью в мире благодаря гидроэнергетике. Переработка и экспорт.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "active" },
+        { id: "kry-2", title: "Siberian Hydropower Projects", titleZh: "西伯利亚水电项目", titleRu: "Сибирские гидроэнергетические проекты", sector: "Energy", description: "New hydropower development and integration with mining operations.", descriptionZh: "新水电开发及与采矿作业的整合。", descriptionRu: "Развитие новых гидроэлектростанций и интеграция с горнодобывающими операциями.", investmentRange: "$50M - $500M", timeline: "5-10 years", status: "upcoming" },
+        { id: "kry-3", title: "Forestry & Wood Processing", titleZh: "林业与木材加工", titleRu: "Лесопереработка", sector: "Forestry", description: "Sustainable forestry and wood products export to China.", descriptionZh: "可持续林业和木材产品出口至中国。", descriptionRu: "Устойчивое лесопользование и экспорт древесной продукции в Китай.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
       ]},
       { id: "norilsk", name: "Norilsk", population: "0.2M", image: "https://images.unsplash.com/photo-1551845041-63e8e76836ea?w=1920&q=80", description: "Arctic mining city and home to Nornickel - world's largest nickel and palladium producer. Critical minerals for EV batteries and electronics. Extreme environment with unique investment opportunities.", opportunities: [
-        { id: "nrl-1", title: "Nornickel Strategic Partnership", sector: "Mining", description: "Nickel, palladium, and copper supply agreements. Critical minerals for Chinese EV industry.", investmentRange: "$100M - $1B", timeline: "5-10 years", status: "priority" },
-        { id: "nrl-2", title: "Mining Technology", sector: "Technology", description: "Autonomous mining equipment and Arctic technology. Harsh environment solutions.", investmentRange: "$20M - $150M", timeline: "3-5 years", status: "active" }
+        { id: "nrl-1", title: "Nornickel Strategic Partnership", titleZh: "诺里尔斯克镍业战略合作", titleRu: "Стратегическое партнёрство с Норникелем", sector: "Mining", description: "Nickel, palladium, and copper supply agreements. Critical minerals for Chinese EV industry.", descriptionZh: "镍、钯和铜供应协议。中国电动汽车行业的关键矿产。", descriptionRu: "Соглашения о поставках никеля, палладия и меди. Критически важные минералы для китайской EV-индустрии.", investmentRange: "$100M - $1B", timeline: "5-10 years", status: "priority" },
+        { id: "nrl-2", title: "Mining Technology", titleZh: "采矿技术", titleRu: "Горнодобывающие технологии", sector: "Technology", description: "Autonomous mining equipment and Arctic technology. Harsh environment solutions.", descriptionZh: "自主采矿设备和北极技术。恶劣环境解决方案。", descriptionRu: "Автономное горное оборудование и арктические технологии. Решения для экстремальных условий.", investmentRange: "$20M - $150M", timeline: "3-5 years", status: "active" }
       ]},
       { id: "achinsk", name: "Achinsk", population: "0.1M", image: "https://images.unsplash.com/photo-1598286867762-8bde84aae1e3?w=1920&q=80", description: "Industrial city on the Trans-Siberian Railway. Aluminum and cement production. Growing logistics importance for eastbound freight.", opportunities: [
-        { id: "ach-1", title: "Trans-Siberian Logistics Hub", sector: "Logistics", description: "Warehousing and transshipment on main rail corridor to Asia.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" }
+        { id: "ach-1", title: "Trans-Siberian Logistics Hub", titleZh: "西伯利亚大铁路物流枢纽", titleRu: "Транссибирский логистический хаб", sector: "Logistics", description: "Warehousing and transshipment on main rail corridor to Asia.", descriptionZh: "主要铁路走廊上通往亚洲的仓储和转运。", descriptionRu: "Складирование и перевалка на главном железнодорожном коридоре в Азию.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" }
       ]}
     ],
     overview: "Vast Siberian region with enormous mineral wealth. Norilsk Nickel is world's largest nickel and palladium producer. Major aluminum (RUSAL) and hydropower production. Growing Arctic development importance.",
     targetSectors: ["Mining", "Aluminum", "Hydropower", "Arctic Development", "Forestry"],
     opportunities: [
-      { id: "kr-1", title: "Nornickel Expansion Partnership", sector: "Mining", description: "Nickel, palladium, and copper mining technology and equipment. Green mining initiatives.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" },
-      { id: "kr-2", title: "RUSAL Aluminum Partnership", sector: "Aluminum", description: "Aluminum smelting and processing. World's lowest-cost aluminum production using hydropower.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "active" },
-      { id: "kr-3", title: "Siberian Forestry Modernization", sector: "Forestry", description: "Sustainable forestry and wood processing. Export to China.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
+      { id: "kr-1", title: "Nornickel Expansion Partnership", titleZh: "诺里尔斯克镍业扩展合作", titleRu: "Партнёрство по расширению Норникеля", sector: "Mining", description: "Nickel, palladium, and copper mining technology and equipment. Green mining initiatives.", descriptionZh: "镍、钯和铜采矿技术及设备。绿色采矿倡议。", descriptionRu: "Технологии и оборудование для добычи никеля, палладия и меди. Инициативы зелёной добычи.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" },
+      { id: "kr-2", title: "RUSAL Aluminum Partnership", titleZh: "俄铝合作项目", titleRu: "Партнёрство с РУСАЛом", sector: "Aluminum", description: "Aluminum smelting and processing. World's lowest-cost aluminum production using hydropower.", descriptionZh: "铝冶炼和加工。利用水力发电的全球最低成本铝生产。", descriptionRu: "Выплавка и переработка алюминия. Производство с самой низкой себестоимостью в мире благодаря гидроэнергетике.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "active" },
+      { id: "kr-3", title: "Siberian Forestry Modernization", titleZh: "西伯利亚林业现代化", titleRu: "Модернизация сибирского лесопромышленного комплекса", sector: "Forestry", description: "Sustainable forestry and wood processing. Export to China.", descriptionZh: "可持续林业和木材加工。出口至中国。", descriptionRu: "Устойчивое лесопользование и деревообработка. Экспорт в Китай.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
     ],
     keyProjects: [
       { id: "kr-p1", name: "Nornickel Sulphur Program", value: "$3.5 Billion", sector: "Mining", description: "Environmental modernization capturing 95% of sulphur emissions.", partners: ["Nornickel"], completionYear: "2025" }
@@ -6171,26 +6281,26 @@ export const RUSSIA_REGIONS: Record<string, RegionData> = {
     taxBenefits: ["Agricultural support", "Resort zone benefits", "Investment incentives"],
     majorCities: [
       { id: "krasnodar", name: "Krasnodar", population: "1.1M", image: "https://images.unsplash.com/photo-1568954775058-be47c87a0a20?w=1920&q=80", description: "Capital of Russia's agricultural heartland. Fast-growing modern city with excellent climate. Major food processing and agribusiness center serving southern Russia.", opportunities: [
-        { id: "krd-1", title: "Krasnodar Agribusiness Hub", sector: "Agriculture", description: "Grain, sunflower, and food processing. Partnership with Russia's largest agricultural producers.", investmentRange: "$10M - $150M", timeline: "2-3 years", status: "priority" },
-        { id: "krd-2", title: "Food Processing Cluster", sector: "Food", description: "Modern processing facilities for export to China. Cold chain and packaging.", investmentRange: "$15M - $120M", timeline: "2-4 years", status: "active" },
-        { id: "krd-3", title: "Wine Industry Development", sector: "Wine", description: "Partnership with local wineries. China market export and tourism development.", investmentRange: "$5M - $50M", timeline: "2-3 years", status: "active" }
+        { id: "krd-1", title: "Krasnodar Agribusiness Hub", titleZh: "克拉斯诺达尔农业综合中心", titleRu: "Агропромышленный хаб Краснодара", sector: "Agriculture", description: "Grain, sunflower, and food processing. Partnership with Russia's largest agricultural producers.", descriptionZh: "粮食、葵花籽和食品加工。与俄罗斯最大农业生产商的合作。", descriptionRu: "Зерно, подсолнечник и пищевая переработка. Партнёрство с крупнейшими аграрными производителями России.", investmentRange: "$10M - $150M", timeline: "2-3 years", status: "priority" },
+        { id: "krd-2", title: "Food Processing Cluster", titleZh: "食品加工产业集群", titleRu: "Кластер пищевой переработки", sector: "Food", description: "Modern processing facilities for export to China. Cold chain and packaging.", descriptionZh: "出口中国的现代化加工设施。冷链和包装。", descriptionRu: "Современные перерабатывающие мощности для экспорта в Китай. Холодильная цепь и упаковка.", investmentRange: "$15M - $120M", timeline: "2-4 years", status: "active" },
+        { id: "krd-3", title: "Wine Industry Development", titleZh: "葡萄酒产业发展", titleRu: "Развитие винодельческой отрасли", sector: "Wine", description: "Partnership with local wineries. China market export and tourism development.", descriptionZh: "与当地酒庄的合作。中国市场出口和旅游发展。", descriptionRu: "Партнёрство с местными винодельнями. Экспорт на китайский рынок и развитие туризма.", investmentRange: "$5M - $50M", timeline: "2-3 years", status: "active" }
       ]},
       { id: "sochi", name: "Sochi", population: "0.4M", image: "https://images.unsplash.com/photo-1578070181910-f1e514afdd08?w=1920&q=80", description: "Russia's premier Black Sea resort and 2014 Winter Olympics host. Year-round destination with beaches and ski slopes. World-class sports and entertainment facilities.", opportunities: [
-        { id: "soc-1", title: "Sochi Resort Development", sector: "Tourism", description: "Luxury hotels and resort facilities. Growing Chinese tourist segment.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" },
-        { id: "soc-2", title: "Olympic Legacy Sports Hub", sector: "Sports", description: "Sports training and event facilities. Formula 1 circuit and ski resorts.", investmentRange: "$15M - $150M", timeline: "2-4 years", status: "active" },
-        { id: "soc-3", title: "Medical Tourism", sector: "Healthcare", description: "Wellness resorts and medical tourism. Traditional Russian spa treatments.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "upcoming" }
+        { id: "soc-1", title: "Sochi Resort Development", titleZh: "索契度假村开发", titleRu: "Развитие курортов Сочи", sector: "Tourism", description: "Luxury hotels and resort facilities. Growing Chinese tourist segment.", descriptionZh: "豪华酒店和度假设施。不断增长的中国游客群体。", descriptionRu: "Люксовые отели и курортная инфраструктура. Растущий сегмент китайских туристов.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" },
+        { id: "soc-2", title: "Olympic Legacy Sports Hub", titleZh: "奥运遗产体育中心", titleRu: "Олимпийский спортивный наследственный хаб", sector: "Sports", description: "Sports training and event facilities. Formula 1 circuit and ski resorts.", descriptionZh: "体育训练和赛事设施。F1赛道和滑雪度假村。", descriptionRu: "Спортивные тренировочные и событийные объекты. Трасса Формулы-1 и горнолыжные курорты.", investmentRange: "$15M - $150M", timeline: "2-4 years", status: "active" },
+        { id: "soc-3", title: "Medical Tourism", titleZh: "医疗旅游", titleRu: "Медицинский туризм", sector: "Healthcare", description: "Wellness resorts and medical tourism. Traditional Russian spa treatments.", descriptionZh: "健康度假村和医疗旅游。传统俄罗斯水疗。", descriptionRu: "Велнес-курорты и медицинский туризм. Традиционные российские спа-процедуры.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "upcoming" }
       ]},
       { id: "novorossiysk", name: "Novorossiysk", population: "0.3M", image: "https://images.unsplash.com/photo-1562073853-7d6039f3cb8a?w=1920&q=80", description: "Russia's largest Black Sea port handling 25% of seaborne trade. Major grain export terminal and oil terminal. Key logistics hub for southern Russia.", opportunities: [
-        { id: "nvr-1", title: "Novorossiysk Container Terminal", sector: "Logistics", description: "Container handling expansion for China trade via Suez Canal route.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" },
-        { id: "nvr-2", title: "Grain Export Terminal", sector: "Agriculture", description: "Grain export facilities for Russian wheat to global markets.", investmentRange: "$30M - $200M", timeline: "2-4 years", status: "active" }
+        { id: "nvr-1", title: "Novorossiysk Container Terminal", titleZh: "新罗西斯克集装箱码头", titleRu: "Контейнерный терминал Новороссийска", sector: "Logistics", description: "Container handling expansion for China trade via Suez Canal route.", descriptionZh: "通过苏伊士运河航线扩大中国贸易的集装箱处理能力。", descriptionRu: "Расширение контейнерных мощностей для торговли с Китаем через Суэцкий канал.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "priority" },
+        { id: "nvr-2", title: "Grain Export Terminal", titleZh: "粮食出口码头", titleRu: "Зерновой экспортный терминал", sector: "Agriculture", description: "Grain export facilities for Russian wheat to global markets.", descriptionZh: "俄罗斯小麦出口至全球市场的粮食出口设施。", descriptionRu: "Зерновые экспортные мощности для российской пшеницы на мировые рынки.", investmentRange: "$30M - $200M", timeline: "2-4 years", status: "active" }
       ]}
     ],
     overview: "Russia's agricultural heartland and Black Sea resort region. Sochi hosted 2014 Winter Olympics. Novorossiysk is Russia's largest port. Warm climate attracts millions of tourists and agricultural investment.",
     targetSectors: ["Agriculture", "Tourism", "Food Processing", "Wine", "Port & Logistics"],
     opportunities: [
-      { id: "kd-1", title: "Krasnodar Agricultural Investment", sector: "Agriculture", description: "Grain, sunflower, and vegetable production. Largest agricultural region in Russia.", investmentRange: "$10M - $200M", timeline: "2-4 years", status: "priority" },
-      { id: "kd-2", title: "Sochi Resort Development", sector: "Tourism", description: "Hotels, resorts, and tourism infrastructure. Olympic legacy facilities.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" },
-      { id: "kd-3", title: "Novorossiysk Port Expansion", sector: "Logistics", description: "Container terminal and grain export facilities. China trade gateway.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" }
+      { id: "kd-1", title: "Krasnodar Agricultural Investment", titleZh: "克拉斯诺达尔农业投资", titleRu: "Сельскохозяйственные инвестиции в Краснодар", sector: "Agriculture", description: "Grain, sunflower, and vegetable production. Largest agricultural region in Russia.", descriptionZh: "粮食、葵花籽和蔬菜生产。俄罗斯最大的农业区。", descriptionRu: "Производство зерна, подсолнечника и овощей. Крупнейший аграрный регион России.", investmentRange: "$10M - $200M", timeline: "2-4 years", status: "priority" },
+      { id: "kd-2", title: "Sochi Resort Development", titleZh: "索契度假村开发", titleRu: "Развитие курортов Сочи", sector: "Tourism", description: "Hotels, resorts, and tourism infrastructure. Olympic legacy facilities.", descriptionZh: "酒店、度假村和旅游基础设施。奥运遗产设施。", descriptionRu: "Отели, курорты и туристическая инфраструктура. Олимпийские наследственные объекты.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" },
+      { id: "kd-3", title: "Novorossiysk Port Expansion", titleZh: "新罗西斯克港口扩建", titleRu: "Расширение порта Новороссийск", sector: "Logistics", description: "Container terminal and grain export facilities. China trade gateway.", descriptionZh: "集装箱码头和粮食出口设施。中国贸易门户。", descriptionRu: "Контейнерный терминал и зерновые экспортные мощности. Ворота торговли с Китаем.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" }
     ],
     keyProjects: [
       { id: "kd-p1", name: "Sochi-Adler Tourism Cluster", value: "$1 Billion", sector: "Tourism", description: "Year-round resort development.", completionYear: "2028" }
@@ -6214,26 +6324,26 @@ export const RUSSIA_REGIONS: Record<string, RegionData> = {
     majorCities: [
       { id: "vladivostok", name: "Vladivostok", population: "0.6M", lat: 43.1155, lng: 131.8855, image: "https://images.unsplash.com/photo-1606761568499-6d2451b23c66?w=1920&q=80", description: "Russia's Pacific capital and gateway to Asia. Free Port of Vladivostok offers unique investment incentives. 2 hours from Harbin, direct connections to all major Asian cities. Eastern Economic Forum host.", opportunities: [
         { id: "vlk-1", title: "Free Port of Vladivostok", titleRu: "Свободный порт Владивосток", titleZh: "符拉迪沃斯托克自由港", sector: "Trade", description: "Simplified visa, customs, and tax regime. Gateway for China-Russia-Asia trade. Duty-free processing zones.", descriptionRu: "Упрощённый визовый, таможенный и налоговый режим. Ворота для торговли Китай-Россия-Азия. Беспошлинные зоны переработки.", descriptionZh: "简化签证、海关和税收制度。中俄亚贸易门户。免税加工区。", investmentRange: "$5M - $100M", timeline: "1-2 years", status: "priority" },
-        { id: "vlk-2", title: "Vladivostok Port Expansion", sector: "Logistics", description: "Container terminal and logistics hub. Direct shipping to all Chinese ports.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "priority" },
-        { id: "vlk-3", title: "Casino & Tourism Zone", sector: "Tourism", description: "Primorye integrated entertainment resort. Gaming license and resort development.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" },
-        { id: "vlk-4", title: "Seafood Processing Hub", sector: "Food", description: "Fish and seafood processing for China market. Cold chain and export facilities.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" }
+        { id: "vlk-2", title: "Vladivostok Port Expansion", titleZh: "符拉迪沃斯托克港口扩建", titleRu: "Расширение порта Владивосток", sector: "Logistics", description: "Container terminal and logistics hub. Direct shipping to all Chinese ports.", descriptionZh: "集装箱码头和物流枢纽。直接发运至所有中国港口。", descriptionRu: "Контейнерный терминал и логистический хаб. Прямые поставки во все китайские порты.", investmentRange: "$30M - $300M", timeline: "3-5 years", status: "priority" },
+        { id: "vlk-3", title: "Casino & Tourism Zone", titleZh: "赌场与旅游区", titleRu: "Казино и туристическая зона", sector: "Tourism", description: "Primorye integrated entertainment resort. Gaming license and resort development.", descriptionZh: "滨海边疆区综合娱乐度假村。博彩牌照和度假村开发。", descriptionRu: "Интегрированный развлекательный курорт Приморье. Игорная лицензия и развитие курорта.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" },
+        { id: "vlk-4", title: "Seafood Processing Hub", titleZh: "海产品加工中心", titleRu: "Хаб переработки морепродуктов", sector: "Food", description: "Fish and seafood processing for China market. Cold chain and export facilities.", descriptionZh: "面向中国市场的鱼类和海产品加工。冷链和出口设施。", descriptionRu: "Переработка рыбы и морепродуктов для китайского рынка. Холодильная цепь и экспортные мощности.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" }
       ]},
       { id: "nakhodka", name: "Nakhodka", population: "0.1M", image: "https://images.unsplash.com/photo-1569335468083-1b4c4b5e6fd0?w=1920&q=80", description: "Major Pacific port with ice-free harbor. Key terminus for Russian exports to Asia. Growing oil and LNG export terminal operations.", opportunities: [
-        { id: "nak-1", title: "Nakhodka Oil Terminal", sector: "Energy", description: "Oil export terminal operations and logistics. Russian crude to China.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" },
-        { id: "nak-2", title: "Container Port Development", sector: "Logistics", description: "Container handling expansion for trans-Pacific trade.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" }
+        { id: "nak-1", title: "Nakhodka Oil Terminal", titleZh: "纳霍德卡石油码头", titleRu: "Нефтяной терминал Находки", sector: "Energy", description: "Oil export terminal operations and logistics. Russian crude to China.", descriptionZh: "石油出口码头运营和物流。俄罗斯原油出口至中国。", descriptionRu: "Операции нефтяного экспортного терминала и логистика. Российская нефть в Китай.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" },
+        { id: "nak-2", title: "Container Port Development", titleZh: "集装箱港口开发", titleRu: "Развитие контейнерного порта", sector: "Logistics", description: "Container handling expansion for trans-Pacific trade.", descriptionZh: "跨太平洋贸易的集装箱处理能力扩展。", descriptionRu: "Расширение контейнерных мощностей для транстихоокеанской торговли.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "active" }
       ]},
       { id: "ussuriysk", name: "Ussuriysk", population: "0.2M", image: "https://images.unsplash.com/photo-1602746280895-acb6f3b8a01a?w=1920&q=80", description: "Major rail junction and agricultural center near Chinese border. Processing hub for agricultural products and manufacturing gateway for Chinese goods entering Russia.", opportunities: [
-        { id: "uss-1", title: "Border Trade Processing Zone", sector: "Trade", description: "Processing and packaging for China-sourced goods. Rail transfer and logistics.", investmentRange: "$5M - $60M", timeline: "1-2 years", status: "priority" },
-        { id: "uss-2", title: "Agricultural Processing", sector: "Agriculture", description: "Soybean, rice, and honey processing for export. Food industry cluster.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" }
+        { id: "uss-1", title: "Border Trade Processing Zone", titleZh: "边境贸易加工区", titleRu: "Зона пограничной торговой переработки", sector: "Trade", description: "Processing and packaging for China-sourced goods. Rail transfer and logistics.", descriptionZh: "中国来源商品的加工和包装。铁路转运和物流。", descriptionRu: "Переработка и упаковка китайских товаров. Железнодорожная перевалка и логистика.", investmentRange: "$5M - $60M", timeline: "1-2 years", status: "priority" },
+        { id: "uss-2", title: "Agricultural Processing", titleZh: "农产品加工", titleRu: "Сельскохозяйственная переработка", sector: "Agriculture", description: "Soybean, rice, and honey processing for export. Food industry cluster.", descriptionZh: "大豆、大米和蜂蜜出口加工。食品产业集群。", descriptionRu: "Переработка сои, риса и мёда на экспорт. Кластер пищевой промышленности.", investmentRange: "$10M - $80M", timeline: "2-3 years", status: "active" }
       ]}
     ],
     overview: "Russia's Pacific gateway and closest major Russian city to China. Vladivostok hosts Eastern Economic Forum. Free Port regime with visa-free entry, tax benefits, and simplified customs. Direct border crossing to Heilongjiang and Jilin provinces.",
     targetSectors: ["Shipping & Logistics", "Fishing", "China Border Trade", "Shipbuilding", "Tourism"],
     opportunities: [
-      { id: "pk-1", title: "Free Port of Vladivostok", sector: "Trade", description: "Tax-free zone with simplified customs, visa-free entry for 18 countries, 0% import duties for SEZ goods. Gateway for China-Russia trade.", investmentRange: "$10M - $300M", timeline: "1-3 years", status: "priority" },
-      { id: "pk-2", title: "Vladivostok-Harbin Trade Corridor", sector: "Logistics", description: "Cross-border logistics connecting Russian Far East to Northeast China. Rail and road infrastructure.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "priority" },
-      { id: "pk-3", title: "Russian Seafood Export Hub", sector: "Fishing", description: "Fishing fleet investment and seafood processing for China market. Russia supplies 10% of China's seafood.", investmentRange: "$10M - $150M", timeline: "2-4 years", status: "active" },
-      { id: "pk-4", title: "Zvezda Shipyard Partnership", sector: "Shipbuilding", description: "LNG carriers, tankers, and icebreakers at Russia's largest shipyard.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" }
+      { id: "pk-1", title: "Free Port of Vladivostok", titleZh: "符拉迪沃斯托克自由港", titleRu: "Свободный порт Владивосток", sector: "Trade", description: "Tax-free zone with simplified customs, visa-free entry for 18 countries, 0% import duties for SEZ goods. Gateway for China-Russia trade.", descriptionZh: "免税区，海关简化，18国免签入境，经济特区商品零进口关税。中俄贸易门户。", descriptionRu: "Безналоговая зона с упрощённой таможней, безвизовый въезд для 18 стран, 0% пошлины для товаров ОЭЗ. Ворота китайско-российской торговли.", investmentRange: "$10M - $300M", timeline: "1-3 years", status: "priority" },
+      { id: "pk-2", title: "Vladivostok-Harbin Trade Corridor", titleZh: "符拉迪沃斯托克-哈尔滨贸易走廊", titleRu: "Торговый коридор Владивосток-Харбин", sector: "Logistics", description: "Cross-border logistics connecting Russian Far East to Northeast China. Rail and road infrastructure.", descriptionZh: "连接俄罗斯远东与中国东北的跨境物流。铁路和公路基础设施。", descriptionRu: "Трансграничная логистика, соединяющая российский Дальний Восток с Северо-Восточным Китаем. Железнодорожная и автодорожная инфраструктура.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "priority" },
+      { id: "pk-3", title: "Russian Seafood Export Hub", titleZh: "俄罗斯海产品出口中心", titleRu: "Российский хаб экспорта морепродуктов", sector: "Fishing", description: "Fishing fleet investment and seafood processing for China market. Russia supplies 10% of China's seafood.", descriptionZh: "渔船投资和面向中国市场的海产品加工。俄罗斯供应中国10%的海产品。", descriptionRu: "Инвестиции в рыболовный флот и переработка морепродуктов для китайского рынка. Россия поставляет 10% морепродуктов Китая.", investmentRange: "$10M - $150M", timeline: "2-4 years", status: "active" },
+      { id: "pk-4", title: "Zvezda Shipyard Partnership", titleZh: "红星造船厂合作", titleRu: "Партнёрство с судоверфью Звезда", sector: "Shipbuilding", description: "LNG carriers, tankers, and icebreakers at Russia's largest shipyard.", descriptionZh: "在俄罗斯最大造船厂建造LNG运输船、油轮和破冰船。", descriptionRu: "СПГ-танкеры, нефтеналивные танкеры и ледоколы на крупнейшей судоверфи России.", investmentRange: "$50M - $500M", timeline: "3-5 years", status: "active" }
     ],
     keyProjects: [
       { id: "pk-p1", name: "Eastern Economic Forum Infrastructure", value: "$2 Billion", sector: "Infrastructure", description: "Vladivostok development as Russia-Asia business hub.", completionYear: "2030" },
@@ -6258,21 +6368,21 @@ export const RUSSIA_REGIONS: Record<string, RegionData> = {
     taxBenefits: ["PSA benefits", "Far East incentives", "LNG project support"],
     majorCities: [
       { id: "yuzhno-sakhalinsk", name: "Yuzhno-Sakhalinsk", population: "0.2M", image: "https://images.unsplash.com/photo-1551845041-63e8e76836ea?w=1920&q=80", description: "Capital of Russia's richest Far Eastern region. Oil and gas service center with Japanese heritage. Gateway to massive offshore energy projects.", opportunities: [
-        { id: "ysk-1", title: "Oil & Gas Service Hub", sector: "Energy Services", description: "Service base for Sakhalin offshore projects. Equipment, logistics, and technical services.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "priority" },
-        { id: "ysk-2", title: "LNG Terminal Operations", sector: "LNG", description: "LNG export operations and maintenance. Ship loading and storage services.", investmentRange: "$50M - $400M", timeline: "3-5 years", status: "active" },
-        { id: "ysk-3", title: "Sakhalin Tech Services", sector: "IT", description: "Remote operations and digital oilfield services. Arctic technology development.", investmentRange: "$5M - $50M", timeline: "1-3 years", status: "active" }
+        { id: "ysk-1", title: "Oil & Gas Service Hub", titleZh: "油气服务中心", titleRu: "Хаб нефтегазовых услуг", sector: "Energy Services", description: "Service base for Sakhalin offshore projects. Equipment, logistics, and technical services.", descriptionZh: "萨哈林近海项目的服务基地。设备、物流和技术服务。", descriptionRu: "Сервисная база для шельфовых проектов Сахалина. Оборудование, логистика и технические услуги.", investmentRange: "$20M - $200M", timeline: "2-4 years", status: "priority" },
+        { id: "ysk-2", title: "LNG Terminal Operations", titleZh: "LNG码头运营", titleRu: "Операции СПГ-терминала", sector: "LNG", description: "LNG export operations and maintenance. Ship loading and storage services.", descriptionZh: "LNG出口运营和维护。船舶装载和储存服务。", descriptionRu: "Экспортные операции СПГ и техническое обслуживание. Услуги по погрузке и хранению.", investmentRange: "$50M - $400M", timeline: "3-5 years", status: "active" },
+        { id: "ysk-3", title: "Sakhalin Tech Services", titleZh: "萨哈林技术服务", titleRu: "Технические услуги Сахалина", sector: "IT", description: "Remote operations and digital oilfield services. Arctic technology development.", descriptionZh: "远程操作和数字油田服务。北极技术开发。", descriptionRu: "Дистанционное управление и цифровые нефтепромысловые услуги. Разработка арктических технологий.", investmentRange: "$5M - $50M", timeline: "1-3 years", status: "active" }
       ]},
       { id: "korsakov", name: "Korsakov", population: "0.03M", image: "https://images.unsplash.com/photo-1569335468083-1b4c4b5e6fd0?w=1920&q=80", description: "Major port city and LNG export terminal. Gateway for Sakhalin-2 project shipments to Asia.", opportunities: [
-        { id: "kor-1", title: "Korsakov LNG Transshipment", sector: "LNG", description: "LNG transshipment and bunkering services. Arctic route support.", investmentRange: "$30M - $250M", timeline: "3-5 years", status: "priority" },
-        { id: "kor-2", title: "Seafood Processing Complex", sector: "Fishing", description: "Premium crab and salmon processing. Direct export to Chinese markets.", investmentRange: "$15M - $100M", timeline: "2-3 years", status: "active" }
+        { id: "kor-1", title: "Korsakov LNG Transshipment", titleZh: "科尔萨科夫LNG转运", titleRu: "Перевалка СПГ в Корсакове", sector: "LNG", description: "LNG transshipment and bunkering services. Arctic route support.", descriptionZh: "LNG转运和加注服务。北极航线支持。", descriptionRu: "Услуги перевалки и бункеровки СПГ. Поддержка арктических маршрутов.", investmentRange: "$30M - $250M", timeline: "3-5 years", status: "priority" },
+        { id: "kor-2", title: "Seafood Processing Complex", titleZh: "海产品加工中心", titleRu: "Комплекс переработки морепродуктов", sector: "Fishing", description: "Premium crab and salmon processing. Direct export to Chinese markets.", descriptionZh: "优质蟹和三文鱼加工。直接出口至中国市场。", descriptionRu: "Переработка премиального краба и лосося. Прямой экспорт на китайские рынки.", investmentRange: "$15M - $100M", timeline: "2-3 years", status: "active" }
       ]}
     ],
     overview: "Island region with massive offshore oil and gas resources. Major LNG exporter to Asia. Sakhalin-1 and Sakhalin-2 are among world's largest integrated oil and gas projects. Strategic location for Asia energy supply.",
     targetSectors: ["Oil & Gas", "LNG", "Fishing", "Mining", "Hydrogen"],
     opportunities: [
-      { id: "sk-1", title: "Sakhalin LNG Expansion", sector: "LNG", description: "LNG plant expansion and Asian export infrastructure. Direct shipments to China LNG terminals.", investmentRange: "$100M - $1B", timeline: "5-10 years", status: "priority" },
-      { id: "sk-2", title: "Sakhalin Hydrogen Hub", sector: "Hydrogen", description: "Blue and green hydrogen production for Asian markets. Leverage existing gas infrastructure.", investmentRange: "$50M - $500M", timeline: "5-10 years", status: "upcoming" },
-      { id: "sk-3", title: "Sakhalin Seafood Processing", sector: "Fishing", description: "Premium crab and salmon processing for Chinese market.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
+      { id: "sk-1", title: "Sakhalin LNG Expansion", titleZh: "萨哈林LNG扩建", titleRu: "Расширение сахалинского СПГ", sector: "LNG", description: "LNG plant expansion and Asian export infrastructure. Direct shipments to China LNG terminals.", descriptionZh: "LNG工厂扩建和亚洲出口基础设施。直接发运至中国LNG码头。", descriptionRu: "Расширение СПГ-завода и экспортная инфраструктура для Азии. Прямые поставки на китайские СПГ-терминалы.", investmentRange: "$100M - $1B", timeline: "5-10 years", status: "priority" },
+      { id: "sk-2", title: "Sakhalin Hydrogen Hub", titleZh: "萨哈林氢能中心", titleRu: "Сахалинский водородный хаб", sector: "Hydrogen", description: "Blue and green hydrogen production for Asian markets. Leverage existing gas infrastructure.", descriptionZh: "面向亚洲市场的蓝氢和绿氢生产。利用现有天然气基础设施。", descriptionRu: "Производство голубого и зелёного водорода для азиатских рынков. Использование существующей газовой инфраструктуры.", investmentRange: "$50M - $500M", timeline: "5-10 years", status: "upcoming" },
+      { id: "sk-3", title: "Sakhalin Seafood Processing", titleZh: "萨哈林海产品加工", titleRu: "Переработка морепродуктов Сахалина", sector: "Fishing", description: "Premium crab and salmon processing for Chinese market.", descriptionZh: "面向中国市场的优质蟹和三文鱼加工。", descriptionRu: "Переработка премиального краба и лосося для китайского рынка.", investmentRange: "$10M - $100M", timeline: "2-4 years", status: "active" }
     ],
     keyProjects: [
       { id: "sk-p1", name: "Sakhalin Energy LNG Train 3", value: "$10 Billion", sector: "LNG", description: "Additional LNG production capacity.", partners: ["Sakhalin Energy"], completionYear: "2030" }
@@ -6442,160 +6552,6 @@ export function getRegionData(regionName: string, country: 'CN' | 'RU'): RegionD
   }
   
   return null;
-}
-`;
-}
-
-function generateCurrencyConverter(): string {
-  return `"use client";
-
-import { useState, useEffect } from 'react';
-import { useTranslations } from 'next-intl';
-import { motion } from 'framer-motion';
-import { ArrowLeftRight, RefreshCw } from 'lucide-react';
-
-const CURRENCIES = ['USD', 'CNY', 'RUB'] as const;
-type Currency = typeof CURRENCIES[number];
-
-const CURRENCY_SYMBOLS: Record<Currency, string> = {
-  USD: '$',
-  CNY: '¥',
-  RUB: '₽',
-};
-
-const CURRENCY_NAMES: Record<string, Record<Currency, string>> = {
-  en: { USD: 'US Dollar', CNY: 'Chinese Yuan', RUB: 'Russian Ruble' },
-  ru: { USD: 'Доллар США', CNY: 'Китайский юань', RUB: 'Российский рубль' },
-  zh: { USD: '美元', CNY: '人民币', RUB: '俄罗斯卢布' },
-};
-
-export function CurrencyConverter() {
-  const t = useTranslations('widgets');
-  const [amount, setAmount] = useState<string>('1000');
-  const [fromCurrency, setFromCurrency] = useState<Currency>('USD');
-  const [toCurrency, setToCurrency] = useState<Currency>('CNY');
-  const [rates, setRates] = useState<Record<Currency, number>>({ USD: 1, CNY: 7.25, RUB: 92.5 });
-  const [loading, setLoading] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-
-  const fetchRates = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
-      const data = await response.json();
-      setRates({
-        USD: 1,
-        CNY: data.rates.CNY || 7.25,
-        RUB: data.rates.RUB || 92.5,
-      });
-      setLastUpdated(new Date());
-    } catch {
-      console.info('Using fallback rates');
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchRates();
-  }, []);
-
-  const convert = (value: number, from: Currency, to: Currency): number => {
-    const inUSD = value / rates[from];
-    return inUSD * rates[to];
-  };
-
-  const result = convert(parseFloat(amount) || 0, fromCurrency, toCurrency);
-
-  const swapCurrencies = () => {
-    setFromCurrency(toCurrency);
-    setToCurrency(fromCurrency);
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700"
-    >
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-white">{t('currencyConverter')}</h3>
-        <button
-          onClick={fetchRates}
-          disabled={loading}
-          className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-        >
-          <RefreshCw className={\`w-4 h-4 \${loading ? 'animate-spin' : ''}\`} />
-        </button>
-      </div>
-
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm text-slate-400 mb-1">{t('amount')}</label>
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="flex-1">
-            <label className="block text-sm text-slate-400 mb-1">{t('from')}</label>
-            <select
-              value={fromCurrency}
-              onChange={(e) => setFromCurrency(e.target.value as Currency)}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              {CURRENCIES.map((curr) => (
-                <option key={curr} value={curr}>
-                  {CURRENCY_SYMBOLS[curr]} {curr}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            onClick={swapCurrencies}
-            className="mt-6 p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-          >
-            <ArrowLeftRight className="w-5 h-5" />
-          </button>
-
-          <div className="flex-1">
-            <label className="block text-sm text-slate-400 mb-1">{t('to')}</label>
-            <select
-              value={toCurrency}
-              onChange={(e) => setToCurrency(e.target.value as Currency)}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              {CURRENCIES.map((curr) => (
-                <option key={curr} value={curr}>
-                  {CURRENCY_SYMBOLS[curr]} {curr}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="bg-slate-700/50 rounded-lg p-4">
-          <div className="text-sm text-slate-400">{t('result')}</div>
-          <div className="text-2xl font-bold text-white">
-            {CURRENCY_SYMBOLS[toCurrency]} {result.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-          </div>
-          <div className="text-xs text-slate-500 mt-1">
-            1 {fromCurrency} = {convert(1, fromCurrency, toCurrency).toFixed(4)} {toCurrency}
-          </div>
-        </div>
-
-        {lastUpdated && (
-          <div className="text-xs text-slate-500 text-center">
-            {t('lastUpdated')}: {lastUpdated.toLocaleTimeString()}
-          </div>
-        )}
-      </div>
-    </motion.div>
-  );
 }
 `;
 }
@@ -7514,11 +7470,11 @@ export function ContactForm() {
               className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">{t('selectRange')}</option>
-              <option value="<1M">{"< $1 Million"}</option>
-              <option value="1-10M">$1 - $10 Million</option>
-              <option value="10-50M">$10 - $50 Million</option>
-              <option value="50-100M">$50 - $100 Million</option>
-              <option value=">100M">{"> $100 Million"}</option>
+              <option value="<1M">{t('investmentRanges.under1m')}</option>
+              <option value="1-10M">{t('investmentRanges.1to10m')}</option>
+              <option value="10-50M">{t('investmentRanges.10to50m')}</option>
+              <option value="50-100M">{t('investmentRanges.50to100m')}</option>
+              <option value=">100M">{t('investmentRanges.over100m')}</option>
             </select>
           </div>
         </div>

@@ -863,18 +863,28 @@ export interface Organization {
   id: string;
   name: string;
   nameLocal?: string;
+  nameZh?: string;
+  nameRu?: string;
   level: "national" | "regional" | "municipal";
   website: string;
   description: string;
+  descriptionZh?: string;
+  descriptionRu?: string;
 }
 
 export interface TradeEvent {
   id: string;
   title: string;
+  titleZh?: string;
+  titleRu?: string;
   date: string;
   endDate?: string;
   location: string;
+  locationZh?: string;
+  locationRu?: string;
   description: string;
+  descriptionZh?: string;
+  descriptionRu?: string;
   url?: string;
   country: CountryCode;
 }
@@ -1962,28 +1972,44 @@ export const ORGANIZATIONS: Record<CountryCode, Organization[]> = {
       id: "1",
       name: "Ministry of Commerce (MOFCOM)",
       nameLocal: "商务部",
+      nameZh: "商务部",
+      nameRu: "Министерство коммерции КНР (MOFCOM)",
       level: "national",
       website: "http://www.mofcom.gov.cn",
       description:
         "Central government ministry formulating trade policies, managing foreign investment, and overseeing international economic cooperation.",
+      descriptionZh:
+        "负责制定贸易政策、管理外商投资和监督国际经济合作的中央政府部委。",
+      descriptionRu:
+        "Центральное правительственное министерство, формирующее торговую политику, управляющее иностранными инвестициями и курирующее международное экономическое сотрудничество.",
     },
     {
       id: "2",
       name: "China Council for Promotion of International Trade (CCPIT)",
       nameLocal: "中国国际贸易促进委员会",
+      nameZh: "中国国际贸易促进委员会",
+      nameRu: "Китайский совет по содействию международной торговле (CCPIT)",
       level: "national",
       website: "http://www.ccpit.org",
       description:
         "China's largest trade promotion organization. Issues certificates of origin, organizes trade delegations.",
+      descriptionZh: "中国最大的贸易促进组织。颁发原产地证书，组织贸易代表团。",
+      descriptionRu:
+        "Крупнейшая организация Китая по содействию торговле. Выдаёт сертификаты происхождения, организует торговые делегации.",
     },
     {
       id: "3",
       name: "China Chamber of International Commerce (CCOIC)",
       nameLocal: "中国国际商会",
+      nameZh: "中国国际商会",
+      nameRu: "Китайская палата международной торговли (CCOIC)",
       level: "national",
       website: "http://www.ccoic.cn",
       description:
         "National business organization representing Chinese enterprises in international trade.",
+      descriptionZh: "代表中国企业参与国际贸易的全国性商业组织。",
+      descriptionRu:
+        "Национальная бизнес-организация, представляющая китайские предприятия в международной торговле.",
     },
   ],
   RU: [
@@ -1991,28 +2017,43 @@ export const ORGANIZATIONS: Record<CountryCode, Organization[]> = {
       id: "1",
       name: "Ministry of Economic Development",
       nameLocal: "Минэкономразвития России",
+      nameZh: "俄罗斯经济发展部",
+      nameRu: "Министерство экономического развития России",
       level: "national",
       website: "https://economy.gov.ru",
       description:
         "Federal ministry for economic strategy, investment climate, and special economic zones.",
+      descriptionZh: "负责经济战略、投资环境和经济特区的联邦部委。",
+      descriptionRu:
+        "Федеральное министерство по экономической стратегии, инвестиционному климату и особым экономическим зонам.",
     },
     {
       id: "2",
       name: "Russian Export Center (REC)",
       nameLocal: "Российский экспортный центр",
+      nameZh: "俄罗斯出口中心",
+      nameRu: "Российский экспортный центр (РЭЦ)",
       level: "national",
       website: "https://exportcenter.ru",
       description:
         "State institution providing export financing, insurance, and support services.",
+      descriptionZh: "提供出口融资、保险和支持服务的国家机构。",
+      descriptionRu:
+        "Государственный институт, предоставляющий экспортное финансирование, страхование и услуги поддержки.",
     },
     {
       id: "3",
       name: "Russian Direct Investment Fund (RDIF)",
       nameLocal: "РФПИ",
+      nameZh: "俄罗斯直接投资基金",
+      nameRu: "Российский фонд прямых инвестиций (РФПИ)",
       level: "national",
       website: "https://rdif.ru",
       description:
         "Russia's sovereign wealth fund co-investing with foreign partners.",
+      descriptionZh: "与外国合作伙伴共同投资的俄罗斯主权财富基金。",
+      descriptionRu:
+        "Суверенный фонд России, осуществляющий совместные инвестиции с иностранными партнёрами.",
     },
   ],
   IN: [
@@ -2347,33 +2388,56 @@ export const TRADE_EVENTS: Record<CountryCode, TradeEvent[]> = {
     {
       id: "1",
       title: "Canton Fair (Spring)",
+      titleZh: "广交会（春季）",
+      titleRu: "Кантонская ярмарка (весна)",
       date: "2026-04-15",
       endDate: "2026-05-05",
       location: "Guangzhou",
+      locationZh: "广州",
+      locationRu: "Гуанчжоу",
       description:
         "China Import and Export Fair - the largest trade fair in China with over 25,000 exhibitors.",
+      descriptionZh:
+        "中国进出口商品交易会——中国最大的贸易展会，参展商超过25,000家。",
+      descriptionRu:
+        "Китайская ярмарка импортных и экспортных товаров — крупнейшая торговая ярмарка в Китае с более чем 25 000 экспонентов.",
       url: "https://www.cantonfair.org.cn",
       country: "CN",
     },
     {
       id: "2",
       title: "China International Import Expo (CIIE)",
+      titleZh: "中国国际进口博览会",
+      titleRu: "Китайская международная импортная выставка (CIIE)",
       date: "2026-11-05",
       endDate: "2026-11-10",
       location: "Shanghai",
+      locationZh: "上海",
+      locationRu: "Шанхай",
       description:
         "World's first import-themed national expo. Platform for foreign companies to access Chinese market.",
+      descriptionZh:
+        "世界首个以进口为主题的国家级博览会。外国企业进入中国市场的平台。",
+      descriptionRu:
+        "Первая в мире национальная выставка, посвящённая импорту. Платформа для иностранных компаний для выхода на китайский рынок.",
       url: "https://www.ciie.org",
       country: "CN",
     },
     {
       id: "3",
       title: "Boao Forum for Asia",
+      titleZh: "博鳌亚洲论坛",
+      titleRu: "Боаоский азиатский форум",
       date: "2026-03-26",
       endDate: "2026-03-29",
       location: "Hainan",
+      locationZh: "海南",
+      locationRu: "Хайнань",
       description:
         "Asia's Davos - premier forum for Asian economic integration.",
+      descriptionZh: "亚洲的达沃斯——亚洲经济一体化的首要论坛。",
+      descriptionRu:
+        "Азиатский Давос — ведущий форум по азиатской экономической интеграции.",
       url: "https://www.boaoforum.org",
       country: "CN",
     },
@@ -2382,33 +2446,55 @@ export const TRADE_EVENTS: Record<CountryCode, TradeEvent[]> = {
     {
       id: "1",
       title: "St. Petersburg International Economic Forum (SPIEF)",
+      titleZh: "圣彼得堡国际经济论坛",
+      titleRu: "Петербургский международный экономический форум (ПМЭФ)",
       date: "2026-06-17",
       endDate: "2026-06-20",
       location: "Saint Petersburg",
+      locationZh: "圣彼得堡",
+      locationRu: "Санкт-Петербург",
       description:
         "Premier annual Russian business forum since 1997. 15,000+ participants from 130+ countries.",
+      descriptionZh:
+        "自1997年以来的俄罗斯首要年度商业论坛。来自130多个国家的15,000多名参与者。",
+      descriptionRu:
+        "Ведущий ежегодный российский бизнес-форум с 1997 года. Более 15 000 участников из 130+ стран.",
       url: "https://forumspb.com",
       country: "RU",
     },
     {
       id: "2",
       title: "Eastern Economic Forum (EEF)",
+      titleZh: "东方经济论坛",
+      titleRu: "Восточный экономический форум (ВЭФ)",
       date: "2026-09-09",
       endDate: "2026-09-12",
       location: "Vladivostok",
+      locationZh: "符拉迪沃斯托克",
+      locationRu: "Владивосток",
       description:
         "Annual forum promoting development of Russian Far East and Asia-Pacific cooperation.",
+      descriptionZh: "促进俄罗斯远东发展和亚太合作的年度论坛。",
+      descriptionRu:
+        "Ежегодный форум, способствующий развитию Дальнего Востока России и сотрудничеству в Азиатско-Тихоокеанском регионе.",
       url: "https://forumvostok.ru",
       country: "RU",
     },
     {
       id: "3",
       title: "INNOPROM Industrial Trade Fair",
+      titleZh: "叶卡捷琳堡国际工业展",
+      titleRu: "ИННОПРОМ",
       date: "2026-07-06",
       endDate: "2026-07-09",
       location: "Ekaterinburg",
+      locationZh: "叶卡捷琳堡",
+      locationRu: "Екатеринбург",
       description:
         "Russia's main industrial exhibition showcasing manufacturing and Industry 4.0 technologies.",
+      descriptionZh: "俄罗斯主要的工业展览，展示制造业和工业4.0技术。",
+      descriptionRu:
+        "Главная промышленная выставка России, демонстрирующая производство и технологии Индустрии 4.0.",
       url: "https://innoprom.com",
       country: "RU",
     },
