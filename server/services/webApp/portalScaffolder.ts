@@ -4297,10 +4297,10 @@ export function RegionDetail({ regionId }: RegionDetailProps) {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold text-white">{project.name}</h3>
+                      <h3 className="text-lg font-semibold text-white">{getLocalizedField(project as unknown as Record<string, unknown>, 'name', locale)}</h3>
                       <span className="px-2 py-1 text-xs font-medium bg-blue-500/20 text-blue-400 rounded">{project.sector}</span>
                     </div>
-                    <p className="text-slate-400 text-sm mb-3">{project.description}</p>
+                    <p className="text-slate-400 text-sm mb-3">{getLocalizedField(project as unknown as Record<string, unknown>, 'description', locale)}</p>
                     {project.partners && project.partners.length > 0 && (
                       <div className="flex items-center gap-2 text-sm text-slate-500">
                         <span>{t('partners')}:</span>
@@ -4351,8 +4351,8 @@ export function RegionDetail({ regionId }: RegionDetailProps) {
                     {getAdvantageIcon(adv.icon)}
                   </div>
                   <div>
-                    <h3 className="font-semibold text-white mb-1">{adv.title}</h3>
-                    <p className="text-slate-400 text-sm">{adv.description}</p>
+                    <h3 className="font-semibold text-white mb-1">{getLocalizedField(adv as unknown as Record<string, unknown>, 'title', locale)}</h3>
+                    <p className="text-slate-400 text-sm">{getLocalizedField(adv as unknown as Record<string, unknown>, 'description', locale)}</p>
                   </div>
                 </div>
               </motion.div>
