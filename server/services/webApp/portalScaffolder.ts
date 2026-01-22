@@ -2705,7 +2705,7 @@ export function RegionMap({ onRegionClick, selectedRegion, cities }: RegionMapPr
   };
 
   return (
-    <div className="w-full h-[500px] bg-slate-800/50 rounded-xl">
+    <div className="w-full h-[700px] bg-slate-800/50 rounded-xl overflow-hidden">
       <ComposableMap
         projection="geoMercator"
         projectionConfig={{ center, scale }}
