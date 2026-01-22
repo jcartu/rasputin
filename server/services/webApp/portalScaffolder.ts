@@ -3706,10 +3706,10 @@ export default function InvestPage() {
   const t = useTranslations('invest');
   const locale = useLocale();
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState<'CN' | 'RU'>(locale === 'zh' ? 'RU' : 'CN');
   
-  // Get regions based on locale (Chinese users see Russia, others see China)
-  const regions = locale === 'zh' ? RUSSIA_REGIONS : CHINA_REGIONS;
-  const targetCountry = locale === 'zh' ? 'Russia' : 'China';
+  const regions = selectedCountry === 'RU' ? RUSSIA_REGIONS : CHINA_REGIONS;
+  const targetCountry = selectedCountry === 'RU' ? 'Russia' : 'China';
   
   // Filter regions based on search
   const filteredRegions = useMemo(() => {
@@ -3745,7 +3745,21 @@ export default function InvestPage() {
           <MapPin className="w-8 h-8 text-white" />
         </div>
         <h1 className="text-4xl font-bold text-white mb-4">{t('title')}</h1>
-        <p className="text-slate-400">{t('selectRegion')}</p>
+        <p className="text-slate-400 mb-6">{t('selectRegion')}</p>
+        <div className="inline-flex bg-slate-800/50 rounded-xl p-1 border border-slate-700">
+          <button
+            onClick={() => setSelectedCountry('CN')}
+            className={\`px-6 py-2.5 rounded-lg font-medium transition-all \${selectedCountry === 'CN' ? 'bg-red-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}\`}
+          >
+            🇨🇳 {locale === 'zh' ? '中国' : locale === 'ru' ? 'Китай' : 'China'}
+          </button>
+          <button
+            onClick={() => setSelectedCountry('RU')}
+            className={\`px-6 py-2.5 rounded-lg font-medium transition-all \${selectedCountry === 'RU' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}\`}
+          >
+            🇷🇺 {locale === 'zh' ? '俄罗斯' : locale === 'ru' ? 'Россия' : 'Russia'}
+          </button>
+        </div>
       </motion.div>
 
       ${
