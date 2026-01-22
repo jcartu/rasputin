@@ -1,10 +1,6 @@
 import { getDb } from "../../db";
-import {
-  learningEvents,
-  proceduralMemories,
-  agentTasks,
-} from "../../../drizzle/schema";
-import { eq, and, desc, sql, like, gte, isNotNull } from "drizzle-orm";
+import { learningEvents, agentTasks } from "../../../drizzle/schema";
+import { eq, and, desc, gte, isNotNull } from "drizzle-orm";
 
 export interface TaskPerformance {
   taskSignature: string;
@@ -249,11 +245,11 @@ interface TaskOutcome {
   toolsUsed: string[];
 }
 
-const taskOutcomeCache = new Map<number, TaskOutcome[]>();
+const _taskOutcomeCache = new Map<number, TaskOutcome[]>();
 
 export async function analyzeSuccessPatterns(
   userId: number,
-  taskQuery: string
+  _taskQuery: string
 ): Promise<PromptOptimization> {
   const optimization: PromptOptimization = {
     optimizedPromptSegments: [],

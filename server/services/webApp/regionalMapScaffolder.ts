@@ -4,10 +4,6 @@ import {
   generateMapComponentCode,
   generateDualMapComponentCode,
   generateRegionPageCode,
-  getMapDependencies,
-  getMapDevDependencies,
-  CHINA_PROVINCES,
-  RUSSIA_REGIONS,
   type MapConfig,
 } from "./mapComponents";
 import {
@@ -48,7 +44,7 @@ export async function scaffoldRegionalMapProject(
     database = "postgresql",
     colorScheme = "blue",
     countries = ["china", "russia"],
-    includeAuth = false,
+    includeAuth: _includeAuth = false,
   } = config;
 
   const projectPath = path.join(outputPath, projectName);
@@ -496,8 +492,8 @@ function writeFile(
 
 function generateHomePageCode(
   projectName: string,
-  countries: string[],
-  colorScheme: string
+  _countries: string[],
+  _colorScheme: string
 ): string {
   return `"use client";
 

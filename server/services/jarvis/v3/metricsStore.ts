@@ -100,28 +100,27 @@ export async function persistConsensusResult(
     .where(eq(consensusVoteLog.proposalId, proposalId));
 }
 
+interface AgentMetrics {
+  tasksCompleted: number;
+  tasksFailed: number;
+  successRate: number;
+  avgDurationMs: number;
+  totalTokensUsed: number;
+  totalCost: number;
+  lastTaskAt: Date | null;
+}
+
 export async function getPersistedAgentMetrics(): Promise<
-  Record<
-    AgentType,
-    {
-      tasksCompleted: number;
-      tasksFailed: number;
-      successRate: number;
-      avgDurationMs: number;
-      totalTokensUsed: number;
-      totalCost: number;
-      lastTaskAt: Date | null;
-    }
-  >
+  Partial<Record<AgentType, AgentMetrics>>
 > {
   const db = await getDb();
-  if (!db) return {} as any;
+  if (!db) return {};
 
   const rows = await db.select().from(swarmAgentMetrics);
 
-  const result: Record<string, any> = {};
+  const result: Partial<Record<AgentType, AgentMetrics>> = {};
   for (const row of rows) {
-    result[row.agentType] = {
+    result[row.agentType as AgentType] = {
       tasksCompleted: row.tasksCompleted,
       tasksFailed: row.tasksFailed,
       successRate: parseFloat(String(row.successRate)),
@@ -132,7 +131,7 @@ export async function getPersistedAgentMetrics(): Promise<
     };
   }
 
-  return result as any;
+  return result;
 }
 
 export async function getRecentConsensusVotes(limit: number = 20): Promise<

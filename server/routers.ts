@@ -1728,7 +1728,7 @@ export const appRouter = router({
           ctx.user.id,
           workspaceId,
           input.name,
-          input.template as any
+          input.template as Parameters<typeof createWorkspace>[3]
         );
 
         // Create database record
@@ -2912,7 +2912,7 @@ export const appRouter = router({
           input.triggerId,
           input.name,
           input.actionType,
-          input.actionConfig as any
+          input.actionConfig as Parameters<typeof eventExecutor.createAction>[3]
         );
       }),
 
@@ -3025,7 +3025,7 @@ export const appRouter = router({
         ]);
 
         return {
-          items: items.map((m: any) => ({
+          items: items.map(m => ({
             id: m.id,
             memoryType: m.memoryType,
             title: m.title,
@@ -3070,7 +3070,7 @@ export const appRouter = router({
         ]);
 
         return {
-          items: items.map((m: any) => ({
+          items: items.map(m => ({
             id: m.id,
             category: m.category,
             subject: m.subject,
@@ -3114,7 +3114,7 @@ export const appRouter = router({
         ]);
 
         return {
-          items: items.map((m: any) => ({
+          items: items.map(m => ({
             id: m.id,
             name: m.name,
             description: m.description,
@@ -3181,7 +3181,7 @@ export const appRouter = router({
         ]);
 
         return {
-          items: items.map((e: any) => ({
+          items: items.map(e => ({
             id: e.id,
             eventType: e.eventType,
             summary: e.summary,

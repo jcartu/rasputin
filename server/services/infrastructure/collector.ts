@@ -382,7 +382,7 @@ export class HealthCollector {
   async addHostToMonitoring(
     userId: number,
     sshHostId: number,
-    checkIntervalMinutes?: number
+    _checkIntervalMinutes?: number
   ): Promise<typeof infrastructureHosts.$inferSelect> {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -427,7 +427,7 @@ export class HealthCollector {
    */
   async removeHostFromMonitoring(
     hostId: number,
-    userId: number
+    _userId: number
   ): Promise<void> {
     const db = await getDb();
     if (!db) return;
@@ -463,7 +463,7 @@ export class HealthCollector {
       throw new Error("Host not found");
     }
 
-    const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
+    const _cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
 
     return db
       .select()

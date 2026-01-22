@@ -814,6 +814,19 @@ export interface FrontierExecutorOptions {
   onThinkingChunk?: (chunk: string) => void;
 }
 
+const MAX_SWARM_ITERATIONS = 10;
+
+const FILE_REQUEST_KEYWORDS =
+  /\b(file|md|markdown|document|report|save|write|create.*file|output.*file|analysis|dashboard|forecast|outlook|summary|comprehensive|in-depth|detailed)\b/i;
+const FILE_WRITE_TOOLS = new Set([
+  "write_file",
+  "write_docx",
+  "write_pptx",
+  "write_xlsx",
+  "create_rich_report",
+  "generate_interactive_report",
+]);
+
 export function createFrontierExecutor(
   toolExecutor?: (
     name: string,
@@ -835,14 +848,18 @@ export function createFrontierExecutor(
       agentType: AgentType,
       task: string,
       tools: string[],
-      _context: ExecutionContext
+      context: ExecutionContext
     ): Promise<ToolResult> {
       const startTime = Date.now();
+      const taskRequestsFiles = FILE_REQUEST_KEYWORDS.test(task);
+      const toolsUsed = new Set<string>();
+      let iteration = 0;
+
+      onThinking?.(`🚀 Starting ${agentType} agent for task...`);
 
       try {
         const adapter = await getGlobalFrontierAdapter();
 
-        // Get actual tool definitions with proper descriptions and parameters
         const allTools = getAvailableTools();
         const toolMap = new Map(allTools.map(t => [t.name, t]));
 
@@ -877,7 +894,6 @@ export function createFrontierExecutor(
                 },
               };
             }
-            // Fallback for tools not in legacy list
             return {
               type: "function" as const,
               function: {
@@ -889,88 +905,278 @@ export function createFrontierExecutor(
           })
           .filter(Boolean);
 
-        const messages: ChatMessage[] = [{ role: "user", content: task }];
+        const messages: ChatMessage[] = [];
 
-        onThinking?.(`[${agentType}] Processing task...`);
-
-        const result = await adapter.reason(agentType, messages, {
-          tools: toolDefs.length > 0 ? toolDefs : undefined,
-          onChunk: onThinkingChunk,
-        });
-
-        if (result.content && !onThinkingChunk) {
-          onThinking?.(result.content);
+        if (
+          context.conversationHistory &&
+          context.conversationHistory.length > 0
+        ) {
+          for (const msg of context.conversationHistory) {
+            messages.push({ role: msg.role, content: msg.content });
+          }
         }
 
-        if (result.toolCalls && result.toolCalls.length > 0 && toolExecutor) {
-          const toolResults: string[] = [];
+        messages.push({ role: "user", content: task });
 
-          for (const call of result.toolCalls) {
-            const toolCallId = call.id || crypto.randomUUID();
-            try {
-              const params = JSON.parse(call.function.arguments);
-              const toolName = call.function.name;
+        let allToolResults: string[] = [];
+        let lastContent = "";
+        let forceToolUsage = false;
 
-              onToolCall?.({ id: toolCallId, name: toolName, input: params });
+        while (iteration < MAX_SWARM_ITERATIONS) {
+          iteration++;
+          onThinking?.(
+            `📍 Iteration ${iteration}/${MAX_SWARM_ITERATIONS} - Reasoning...${forceToolUsage ? " (forcing tool usage)" : ""}`
+          );
 
-              if (
-                enableConsensus &&
-                swarmOrchestrator &&
-                swarmOrchestrator.isHighRiskTool(toolName)
-              ) {
-                const consensus = await swarmOrchestrator.requestToolConsensus(
-                  toolName,
-                  params
+          const result = await adapter.reason(agentType, messages, {
+            tools: toolDefs.length > 0 ? toolDefs : undefined,
+            onChunk: onThinkingChunk,
+            toolChoice: forceToolUsage ? "any" : undefined,
+            maxTokens: 64000,
+          });
+
+          lastContent = result.content;
+          onThinking?.(
+            `💭 Model responded (${result.tokensUsed} tokens, ${result.model})`
+          );
+
+          if (result.toolCalls && result.toolCalls.length > 0 && toolExecutor) {
+            onThinking?.(
+              `🔧 Executing ${result.toolCalls.length} tool(s): ${result.toolCalls.map(tc => tc.function.name).join(", ")}`
+            );
+
+            messages.push({
+              role: "assistant",
+              content: result.content,
+              tool_calls: result.toolCalls,
+            });
+
+            for (const call of result.toolCalls) {
+              const toolCallId = call.id || crypto.randomUUID();
+              try {
+                const params = JSON.parse(call.function.arguments);
+                const toolName = call.function.name;
+                toolsUsed.add(toolName);
+
+                onToolCall?.({ id: toolCallId, name: toolName, input: params });
+                onThinking?.(`⚙️ Running ${toolName}...`);
+
+                if (
+                  enableConsensus &&
+                  swarmOrchestrator &&
+                  swarmOrchestrator.isHighRiskTool(toolName)
+                ) {
+                  onThinking?.(
+                    `🔒 High-risk tool detected, requesting consensus...`
+                  );
+                  const consensus =
+                    await swarmOrchestrator.requestToolConsensus(
+                      toolName,
+                      params
+                    );
+                  if (consensus.decision !== "approved") {
+                    const blockedMsg = `BLOCKED - Consensus ${consensus.decision} (${Math.round(consensus.agreementPercentage * 100)}% agreement)`;
+                    onToolResult?.({
+                      toolCallId,
+                      output: blockedMsg,
+                      isError: true,
+                    });
+                    allToolResults.push(`[${toolName}]: ${blockedMsg}`);
+                    messages.push({
+                      role: "tool",
+                      content: blockedMsg,
+                      tool_call_id: toolCallId,
+                    });
+                    continue;
+                  }
+                }
+
+                const toolResult = await toolExecutor(toolName, params);
+                const isError = toolResult.startsWith("Error:");
+                onToolResult?.({
+                  toolCallId,
+                  output: toolResult,
+                  isError,
+                });
+                allToolResults.push(`[${toolName}]: ${toolResult}`);
+                onThinking?.(
+                  `${isError ? "❌" : "✅"} ${toolName} ${isError ? "failed" : "completed"}`
                 );
-                if (consensus.decision !== "approved") {
-                  const blockedMsg = `BLOCKED - Consensus ${consensus.decision} (${Math.round(consensus.agreementPercentage * 100)}% agreement)`;
-                  onToolResult?.({
-                    toolCallId,
-                    output: blockedMsg,
-                    isError: true,
-                  });
-                  toolResults.push(`[${toolName}]: ${blockedMsg}`);
-                  continue;
+
+                messages.push({
+                  role: "tool",
+                  content: toolResult,
+                  tool_call_id: toolCallId,
+                });
+              } catch (err) {
+                const errorMsg =
+                  err instanceof Error ? err.message : String(err);
+                onToolResult?.({ toolCallId, output: errorMsg, isError: true });
+                allToolResults.push(
+                  `[${call.function.name}]: Error - ${errorMsg}`
+                );
+                onThinking?.(`❌ ${call.function.name} error: ${errorMsg}`);
+                messages.push({
+                  role: "tool",
+                  content: `Error: ${errorMsg}`,
+                  tool_call_id: toolCallId,
+                });
+              }
+            }
+
+            const usedFileWriteTool = Array.from(toolsUsed).some(t =>
+              FILE_WRITE_TOOLS.has(t)
+            );
+            if (usedFileWriteTool) {
+              onThinking?.(
+                `✅ File output generated (${toolsUsed.size} tools used). Task complete.`
+              );
+              break;
+            }
+            if (!taskRequestsFiles) {
+              onThinking?.(
+                `✅ Task iteration complete (${toolsUsed.size} tools used)`
+              );
+              continue;
+            }
+          } else {
+            const usedFileWriteTool = Array.from(toolsUsed).some(t =>
+              FILE_WRITE_TOOLS.has(t)
+            );
+
+            if (taskRequestsFiles && !usedFileWriteTool && toolExecutor) {
+              onThinking?.(
+                `⚠️ No tools called but task requires file output. Auto-generating report from LLM response...`
+              );
+
+              // Instead of retrying, programmatically call generate_interactive_report
+              // with the LLM's text response
+              const reportTitle =
+                task.length > 50 ? task.substring(0, 47) + "..." : task;
+              const reportFilename = `report_${Date.now()}.html`;
+
+              // Strip common preamble patterns from the LLM response
+              let cleanContent = lastContent
+                .replace(
+                  /^(I'll|I will|Let me|Here's|I'm going to|I can|Sure|Absolutely|Of course)[^.!?]*[.!?]\s*/gi,
+                  ""
+                )
+                .replace(
+                  /^(Creating|Generating|Building|Preparing)[^.!?]*[.!?]\s*/gi,
+                  ""
+                )
+                .trim();
+
+              // If stripping left nothing, use original
+              if (!cleanContent || cleanContent.length < 100) {
+                cleanContent = lastContent;
+              }
+
+              // Try to split into sections if content has headers
+              const sections: Array<{
+                type: string;
+                title: string;
+                content: string;
+              }> = [];
+              const headerPattern = /^#+\s+(.+)$/gm;
+              const parts = cleanContent.split(headerPattern);
+
+              if (parts.length > 2) {
+                for (let i = 1; i < parts.length; i += 2) {
+                  const title =
+                    parts[i]?.trim() || `Section ${Math.floor(i / 2) + 1}`;
+                  const content = parts[i + 1]?.trim() || "";
+                  if (content) {
+                    sections.push({ type: "text", title, content });
+                  }
                 }
               }
 
-              const toolResult = await toolExecutor(toolName, params);
-              onToolResult?.({
-                toolCallId,
-                output: toolResult,
-                isError: false,
-              });
-              toolResults.push(`[${toolName}]: ${toolResult}`);
-            } catch (err) {
-              const errorMsg = err instanceof Error ? err.message : String(err);
-              onToolResult?.({ toolCallId, output: errorMsg, isError: true });
-              toolResults.push(`[${call.function.name}]: Error - ${errorMsg}`);
-            }
-          }
+              // Fallback to single section if no headers found
+              if (sections.length === 0) {
+                sections.push({
+                  type: "text",
+                  title: "Report",
+                  content: cleanContent,
+                });
+              }
 
-          return {
-            success: true,
-            output: `${result.content}\n\nTool Results:\n${toolResults.join("\n")}`,
-            durationMs: Date.now() - startTime,
-            metadata: {
-              model: result.model,
-              tokensUsed: result.tokensUsed,
-              toolCalls: result.toolCalls.length,
-            },
-          };
+              const reportParams = {
+                path: reportFilename,
+                title: `Report: ${reportTitle}`,
+                sections,
+                theme: "dark",
+              };
+
+              onThinking?.(`🔧 Auto-calling generate_interactive_report...`);
+              onToolCall?.({
+                id: crypto.randomUUID(),
+                name: "generate_interactive_report",
+                input: reportParams,
+              });
+
+              try {
+                const reportResult = await toolExecutor(
+                  "generate_interactive_report",
+                  reportParams
+                );
+                toolsUsed.add("generate_interactive_report");
+                allToolResults.push(
+                  `[generate_interactive_report]: ${reportResult}`
+                );
+                onThinking?.(
+                  `✅ Report generated successfully via auto-tool-call`
+                );
+                onToolResult?.({
+                  toolCallId: crypto.randomUUID(),
+                  output: reportResult,
+                  isError: false,
+                });
+              } catch (err) {
+                const errorMsg =
+                  err instanceof Error ? err.message : String(err);
+                onThinking?.(`❌ Auto-report generation failed: ${errorMsg}`);
+                allToolResults.push(
+                  `[generate_interactive_report]: Error - ${errorMsg}`
+                );
+              }
+
+              // Break the loop - we've created the report
+              break;
+            }
+
+            onThinking?.(
+              `📝 No more tool calls needed. Finalizing response...`
+            );
+            break;
+          }
         }
+
+        if (iteration >= MAX_SWARM_ITERATIONS) {
+          onThinking?.(
+            `⏰ Reached max iterations (${MAX_SWARM_ITERATIONS}). Returning current results.`
+          );
+        }
+
+        const finalOutput =
+          allToolResults.length > 0
+            ? `${lastContent}\n\nTool Results:\n${allToolResults.join("\n")}`
+            : lastContent;
 
         return {
           success: true,
-          output: result.content,
+          output: finalOutput,
           durationMs: Date.now() - startTime,
           metadata: {
-            model: result.model,
-            tokensUsed: result.tokensUsed,
+            model: "frontier",
+            tokensUsed: 0,
+            toolCalls: toolsUsed.size,
+            iterations: iteration,
           },
         };
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
+        onThinking?.(`❌ Error: ${errorMsg}`);
         return {
           success: false,
           output: `Error: ${errorMsg}`,

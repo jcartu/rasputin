@@ -88,6 +88,7 @@ import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { WorkspaceIDE } from "@/components/WorkspaceIDE";
 import {
   ToolOutputPreview,
+  ReportPreview,
   WeatherCard,
   type WeatherData,
 } from "@/components/ToolOutputPreview";
@@ -832,12 +833,16 @@ function extractHtmlReports(steps?: AgentStep[]): Array<{
   }> = [];
 
   for (const step of steps) {
+    // Check for generate_interactive_report or create_rich_report
     if (
-      step.tool === "create_rich_report" &&
+      (step.tool === "generate_interactive_report" ||
+        step.tool === "create_rich_report") &&
       step.status === "success" &&
       step.output
     ) {
-      const pathMatch = step.output.match(/Path:\s*([^\n]+\.html)/i);
+      const pathMatch =
+        step.output.match(/\*\*Path:\*\*\s*([^\n]+\.html)/i) ||
+        step.output.match(/(?:^|[^*])Path:\s*([^\n]+\.html)/i);
       if (pathMatch) {
         const filePath = pathMatch[1].trim();
         const filename = filePath.split("/").pop() || filePath;
@@ -878,54 +883,25 @@ function extractHtmlReports(steps?: AgentStep[]): Array<{
 
 function HtmlReportPreview({ steps }: { steps?: AgentStep[] }) {
   const reports = extractHtmlReports(steps);
-
   if (reports.length === 0) return null;
 
   return (
     <div className="space-y-4">
-      {reports.map((report, idx) => (
-        <div
-          key={idx}
-          className="rounded-lg border border-border/50 overflow-hidden"
-        >
-          <div className="p-3 bg-gradient-to-r from-purple-500/10 to-cyan-500/10 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-cyan-400" />
-              <span className="font-medium text-sm">{report.filename}</span>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => window.open(report.downloadUrl, "_blank")}
-              >
-                <ExternalLink className="h-3 w-3 mr-1" />
-                Open
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  const a = document.createElement("a");
-                  a.href = report.downloadUrl;
-                  a.download = report.filename;
-                  a.click();
-                }}
-              >
-                <Download className="h-3 w-3 mr-1" />
-                Download
-              </Button>
-            </div>
-          </div>
-          <div className="bg-white">
-            <iframe
-              src={report.downloadUrl}
-              className="w-full h-[500px]"
-              title={report.filename}
-            />
-          </div>
-        </div>
-      ))}
+      {reports.map((report, idx) => {
+        // Construct the output format that ReportPreview expects
+        const output = `Interactive report generated successfully!
+**Path:** ${report.path}
+**Title:** ${report.filename.replace(/\.html$/, "")}
+**Theme:** dark
+**Sections:** 5`;
+        return (
+          <ReportPreview
+            key={idx}
+            output={output}
+            toolName="generate_interactive_report"
+          />
+        );
+      })}
     </div>
   );
 }
@@ -1880,6 +1856,7 @@ export default function AgentPage() {
         jarvisStream.loadConversationHistory(recentCompletedTasks);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbTasks, jarvisStream.loadConversationHistory]);
 
   // Attempt to rejoin active task on mount
@@ -1887,6 +1864,7 @@ export default function AgentPage() {
     if (user?.id && !jarvisStream.isStreaming) {
       jarvisStream.rejoinTask(user.id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, jarvisStream.rejoinTask]);
 
   // Scroll to bottom when messages change
@@ -2189,6 +2167,7 @@ export default function AgentPage() {
     }
 
     setIsProcessing(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     input,
     isProcessing,

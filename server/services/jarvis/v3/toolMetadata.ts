@@ -143,6 +143,15 @@ export const TOOL_METADATA: Record<string, JARVISToolMetadata> = {
     estimatedDurationMs: 5000,
     qdrantCollections: ["reports"],
   }),
+  generate_interactive_report: meta(
+    ["coder", "researcher"],
+    "medium",
+    "document",
+    {
+      estimatedDurationMs: 3000,
+      qdrantCollections: ["reports"],
+    }
+  ),
   list_document_templates: meta(AGENT_GROUPS.all, "low", "document"),
   get_document_template: meta(AGENT_GROUPS.all, "low", "document"),
   render_document_template: meta(["coder", "executor"], "medium", "document", {

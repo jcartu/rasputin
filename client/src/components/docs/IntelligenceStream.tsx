@@ -91,6 +91,7 @@ export const IntelligenceStream: React.FC<IntelligenceStreamProps> = ({
     };
 
     runSimulation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scenario]);
 
   const addMessage = (

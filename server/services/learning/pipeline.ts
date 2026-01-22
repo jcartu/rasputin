@@ -15,6 +15,8 @@ import {
   agentTasks,
   agentMessages,
   agentToolCalls,
+  type AgentTask,
+  type AgentMessage,
 } from "../../../drizzle/schema";
 import { eq, and, desc, sql, gte } from "drizzle-orm";
 import { getMemoryService } from "../memory";
@@ -144,28 +146,27 @@ export async function collectTrainingDataFromTask(
     }
   }
 
-  // 3. Store reasoning examples (from thinking content)
-  const thinkingMessages = messages.filter((m: any) => m.thinking);
+  const thinkingMessages = messages.filter(m => m.thinking);
   for (const msg of thinkingMessages) {
     await memoryService.storeTrainingData({
       taskId,
       dataType: "reasoning",
       input: taskData.query,
-      output: (msg as any).thinking,
+      output: msg.thinking ?? "",
       qualityScore: 75,
       usedForTraining: false,
     });
     dataCollected++;
   }
 
-  // 4. Store code generation examples
   const codeToolCalls = toolCalls.filter(
-    (tc: any) =>
+    tc =>
       tc.toolName === "execute_python" || tc.toolName === "execute_javascript"
   );
   for (const codeCall of codeToolCalls) {
     if (codeCall.status === "completed") {
-      const codeInput = (codeCall.input as any)?.code || "";
+      const inputObj = codeCall.input as { code?: string };
+      const codeInput = inputObj?.code || "";
       await memoryService.storeTrainingData({
         taskId,
         dataType: "code_generation",
@@ -231,13 +232,11 @@ export async function exportTrainingData(
     .orderBy(desc(trainingData.qualityScore))
     .limit(limit);
 
-  // Filter by data types if specified
   const filtered = dataTypes
-    ? results.filter((r: any) => dataTypes.includes(r.dataType))
+    ? results.filter(r => dataTypes.includes(r.dataType))
     : results;
 
-  // Convert to requested format
-  const examples = filtered.map((row: any) => {
+  const examples = filtered.map(row => {
     switch (format) {
       case "alpaca":
         return {
@@ -270,17 +269,15 @@ export async function exportTrainingData(
     }
   });
 
-  // Calculate stats
   const byType: Record<string, number> = {};
   let totalQuality = 0;
   for (const row of filtered) {
-    byType[(row as any).dataType] = (byType[(row as any).dataType] || 0) + 1;
-    totalQuality += (row as any).qualityScore;
+    byType[row.dataType] = (byType[row.dataType] || 0) + 1;
+    totalQuality += row.qualityScore;
   }
 
-  // Mark as used if requested
   if (markAsUsed && filtered.length > 0) {
-    const ids = filtered.map((r: any) => r.id);
+    const ids = filtered.map(r => r.id);
     for (const id of ids) {
       await database
         .update(trainingData)
@@ -349,7 +346,7 @@ export async function analyzeLearningPatterns(
       event.eventType === "skill_improved" ||
       event.eventType === "skill_acquired"
     ) {
-      const content = event.content as any;
+      const content = event.content as { toolsUsed?: string[] } | null;
       if (content?.toolsUsed) {
         for (const tool of content.toolsUsed) {
           skillCounts[tool] = (skillCounts[tool] || 0) + 1;
@@ -433,17 +430,17 @@ export async function generateImprovementSuggestions(
 // HELPER FUNCTIONS
 // ============================================================================
 
-function calculateConversationQuality(messages: any[], task: any): number {
+function calculateConversationQuality(
+  messages: AgentMessage[],
+  task: AgentTask
+): number {
   let quality = 70;
 
-  // Successful completion
   if (task.status === "completed") quality += 15;
 
-  // Efficient (fewer messages = more efficient)
   if (messages.length <= 5) quality += 10;
   else if (messages.length > 10) quality -= 10;
 
-  // Fast completion
   if (task.durationMs && task.durationMs < 30000) quality += 5;
 
   return Math.min(Math.max(quality, 0), 100);

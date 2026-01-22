@@ -91,6 +91,11 @@ interface LogEntry {
   type: "info" | "success" | "warning" | "error";
 }
 
+interface SynthesisStep {
+  msg: string;
+  type: LogEntry["type"];
+}
+
 interface ResearchTask {
   id: string;
   chatId?: number;
@@ -562,7 +567,7 @@ export default function Research() {
     }, 200);
   };
 
-  const _runSynthesisDemo = (taskId: string, steps: any[]) => {
+  const _runSynthesisDemo = (taskId: string, steps: SynthesisStep[]) => {
     setIsProcessing(true);
     setProgress(0);
     setLogs([]);
@@ -573,7 +578,7 @@ export default function Research() {
     const interval = setInterval(() => {
       if (stepIndex < steps.length) {
         const step = steps[stepIndex];
-        addLog("SYNTHESIS", step.msg, step.type as any);
+        addLog("SYNTHESIS", step.msg, step.type);
         playSound(step.type === "success" ? "success" : "type", theme);
 
         // Narrate key milestones

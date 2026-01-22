@@ -31,7 +31,7 @@ interface ChatMessage {
 interface IntelligenceStreamProps {
   scenario: string;
   onComplete?: () => void;
-  onLog?: (log: any) => void;
+  onLog?: (log: { agent: string; msg: string; type: string }) => void;
 }
 
 export const IntelligenceStream: React.FC<IntelligenceStreamProps> = ({
@@ -101,6 +101,7 @@ export const IntelligenceStream: React.FC<IntelligenceStreamProps> = ({
     return () => {
       _isMounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scenario]);
 
   const addMessage = (

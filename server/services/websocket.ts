@@ -885,14 +885,28 @@ async function handleJarvisTask(
             timestamp,
           });
         },
-        onThinkingChunk: (chunk: string) => {
-          if (activeQueries.get(queryKey)?.cancelled) return;
-          const timestamp = Date.now();
-          const state = getActiveTaskState(userId);
-          if (state && state.steps.length > 0) {
-            const lastStep = state.steps[state.steps.length - 1];
-            if (lastStep.type === "thinking") {
-              lastStep.content = (lastStep.content || "") + chunk;
+        onThinkingChunk: (() => {
+          let totalChars = 0;
+          let lastProgressUpdate = Date.now();
+          const streamStartTime = Date.now();
+          return (chunk: string) => {
+            if (activeQueries.get(queryKey)?.cancelled) return;
+            const timestamp = Date.now();
+            totalChars += chunk.length;
+
+            const state = getActiveTaskState(userId);
+            if (state && state.steps.length > 0) {
+              const lastStep = state.steps[state.steps.length - 1];
+              if (lastStep.type === "thinking") {
+                lastStep.content = (lastStep.content || "") + chunk;
+              } else {
+                addStepToActiveTask(userId, {
+                  id: crypto.randomUUID(),
+                  type: "thinking",
+                  content: chunk,
+                  timestamp,
+                });
+              }
             } else {
               addStepToActiveTask(userId, {
                 id: crypto.randomUUID(),
@@ -901,20 +915,33 @@ async function handleJarvisTask(
                 timestamp,
               });
             }
-          } else {
-            addStepToActiveTask(userId, {
-              id: crypto.randomUUID(),
-              type: "thinking",
-              content: chunk,
+
+            socket.emit("jarvis:thinking_chunk", {
+              taskId,
+              chunk,
               timestamp,
             });
-          }
-          socket.emit("jarvis:thinking_chunk", {
-            taskId,
-            chunk,
-            timestamp,
-          });
-        },
+
+            if (timestamp - lastProgressUpdate > 2000) {
+              const elapsedSecs = Math.floor(
+                (timestamp - streamStartTime) / 1000
+              );
+              const estimatedTokens = Math.floor(totalChars / 4);
+              socket.emit("jarvis:thinking", {
+                taskId,
+                content: `📊 Streaming: ${totalChars.toLocaleString()} chars (~${estimatedTokens.toLocaleString()} tokens) | ⏱️ ${elapsedSecs}s elapsed`,
+                timestamp,
+              });
+              addStepToActiveTask(userId, {
+                id: crypto.randomUUID(),
+                type: "thinking",
+                content: `📊 Streaming: ${totalChars.toLocaleString()} chars (~${estimatedTokens.toLocaleString()} tokens) | ⏱️ ${elapsedSecs}s elapsed`,
+                timestamp,
+              });
+              lastProgressUpdate = timestamp;
+            }
+          };
+        })(),
         onIteration: (iteration: number, maxIterations: number) => {
           if (activeQueries.get(queryKey)?.cancelled) return;
           iterationCount = iteration;

@@ -12,13 +12,13 @@ const targets = [
 await mkdir("dist", { recursive: true });
 
 for (const { target, name } of targets) {
-  console.log(`Building for ${target}...`);
+  console.info(`Building for ${target}...`);
   try {
     await $`bun build --compile --target=${target} ./src/index.ts --outfile=dist/${name}`;
-    console.log(`  ✓ dist/${name}`);
+    console.info(`  ✓ dist/${name}`);
   } catch (error) {
     console.error(`  ✗ Failed: ${error}`);
   }
 }
 
-console.log("\nBuild complete!");
+console.info("\nBuild complete!");

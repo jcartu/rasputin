@@ -129,6 +129,7 @@ import {
   getDesktopDaemonStatus,
   listDesktopTools as _listDesktopTools,
 } from "../desktop/remoteClient";
+import { buildReport, type Report } from "./reports";
 
 const execAsync = promisify(exec);
 const USE_DOCKER_SANDBOX = process.env.USE_SANDBOX !== "false";
@@ -1887,6 +1888,7 @@ export async function getWeather(location: string): Promise<string> {
     {
       name: "wttr.in",
       url: `https://wttr.in/${encodedLocation}?format=j1`,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- external API response with deep nesting
       parse: (data: any): WeatherData | null => {
         try {
           const current = data.current_condition?.[0];
@@ -1910,6 +1912,7 @@ export async function getWeather(location: string): Promise<string> {
             precipitation: parseFloat(current.precipMM),
             sunrise: astronomy?.sunrise,
             sunset: astronomy?.sunset,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             forecast: data.weather?.slice(0, 5).map((day: any) => ({
               date: day.date,
               maxTemp: parseFloat(day.maxtempC),
@@ -1978,6 +1981,7 @@ export async function getWeather(location: string): Promise<string> {
     {
       name: "WeatherAPI.com (free tier)",
       url: `https://api.weatherapi.com/v1/forecast.json?key=demo&q=${encodedLocation}&days=5`,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- external API response with deep nesting
       parse: (data: any): WeatherData | null => {
         try {
           const current = data.current;
@@ -1998,6 +2002,7 @@ export async function getWeather(location: string): Promise<string> {
             uvIndex: current.uv,
             cloudCover: current.cloud,
             precipitation: current.precip_mm,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             forecast: data.forecast?.forecastday?.map((day: any) => ({
               date: day.date,
               maxTemp: day.day.maxtemp_c,
@@ -3377,6 +3382,218 @@ export async function createRichReport(
     return `Rich report created successfully!\n\nPath: ${htmlPath}\nTitle: ${options.title}\nSections: ${options.sections.length}\nImages generated: ${imageCount}\nStyle: ${options.style || "modern"}${errorNote}\n\nThe report is a self-contained HTML file with embedded images that can be opened in any browser and exported to PDF using the browser's print function (Ctrl/Cmd+P → Save as PDF).`;
   } catch (error) {
     return `Error creating rich report: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+interface InteractiveReportInput {
+  path: string;
+  title: string;
+  subtitle?: string;
+  theme?: "dark" | "light" | "purple" | "blue" | "green";
+  badge?: string;
+  heroStats?: Array<{
+    value: number | string;
+    label: string;
+    prefix?: string;
+    suffix?: string;
+  }>;
+  sections: Array<Record<string, unknown>>;
+  generatedBy?: string;
+}
+
+export async function generateInteractiveReport(
+  input: InteractiveReportInput | Record<string, unknown>
+): Promise<string> {
+  try {
+    await ensureSandbox();
+    const filePath = input.path as string;
+    const resolvedPath = resolveSandboxPath(filePath);
+    const htmlPath = resolvedPath.endsWith(".html")
+      ? resolvedPath
+      : resolvedPath + ".html";
+
+    const heroStats =
+      (input.heroStats as InteractiveReportInput["heroStats"]) || [];
+    const sections = (input.sections as Array<Record<string, unknown>>) || [];
+    const theme = (input.theme as InteractiveReportInput["theme"]) || "dark";
+
+    const reportSections: Report["sections"] = [];
+
+    if (input.title) {
+      reportSections.push({
+        type: "hero",
+        badge: input.badge as string | undefined,
+        title: input.title as string,
+        subtitle: input.subtitle as string | undefined,
+        stats: heroStats,
+      });
+    }
+
+    for (const section of sections) {
+      const sectionType = section.type as string;
+
+      switch (sectionType) {
+        case "metrics":
+          reportSections.push({
+            type: "metrics",
+            title: section.title as string | undefined,
+            cards:
+              (section.cards as Array<{
+                title: string;
+                value: string | number;
+                icon?: string;
+                changePercent?: number;
+                subtitle?: string;
+              }>) || [],
+          });
+          break;
+
+        case "chart":
+          reportSections.push({
+            type: "chart",
+            title: section.title as string,
+            chartType: section.chartType as
+              | "bar"
+              | "line"
+              | "doughnut"
+              | "pie"
+              | "radar"
+              | "polarArea",
+            data: section.data as {
+              labels: string[];
+              datasets: Array<{
+                label: string;
+                data: number[];
+                backgroundColor?: string | string[];
+                borderColor?: string | string[];
+              }>;
+            },
+            height: section.height as number | undefined,
+          });
+          break;
+
+        case "table":
+          reportSections.push({
+            type: "table",
+            title: section.title as string | undefined,
+            columns: section.columns as Array<{
+              key: string;
+              header: string;
+              align?: "left" | "center" | "right";
+              format?: "text" | "number" | "currency" | "percent" | "badge";
+            }>,
+            rows: section.rows as Array<Record<string, unknown>>,
+            showRank: section.showRank as boolean | undefined,
+            tabs: section.tabs as
+              | Array<{
+                  key: string;
+                  label: string;
+                  icon?: string;
+                  rows: Array<Record<string, unknown>>;
+                }>
+              | undefined,
+          });
+          break;
+
+        case "insights":
+          reportSections.push({
+            type: "insights",
+            title: section.title as string | undefined,
+            subtitle: section.subtitle as string | undefined,
+            insights:
+              (section.insights as Array<{
+                icon: string;
+                title: string;
+                description: string;
+                color?: string;
+              }>) || [],
+          });
+          break;
+
+        case "timeline":
+          reportSections.push({
+            type: "timeline",
+            title: section.title as string | undefined,
+            events:
+              (section.events as Array<{
+                date: string;
+                title: string;
+                description?: string;
+                icon?: string;
+                status?: "completed" | "in_progress" | "pending";
+              }>) || [],
+          });
+          break;
+
+        case "comparison":
+          reportSections.push({
+            type: "comparison",
+            title: section.title as string | undefined,
+            items:
+              (section.items as Array<{
+                name: string;
+                icon?: string;
+                metrics: Array<{ label: string; value: string | number }>;
+              }>) || [],
+          });
+          break;
+
+        case "text":
+          reportSections.push({
+            type: "text",
+            title: section.title as string | undefined,
+            markdownContent: (section.markdownContent ||
+              section.content) as string,
+          });
+          break;
+
+        case "code":
+          reportSections.push({
+            type: "code",
+            title: section.title as string | undefined,
+            language: section.language as string,
+            code: section.code as string,
+          });
+          break;
+
+        case "divider":
+          reportSections.push({ type: "divider" });
+          break;
+      }
+    }
+
+    const report: Report = {
+      config: {
+        title: input.title as string,
+        subtitle: input.subtitle as string | undefined,
+        theme,
+        showNavigation: false,
+        showFooter: true,
+        generatedBy: (input.generatedBy as string) || "JARVIS AI",
+      },
+      sections: reportSections,
+    };
+
+    const html = buildReport(report);
+    await fs.writeFile(htmlPath, html, "utf-8");
+
+    return `Interactive report generated successfully!
+
+**Path:** ${htmlPath}
+**Title:** ${input.title}
+**Theme:** ${theme}
+**Sections:** ${reportSections.length}
+
+The report features:
+- Dark glassmorphism design with animated background
+- Animated counters in hero section
+- Interactive Chart.js visualizations
+- Responsive layout with fade-in animations
+- Code syntax highlighting
+
+Open in browser to view. Export to PDF via Print (Ctrl/Cmd+P → Save as PDF).`;
+  } catch (error) {
+    return `Error generating interactive report: ${error instanceof Error ? error.message : String(error)}`;
   }
 }
 
@@ -8089,7 +8306,15 @@ export async function searchMemory(
     }
 
     const formatted = results.map(r => {
-      const mem = r.memory as any;
+      // Memory can be episodic, semantic, or procedural with different shapes
+      const mem = r.memory as {
+        title?: string;
+        name?: string;
+        subject?: string;
+        description?: string;
+        predicate?: string;
+        object?: string;
+      };
       return `[${r.memoryType}] (${(r.relevanceScore * 100).toFixed(0)}% match)
   ${mem.title || mem.name || mem.subject || "Untitled"}
   ${mem.description || `${mem.predicate || ""} ${mem.object || ""}`}`;
@@ -8121,9 +8346,13 @@ export async function storeMemory(
         (normalizedContent.text as string) ||
         (normalizedContent.description as string) ||
         JSON.stringify(normalizedContent);
+      type EpisodicMemoryType = Parameters<
+        typeof memoryService.createEpisodicMemory
+      >[0]["memoryType"];
       const id = await memoryService.createEpisodicMemory({
         userId,
-        memoryType: (normalizedContent.memoryType as any) || "interaction",
+        memoryType:
+          (normalizedContent.memoryType as EpisodicMemoryType) || "interaction",
         title:
           (normalizedContent.title as string) || text.slice(0, 100) || "Memory",
         description:
@@ -8170,9 +8399,14 @@ export async function storeMemory(
         }
       }
 
+      type SemanticCategory = Parameters<
+        typeof memoryService.createSemanticMemory
+      >[0]["category"];
       const id = await memoryService.createSemanticMemory({
         userId,
-        category: (normalizedContent.category as any) || "domain_knowledge",
+        category:
+          (normalizedContent.category as SemanticCategory) ||
+          "domain_knowledge",
         subject,
         predicate,
         object,
@@ -8184,7 +8418,9 @@ export async function storeMemory(
     }
 
     if (memoryType === "procedural") {
-      // For procedural: parse description as steps if not provided
+      type ProceduralSteps = Parameters<
+        typeof memoryService.createProceduralMemory
+      >[0]["steps"];
       const text =
         (normalizedContent.text as string) ||
         (normalizedContent.description as string) ||
@@ -8198,7 +8434,7 @@ export async function storeMemory(
         description: (normalizedContent.description as string) || text,
         triggerConditions:
           (normalizedContent.triggerConditions as string[]) || [],
-        steps: (normalizedContent.steps as any[]) || [
+        steps: (normalizedContent.steps as ProceduralSteps) || [
           { action: "execute", description: text },
         ],
         isActive: true,
@@ -8220,16 +8456,32 @@ export async function getMemoryStats(userId: number): Promise<string> {
   try {
     const memoryService = getMemoryService();
     const stats = await memoryService.getStats(userId);
+    const totalMemories =
+      stats.totalEpisodic + stats.totalSemantic + stats.totalProcedural;
 
-    return `Memory Statistics:
-- Episodic memories: ${stats.totalEpisodic}
-- Semantic memories: ${stats.totalSemantic}
-- Procedural memories: ${stats.totalProcedural}
-- Total embeddings: ${stats.totalEmbeddings}
-- Learning events: ${stats.totalLearningEvents}
-- Training data points: ${stats.totalTrainingData}`;
+    return `## Memory Statistics
+
+### Overview
+| Type | Count | Description |
+|------|-------|-------------|
+| 📝 Episodic | ${stats.totalEpisodic} | Specific events and experiences |
+| 🧠 Semantic | ${stats.totalSemantic} | General knowledge and facts |
+| ⚙️ Procedural | ${stats.totalProcedural} | How-to knowledge and procedures |
+| **Total** | **${totalMemories}** | All memory types combined |
+
+### System Data
+| Metric | Value |
+|--------|-------|
+| Embeddings | ${stats.totalEmbeddings} |
+| Learning Events | ${stats.totalLearningEvents} |
+| Training Data Points | ${stats.totalTrainingData} |
+
+${totalMemories === 0 ? "\n*No memories stored yet. As we interact, I'll remember important context to serve you better.*" : ""}`;
   } catch (error) {
-    return `Failed to get memory stats: ${error instanceof Error ? error.message : String(error)}`;
+    return `## Memory Statistics
+
+**Error:** Unable to retrieve memory stats.
+${error instanceof Error ? error.message : String(error)}`;
   }
 }
 
@@ -8238,19 +8490,73 @@ export async function getPredictedTasks(userId: number): Promise<string> {
     const suggestions = await getSuggestedTasks(userId);
 
     if (suggestions.length === 0) {
-      return "No task predictions available yet. Complete more tasks to enable predictions.";
+      return `## Task Predictions
+
+No predictions available yet. As I learn your work patterns, I'll suggest tasks you might want to perform.
+
+**Tip:** Complete a few more tasks and I'll start recognizing your habits.`;
     }
 
-    const lines = suggestions.map((s, i) => {
+    const highConfidence = suggestions.filter(s => s.confidence >= 0.7);
+    const medConfidence = suggestions.filter(
+      s => s.confidence >= 0.4 && s.confidence < 0.7
+    );
+
+    let report = `## Task Predictions
+
+### Summary
+- **${suggestions.length}** predicted tasks
+- **${highConfidence.length}** high confidence (>70%)
+- **${medConfidence.length}** medium confidence (40-70%)
+
+---
+
+`;
+
+    suggestions.forEach((s, i) => {
       const confidence = Math.round(s.confidence * 100);
-      return `${i + 1}. ${s.suggestion}
-   Confidence: ${confidence}%
-   Reason: ${s.reason}`;
+      const confidenceBar =
+        "█".repeat(Math.floor(confidence / 10)) +
+        "░".repeat(10 - Math.floor(confidence / 10));
+      const priority =
+        confidence >= 70
+          ? "🔴 High"
+          : confidence >= 40
+            ? "🟡 Medium"
+            : "🟢 Low";
+
+      report += `### ${i + 1}. ${s.suggestion}
+
+| Confidence | ${confidenceBar} **${confidence}%** |
+|------------|${"-".repeat(confidenceBar.length + 8)}|
+| Priority | ${priority} |
+
+**Reasoning:** ${s.reason}
+
+---
+
+`;
     });
 
-    return `Predicted/Suggested Tasks:\n\n${lines.join("\n\n")}`;
+    if (highConfidence.length > 0) {
+      report += `
+### Recommended Actions
+
+These tasks have the highest likelihood based on your patterns:
+
+${highConfidence
+  .slice(0, 3)
+  .map((s, i) => `${i + 1}. **${s.suggestion}**`)
+  .join("\n")}
+`;
+    }
+
+    return report;
   } catch (error) {
-    return `Failed to get predictions: ${error instanceof Error ? error.message : String(error)}`;
+    return `## Task Predictions
+
+**Error:** Unable to generate predictions.
+${error instanceof Error ? error.message : String(error)}`;
   }
 }
 
@@ -8259,23 +8565,71 @@ export async function getTaskPatterns(userId: number): Promise<string> {
     const patterns = await analyzeTaskPatterns(userId);
 
     if (patterns.length === 0) {
-      return "No task patterns detected yet. Complete more tasks to enable pattern analysis.";
+      return `## Task Pattern Analysis
+
+No patterns detected yet. As you complete more tasks, I'll identify recurring workflows and habits to help predict your needs.
+
+**Tip:** Patterns emerge after 5-10 similar tasks.`;
     }
 
-    const lines = patterns.slice(0, 10).map((p, i) => {
+    const topPatterns = patterns.slice(0, 10);
+    const highConfidence = topPatterns.filter(p => p.confidence >= 0.5);
+    const avgFrequency =
+      topPatterns.reduce((sum, p) => sum + p.frequency, 0) / topPatterns.length;
+
+    let report = `## Task Pattern Analysis
+
+### Summary
+- **${topPatterns.length}** patterns detected
+- **${highConfidence.length}** high-confidence patterns (>50%)
+- **${(avgFrequency * 30).toFixed(0)}** avg tasks/month
+
+---
+
+### Your Top Patterns
+
+`;
+
+    topPatterns.forEach((p, i) => {
       const freq = (p.frequency * 30).toFixed(1);
       const interval = formatIntervalMs(p.averageInterval);
       const confidence = Math.round(p.confidence * 100);
-      return `${i + 1}. Pattern: "${p.pattern}"
-   Frequency: ~${freq} times/month
-   Avg interval: ${interval}
-   Confidence: ${confidence}%
-   Keywords: ${p.contextTriggers.slice(0, 5).join(", ")}`;
+      const confidenceBar =
+        "█".repeat(Math.floor(confidence / 10)) +
+        "░".repeat(10 - Math.floor(confidence / 10));
+
+      report += `#### ${i + 1}. ${p.pattern}
+
+| Metric | Value |
+|--------|-------|
+| Frequency | ~${freq} times/month |
+| Typical Interval | ${interval} |
+| Confidence | ${confidenceBar} ${confidence}% |
+
+**Triggers:** ${p.contextTriggers.slice(0, 5).join(", ") || "None identified"}
+
+`;
     });
 
-    return `Detected Task Patterns:\n\n${lines.join("\n\n")}`;
+    if (highConfidence.length > 0) {
+      report += `---
+
+### Insights
+
+Based on your patterns, you tend to:
+${highConfidence
+  .slice(0, 3)
+  .map(p => `- **${p.pattern}** every ${formatIntervalMs(p.averageInterval)}`)
+  .join("\n")}
+`;
+    }
+
+    return report;
   } catch (error) {
-    return `Failed to analyze patterns: ${error instanceof Error ? error.message : String(error)}`;
+    return `## Task Pattern Analysis
+
+**Error:** Unable to analyze patterns.
+${error instanceof Error ? error.message : String(error)}`;
   }
 }
 
@@ -8291,18 +8645,38 @@ function formatIntervalMs(ms: number): string {
 export async function getProactiveMonitorStatus(): Promise<string> {
   try {
     const status = await proactiveMonitor.getStatus();
-    return `Proactive Monitor Status:
-- Running: ${status.running ? "Yes" : "No"}
-- Enabled: ${status.config.enabled ? "Yes" : "No"}
-- Check Interval: ${status.config.checkIntervalMs / 1000 / 60} minutes
-- Auto-trigger Threshold: ${Math.round(status.config.autoTriggerThreshold * 100)}%
-- Alert Threshold: ${Math.round(status.config.alertThreshold * 100)}%
-- Max Auto-triggers/Day: ${status.config.maxAutoTriggersPerDay}
-- Monitored Users: ${status.monitoredUsersCount}
-- Total Alerts: ${status.alertsCount}
-- Last Check: ${status.lastCheckTime?.toISOString() || "Never"}`;
+    const runningIcon = status.running ? "🟢" : "⚫";
+    const enabledIcon = status.config.enabled ? "✓" : "✗";
+    const checkInterval = status.config.checkIntervalMs / 1000 / 60;
+    const lastCheck = status.lastCheckTime
+      ? new Date(status.lastCheckTime).toLocaleString()
+      : "Never";
+
+    return `## Proactive Monitor Status
+
+### Overview
+| Status | Value |
+|--------|-------|
+| ${runningIcon} Running | ${status.running ? "**Active**" : "Stopped"} |
+| Enabled | ${enabledIcon} ${status.config.enabled ? "Yes" : "No"} |
+| Monitored Users | ${status.monitoredUsersCount} |
+| Total Alerts | ${status.alertsCount} |
+| Last Check | ${lastCheck} |
+
+### Configuration
+| Setting | Value |
+|---------|-------|
+| Check Interval | Every ${checkInterval} minutes |
+| Auto-trigger Threshold | ${Math.round(status.config.autoTriggerThreshold * 100)}% confidence |
+| Alert Threshold | ${Math.round(status.config.alertThreshold * 100)}% confidence |
+| Max Auto-triggers/Day | ${status.config.maxAutoTriggersPerDay} |
+
+${status.running ? "The monitor is actively watching for task patterns and opportunities." : "**Note:** Monitor is currently stopped. Enable it to receive proactive suggestions."}`;
   } catch (error) {
-    return `Failed to get monitor status: ${error instanceof Error ? error.message : String(error)}`;
+    return `## Proactive Monitor Status
+
+**Error:** Unable to retrieve status.
+${error instanceof Error ? error.message : String(error)}`;
   }
 }
 
@@ -8313,18 +8687,27 @@ export async function configureProactiveMonitor(
     await proactiveMonitor.updateConfig(config);
     const status = await proactiveMonitor.getStatus();
 
-    const changes = Object.entries(config)
-      .map(([k, v]) => `  ${k}: ${v}`)
+    const changesList = Object.entries(config)
+      .map(([k, v]) => `| ${k} | ${v} |`)
       .join("\n");
 
-    return `Proactive Monitor configuration updated:
-${changes}
+    return `## Proactive Monitor Updated
 
-Current Status:
-- Running: ${status.running ? "Yes" : "No"}
-- Monitored Users: ${status.monitoredUsersCount}`;
+### Changes Applied
+| Setting | New Value |
+|---------|-----------|
+${changesList}
+
+### Current Status
+- **Running:** ${status.running ? "Yes" : "No"}
+- **Monitored Users:** ${status.monitoredUsersCount}
+
+Configuration saved successfully.`;
   } catch (error) {
-    return `Failed to configure monitor: ${error instanceof Error ? error.message : String(error)}`;
+    return `## Configuration Error
+
+**Failed to update monitor settings.**
+${error instanceof Error ? error.message : String(error)}`;
   }
 }
 
@@ -8336,21 +8719,56 @@ export async function getProactiveAlerts(
     const alerts = proactiveMonitor.getAlerts(userId, limit);
 
     if (alerts.length === 0) {
-      return "No proactive alerts found.";
+      return `## Proactive Alerts
+
+No alerts at this time. The monitor will notify you when it detects tasks you might want to perform based on your patterns.`;
     }
 
-    const lines = alerts.map((a, i) => {
+    const actionIcons: Record<string, string> = {
+      suggest: "💡",
+      remind: "🔔",
+      trigger: "⚡",
+      alert: "⚠️",
+    };
+
+    let report = `## Proactive Alerts
+
+**${alerts.length}** alert${alerts.length !== 1 ? "s" : ""} found${userId ? "" : " (all users)"}
+
+---
+
+`;
+
+    alerts.forEach(a => {
       const confidence = Math.round(a.confidence * 100);
-      const time = a.createdAt.toLocaleString();
-      return `${i + 1}. [${a.suggestedAction.toUpperCase()}] ${a.taskDescription}
-   Confidence: ${confidence}%
-   Reason: ${a.reason}
-   Time: ${time}${userId ? "" : `\n   User: ${a.userId}`}`;
+      const confidenceBar =
+        "█".repeat(Math.floor(confidence / 10)) +
+        "░".repeat(10 - Math.floor(confidence / 10));
+      const time = new Date(a.createdAt).toLocaleString();
+      const icon = actionIcons[a.suggestedAction.toLowerCase()] || "📌";
+
+      report += `### ${icon} ${a.taskDescription}
+
+| Detail | Value |
+|--------|-------|
+| Action | **${a.suggestedAction.toUpperCase()}** |
+| Confidence | ${confidenceBar} ${confidence}% |
+| Time | ${time} |
+${userId ? "" : `| User | ${a.userId} |\n`}
+
+**Why:** ${a.reason}
+
+---
+
+`;
     });
 
-    return `Proactive Alerts (${alerts.length}):\n\n${lines.join("\n\n")}`;
+    return report.trim();
   } catch (error) {
-    return `Failed to get alerts: ${error instanceof Error ? error.message : String(error)}`;
+    return `## Proactive Alerts
+
+**Error:** Unable to retrieve alerts.
+${error instanceof Error ? error.message : String(error)}`;
   }
 }
 
@@ -10848,6 +11266,8 @@ export async function executeTool(
           userId: input.userId as number | undefined,
         }
       );
+    case "generate_interactive_report":
+      return generateInteractiveReport(input);
     case "get_datetime":
       return getCurrentDateTime();
     case "json_tool":
@@ -11804,6 +12224,66 @@ export function getAvailableTools(): Array<{
 - code: {type:'code', language:'python', content:'print("hello")'}
 - image: {type:'image', imagePrompt:'AI prompt for image generation', content:'Caption'}`,
           required: true,
+        },
+      },
+    },
+    {
+      name: "generate_interactive_report",
+      description:
+        "Generate a STUNNING interactive HTML report with dark glassmorphism design, animated counters, Chart.js visualizations, and beautiful typography. SUPERIOR to create_rich_report for modern, sleek reports. Features: animated backgrounds, hero sections with stats, metric cards with change indicators, bar/line/pie/doughnut/radar charts, tabbed data tables with rankings, insight cards, timelines, comparison grids, and code blocks with syntax highlighting. Perfect for market analyses, dashboards, research reports, and executive summaries.",
+      parameters: {
+        path: {
+          type: "string",
+          description:
+            "Output file path (e.g., /tmp/jarvis-workspace/report.html)",
+          required: true,
+        },
+        title: {
+          type: "string",
+          description: "Report title (displayed prominently in hero section)",
+          required: true,
+        },
+        subtitle: {
+          type: "string",
+          description: "Optional subtitle for context",
+          required: false,
+        },
+        theme: {
+          type: "string",
+          description:
+            "Color theme: 'dark' (default), 'light', 'purple', 'blue', or 'green'",
+          required: false,
+        },
+        badge: {
+          type: "string",
+          description:
+            "Optional badge text shown above title (e.g., 'Live Data • January 2026')",
+          required: false,
+        },
+        heroStats: {
+          type: "array",
+          description:
+            "Array of stats for hero section: [{value: 289, label: 'Total Items', prefix: '$', suffix: 'M'}]",
+          required: false,
+        },
+        sections: {
+          type: "array",
+          description: `Array of section objects. Section types:
+- metrics: {type:'metrics', title?:'Overview', cards:[{title:'Revenue', value:'$1.2M', icon:'💰', changePercent:15, subtitle:'vs last month'}]}
+- chart: {type:'chart', title:'Sales Trend', chartType:'bar'|'line'|'doughnut'|'pie'|'radar'|'polarArea', data:{labels:['Q1','Q2'], datasets:[{label:'Sales', data:[100,150], backgroundColor:['#6366f1','#ec4899']}]}}
+- table: {type:'table', title:'Top Products', showRank:true, columns:[{key:'name', header:'Product'}, {key:'sales', header:'Sales', format:'currency'}], rows:[{name:'Widget', sales:1000}], tabs?:[{key:'usa', label:'🇺🇸 USA', rows:[...]}]}
+- insights: {type:'insights', title:'Key Findings', insights:[{icon:'💡', title:'Growth Driver', description:'Mobile sales increased 45%'}]}
+- timeline: {type:'timeline', title:'Project Milestones', events:[{date:'Jan 2026', title:'Launch', status:'completed'}]}
+- comparison: {type:'comparison', title:'Options', items:[{name:'Plan A', icon:'🚀', metrics:[{label:'Price', value:'$99'}]}]}
+- text: {type:'text', title:'Summary', markdownContent:'**Bold** and *italic* with [links](url)'}
+- code: {type:'code', title:'Example', language:'python', code:'print("hello")'}
+- divider: {type:'divider'}`,
+          required: true,
+        },
+        generatedBy: {
+          type: "string",
+          description: "Attribution text for footer (e.g., 'JARVIS AI')",
+          required: false,
         },
       },
     },

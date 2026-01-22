@@ -26,7 +26,7 @@ async function saveImage(buffer: Buffer, prefix: string): Promise<string> {
       "image/png"
     );
     return url;
-  } catch (error) {
+  } catch (_error) {
     console.info("[ImageGen] Forge storage unavailable, using local storage");
     return saveImageLocally(buffer, filename);
   }

@@ -1,16 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   FileText,
   Image as ImageIcon,
-  // FileCode,
   FileJson,
-  // File,
   ExternalLink,
   Download,
   Maximize2,
   X,
-  // FileSpreadsheet,
-  // FileVideo,
   FileAudio,
   Archive,
   Cloud,
@@ -21,12 +17,19 @@ import {
   Sunrise,
   Sunset,
   Umbrella,
+  Rocket,
+  Loader2,
+  FileCode,
+  Globe,
+  Sparkles,
+  BarChart3,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { Streamdown } from "streamdown";
+import { toast } from "sonner";
 
 interface ToolOutputPreviewProps {
   toolName: string;
@@ -525,6 +528,415 @@ function ArchivePreview({ url }: { url: string }) {
         </a>
       </Button>
     </div>
+  );
+}
+
+// Interactive Report Preview with fullscreen, PDF export, and Vercel publish
+export function ReportPreview({
+  output,
+  toolName: _toolName,
+}: {
+  output: string;
+  toolName: string;
+}) {
+  const [fullscreen, setFullscreen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [htmlContent, setHtmlContent] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [previewReady, setPreviewReady] = useState(false);
+  const [iframeKey, setIframeKey] = useState(0);
+
+  // Match **Path:** first (markdown bold), then plain Path: with word boundary
+  const pathMatch =
+    output.match(/\*\*Path:\*\*\s*([^\n]+)/i) ||
+    output.match(/(?:^|[^*])Path:\s*([^\n]+\.html)/i);
+  const titleMatch =
+    output.match(/\*\*Title:\*\*\s*([^\n]+)/i) ||
+    output.match(/Title:\s*([^\n]+)/i);
+  const themeMatch = output.match(/\*\*Theme:\*\*\s*([^\n]+)/i);
+  const sectionsMatch = output.match(/\*\*Sections:\*\*\s*(\d+)/i);
+
+  const filePath = pathMatch?.[1]?.trim();
+  const title = titleMatch?.[1]?.trim() || "Report";
+  const theme = themeMatch?.[1]?.trim() || "dark";
+  const sectionsCount = sectionsMatch?.[1] || "?";
+
+  if (!filePath) {
+    return (
+      <pre className="mt-1 p-2 rounded bg-muted/50 text-xs overflow-x-auto max-h-48 whitespace-pre-wrap">
+        {output}
+      </pre>
+    );
+  }
+
+  const filename = filePath.split("/").pop() || "report.html";
+  const relativePath = filePath.startsWith("/tmp/jarvis-workspace/")
+    ? filePath.replace("/tmp/jarvis-workspace/", "")
+    : filePath.startsWith("/tmp/")
+      ? filePath.replace("/tmp/", "")
+      : filePath.startsWith("/")
+        ? filePath.substring(1)
+        : filePath;
+  const downloadUrl = `/api/files/workspace/${relativePath}`;
+
+  // Auto-trigger iframe reload on mount to ensure preview loads
+  useEffect(() => {
+    // Force iframe refresh by changing key after a short delay
+    // This ensures the iframe actually attempts to load
+    const timer = setTimeout(() => {
+      setIframeKey(k => k + 1);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [downloadUrl]);
+
+  const loadHtmlContent = async () => {
+    if (htmlContent) return;
+    setIsLoading(true);
+    try {
+      const response = await fetch(downloadUrl);
+      if (response.ok) {
+        const content = await response.text();
+        setHtmlContent(content);
+      }
+    } catch (err) {
+      console.error("Failed to load report:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    setIsExporting(true);
+    try {
+      let contentToExport = htmlContent;
+      if (!contentToExport) {
+        const res = await fetch(downloadUrl);
+        if (!res.ok) throw new Error("Failed to fetch report content");
+        contentToExport = await res.text();
+      }
+
+      const response = await fetch("/api/files/export-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          html: contentToExport,
+          filename: filename.replace(/\.html$/, ".pdf"),
+        }),
+      });
+
+      if (!response.ok) throw new Error("PDF generation failed");
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename.replace(/\.html$/, ".pdf");
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("PDF exported successfully!");
+    } catch (err) {
+      console.error("PDF export failed:", err);
+      toast.error(
+        "PDF export failed. Try opening the report and using browser print."
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handlePublishToVercel = async () => {
+    setIsPublishing(true);
+    try {
+      const response = await fetch("/api/jarvis/publish-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filePath,
+          title,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Publish failed");
+      }
+
+      const result = await response.json();
+      setPublishedUrl(result.url);
+      toast.success("Published to Vercel!", {
+        description: result.url,
+        action: {
+          label: "Open",
+          onClick: () => window.open(result.url, "_blank"),
+        },
+      });
+    } catch (err) {
+      console.error("Vercel publish failed:", err);
+      toast.error("Failed to publish to Vercel");
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  const themeColors: Record<
+    string,
+    { bg: string; border: string; accent: string }
+  > = {
+    dark: {
+      bg: "from-slate-900 to-indigo-950",
+      border: "border-indigo-500/30",
+      accent: "text-indigo-400",
+    },
+    light: {
+      bg: "from-slate-100 to-indigo-100",
+      border: "border-indigo-300",
+      accent: "text-indigo-600",
+    },
+    purple: {
+      bg: "from-purple-950 to-violet-950",
+      border: "border-purple-500/30",
+      accent: "text-purple-400",
+    },
+    blue: {
+      bg: "from-blue-950 to-cyan-950",
+      border: "border-blue-500/30",
+      accent: "text-blue-400",
+    },
+    green: {
+      bg: "from-emerald-950 to-teal-950",
+      border: "border-emerald-500/30",
+      accent: "text-emerald-400",
+    },
+  };
+
+  const colors = themeColors[theme] || themeColors.dark;
+
+  return (
+    <>
+      <div
+        className={cn(
+          "mt-3 rounded-xl overflow-hidden border-2",
+          colors.border,
+          "bg-gradient-to-br",
+          colors.bg
+        )}
+      >
+        <div className="p-4 border-b border-white/10">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div
+                className={cn(
+                  "p-2.5 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg",
+                  "shadow-indigo-500/25"
+                )}
+              >
+                <BarChart3 className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-white flex items-center gap-2">
+                  {title}
+                  <Sparkles className="h-4 w-4 text-yellow-400" />
+                </h3>
+                <p className="text-xs text-white/60 flex items-center gap-2 mt-0.5">
+                  <FileCode className="h-3 w-3" />
+                  {sectionsCount} sections • {theme} theme
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {publishedUrl && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-green-500/30 text-green-400 hover:bg-green-500/10"
+                  asChild
+                >
+                  <a
+                    href={publishedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Globe className="h-3.5 w-3.5" />
+                    Live
+                  </a>
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="relative bg-white">
+          <iframe
+            key={iframeKey}
+            src={downloadUrl}
+            className="w-full h-96 border-0"
+            title={title}
+            onLoad={() => setIsLoading(false)}
+          />
+          {isLoading && (
+            <div className="absolute inset-0 h-96 flex items-center justify-center bg-slate-900">
+              <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+            </div>
+          )}
+        </div>
+
+        <div className="p-3 border-t border-white/10 flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 border-white/20 text-white hover:bg-white/10"
+            onClick={() => {
+              loadHtmlContent();
+              setFullscreen(true);
+            }}
+          >
+            <Maximize2 className="h-3.5 w-3.5" />
+            Fullscreen
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 border-white/20 text-white hover:bg-white/10"
+            asChild
+          >
+            <a href={downloadUrl} download={filename}>
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </a>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 border-white/20 text-white hover:bg-white/10"
+            onClick={handleExportPdf}
+            disabled={isExporting}
+          >
+            {isExporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FileText className="h-3.5 w-3.5" />
+            )}
+            {isExporting ? "Exporting..." : "Export PDF"}
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            className="gap-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-0"
+            onClick={handlePublishToVercel}
+            disabled={isPublishing || !!publishedUrl}
+          >
+            {isPublishing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : publishedUrl ? (
+              <Globe className="h-3.5 w-3.5" />
+            ) : (
+              <Rocket className="h-3.5 w-3.5" />
+            )}
+            {isPublishing
+              ? "Publishing..."
+              : publishedUrl
+                ? "Published!"
+                : "Publish to Vercel"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 border-white/20 text-white hover:bg-white/10"
+            asChild
+          >
+            <a href={downloadUrl} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open
+            </a>
+          </Button>
+        </div>
+      </div>
+
+      <Dialog open={fullscreen} onOpenChange={setFullscreen}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh] w-full h-full p-0 bg-black/95 border-white/10">
+          <DialogTitle className="sr-only">{title}</DialogTitle>
+          <div className="relative flex flex-col h-full">
+            <div className="absolute top-3 right-3 z-10 flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-9 bg-black/60 hover:bg-black/80 text-white border-0 backdrop-blur-sm"
+                asChild
+              >
+                <a href={downloadUrl} download={filename}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download
+                </a>
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-9 bg-black/60 hover:bg-black/80 text-white border-0 backdrop-blur-sm"
+                onClick={handleExportPdf}
+                disabled={isExporting}
+              >
+                {isExporting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <FileText className="h-4 w-4 mr-2" />
+                )}
+                PDF
+              </Button>
+              {!publishedUrl && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-9 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-0"
+                  onClick={handlePublishToVercel}
+                  disabled={isPublishing}
+                >
+                  {isPublishing ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Rocket className="h-4 w-4 mr-2" />
+                  )}
+                  Publish
+                </Button>
+              )}
+              {publishedUrl && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-9 bg-green-600 hover:bg-green-700 text-white border-0"
+                  asChild
+                >
+                  <a
+                    href={publishedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Globe className="h-4 w-4 mr-2" />
+                    View Live
+                  </a>
+                </Button>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-9 w-9 p-0 bg-black/60 hover:bg-black/80 text-white border-0 backdrop-blur-sm"
+                onClick={() => setFullscreen(false)}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="flex-1 p-4 pt-14">
+              <iframe
+                src={downloadUrl}
+                className="w-full h-full rounded-lg shadow-2xl bg-white"
+                title={title}
+              />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -1034,6 +1446,15 @@ export function ToolOutputPreview({
     } catch {
       // Fall through to default rendering if JSON parsing fails
     }
+  }
+
+  if (
+    (toolName === "generate_interactive_report" ||
+      toolName === "create_rich_report") &&
+    (output.includes("report") || output.includes("Report")) &&
+    (output.includes(".html") || output.includes("Path:"))
+  ) {
+    return <ReportPreview output={output} toolName={toolName} />;
   }
 
   if (

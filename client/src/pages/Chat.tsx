@@ -297,6 +297,7 @@ export default function Chat() {
       }, 3000);
       return () => clearTimeout(timer);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
   // Update URL when chat changes

@@ -912,11 +912,11 @@ DEBUG=True
  */
 async function generateRailsFiles(
   projectPath: string,
-  config: ScaffoldConfig
+  _config: ScaffoldConfig
 ): Promise<string[]> {
   const files: string[] = [];
 
-  // Gemfile
+  /* eslint-disable no-useless-escape */
   const gemfile = `source "https://rubygems.org"
 git_source(:github) { |repo| "https://github.com/\#{repo}.git" }
 
@@ -944,6 +944,7 @@ group :development do
   gem "web-console", ">= 4.1.0"
 end
 `;
+  /* eslint-enable no-useless-escape */
   fs.writeFileSync(path.join(projectPath, "Gemfile"), gemfile);
   files.push("Gemfile");
 

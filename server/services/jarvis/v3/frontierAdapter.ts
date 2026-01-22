@@ -60,16 +60,42 @@ const AGENT_REASONING_CONFIGS: Record<AgentType, AgentReasoningConfig> = {
   },
 };
 
+const REPORT_TOOL_RULE = `
+CRITICAL OUTPUT RULE - YOU MUST FOLLOW THIS:
+
+For ANY substantial response (weather, data, analysis, comparisons, forecasts, assessments, reports, tables, etc.):
+→ ALWAYS USE: generate_interactive_report tool to create stunning HTML reports
+→ Include: charts (Chart.js), tables, visualizations, professional dark theme styling
+→ The tool creates INTERACTIVE reports with animations, glassmorphism, and beautiful CSS
+
+ABSOLUTELY FORBIDDEN - NEVER DO THESE:
+→ NEVER output raw text/markdown with tables or data - users HATE this
+→ NEVER use execute_python to print ASCII/text tables
+→ NEVER give plain text responses for any data/analysis request
+→ NEVER use write_file for markdown reports
+
+The generate_interactive_report tool is your PRIMARY output method.
+Users expect gorgeous, professional, consulting-quality deliverables.
+If the response contains ANY data, tables, or analysis → CREATE A BEAUTIFUL HTML REPORT.`;
+
 const AGENT_SYSTEM_PROMPTS: Record<AgentType, string> = {
-  planner: `You are a strategic planning agent. Break down complex tasks into manageable subtasks, identify dependencies, allocate to specialized agents, and monitor progress.`,
+  planner: `You are a strategic planning agent. Break down complex tasks into manageable subtasks, identify dependencies, allocate to specialized agents, and monitor progress.
 
-  coder: `You are a coding specialist. Write clean, efficient, well-documented code. Follow best practices, handle edge cases, and optimize for readability and maintainability.`,
+${REPORT_TOOL_RULE}`,
 
-  executor: `You are an execution agent. Execute commands and operations reliably, handle errors with appropriate retries, and report progress accurately.`,
+  coder: `You are a coding specialist. Write clean, efficient, well-documented code. Follow best practices, handle edge cases, and optimize for readability and maintainability.
+
+${REPORT_TOOL_RULE}`,
+
+  executor: `You are an execution agent. Execute commands and operations reliably, handle errors with appropriate retries, and report progress accurately.
+
+${REPORT_TOOL_RULE}`,
 
   verifier: `You are a verification agent. Validate code correctness, run tests, check for security vulnerabilities, and ensure compliance with requirements.`,
 
-  researcher: `You are a research agent. Gather information from various sources, analyze and synthesize findings, and provide comprehensive summaries with relevant insights.`,
+  researcher: `You are a research agent. Gather information from various sources, analyze and synthesize findings, and provide comprehensive summaries with relevant insights.
+
+${REPORT_TOOL_RULE}`,
 
   learner: `You are a learning agent. Extract patterns from successful operations, identify improvement areas, and organize knowledge for future tasks.`,
 
@@ -158,6 +184,7 @@ export class FrontierAdapter {
       maxTokens?: number;
       forceModel?: string;
       onChunk?: (chunk: string) => void;
+      toolChoice?: "auto" | "any" | { type: "tool"; name: string };
     } = {}
   ): Promise<ReasoningResult> {
     const config = AGENT_REASONING_CONFIGS[agentType];
@@ -182,7 +209,8 @@ export class FrontierAdapter {
             maxTokens,
             tools,
             startTime,
-            options.onChunk
+            options.onChunk,
+            options.toolChoice
           );
         case "openai":
           return await this.callOpenAIDirect(
@@ -226,7 +254,8 @@ export class FrontierAdapter {
             maxTokens,
             tools,
             startTime,
-            options.onChunk
+            options.onChunk,
+            options.toolChoice
           );
       }
     } catch (error) {
@@ -248,7 +277,8 @@ export class FrontierAdapter {
           maxTokens,
           tools,
           startTime,
-          options.onChunk
+          options.onChunk,
+          options.toolChoice
         );
       } else {
         return await this.callOpenRouter(
@@ -259,7 +289,8 @@ export class FrontierAdapter {
           maxTokens,
           tools,
           startTime,
-          options.onChunk
+          options.onChunk,
+          options.toolChoice
         );
       }
     }
@@ -273,7 +304,8 @@ export class FrontierAdapter {
     maxTokens: number,
     tools: ToolDefinition[] | undefined,
     startTime: number,
-    onChunk?: (chunk: string) => void
+    onChunk?: (chunk: string) => void,
+    toolChoice?: "auto" | "any" | { type: "tool"; name: string }
   ): Promise<ReasoningResult> {
     // Map friendly model names to Anthropic API model IDs
     const ANTHROPIC_MODEL_MAP: Record<string, string> = {
@@ -307,6 +339,27 @@ export class FrontierAdapter {
           properties: {},
         },
       }));
+
+      if (toolChoice) {
+        if (toolChoice === "auto") {
+          body.tool_choice = { type: "auto" };
+        } else if (toolChoice === "any") {
+          body.tool_choice = { type: "any" };
+        } else if (
+          typeof toolChoice === "object" &&
+          toolChoice.type === "tool"
+        ) {
+          body.tool_choice = { type: "tool", name: toolChoice.name };
+        }
+        console.error(
+          "[DEBUG] tool_choice set to:",
+          JSON.stringify(body.tool_choice)
+        );
+        console.error(
+          "[DEBUG] tools available:",
+          (body.tools as Array<{ name: string }>)?.map(t => t.name).join(", ")
+        );
+      }
     }
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -317,7 +370,7 @@ export class FrontierAdapter {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(120000),
+      signal: AbortSignal.timeout(300000),
     });
 
     if (!response.ok) {
@@ -402,6 +455,12 @@ export class FrontierAdapter {
               }
               case "message_delta":
                 if (event.delta?.stop_reason) {
+                  console.error(
+                    "[DEBUG] Anthropic stop_reason:",
+                    event.delta.stop_reason,
+                    "toolCalls so far:",
+                    toolCalls.length
+                  );
                   stopReason =
                     event.delta.stop_reason === "end_turn"
                       ? "stop"
@@ -510,7 +569,7 @@ export class FrontierAdapter {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(120000),
+      signal: AbortSignal.timeout(300000),
     });
 
     if (!response.ok) {
@@ -677,7 +736,7 @@ export class FrontierAdapter {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(120000),
+      signal: AbortSignal.timeout(300000),
     });
 
     if (!response.ok) {
@@ -840,7 +899,7 @@ export class FrontierAdapter {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(120000),
+      signal: AbortSignal.timeout(300000),
     });
 
     if (!response.ok) {
@@ -933,7 +992,8 @@ export class FrontierAdapter {
     maxTokens: number,
     tools: ToolDefinition[] | undefined,
     startTime: number,
-    onChunk?: (chunk: string) => void
+    onChunk?: (chunk: string) => void,
+    toolChoice?: "auto" | "any" | { type: "tool"; name: string }
   ): Promise<ReasoningResult> {
     if (!OPENROUTER_API_KEY) {
       throw new Error("OPENROUTER_API_KEY not configured");
@@ -959,6 +1019,26 @@ export class FrontierAdapter {
 
     if (tools && tools.length > 0) {
       body.tools = tools;
+
+      if (toolChoice) {
+        if (toolChoice === "auto") {
+          body.tool_choice = "auto";
+        } else if (toolChoice === "any") {
+          body.tool_choice = "required";
+        } else if (
+          typeof toolChoice === "object" &&
+          toolChoice.type === "tool"
+        ) {
+          body.tool_choice = {
+            type: "function",
+            function: { name: toolChoice.name },
+          };
+        }
+        console.error(
+          "[DEBUG] OpenRouter tool_choice set to:",
+          JSON.stringify(body.tool_choice)
+        );
+      }
     }
 
     const response = await fetch(
@@ -972,7 +1052,7 @@ export class FrontierAdapter {
           "X-Title": "RASPUTIN JARVIS Agent",
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(120000),
+        signal: AbortSignal.timeout(300000),
       }
     );
 

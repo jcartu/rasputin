@@ -137,7 +137,7 @@ interface ProceduralMemory {
   );
 }
 
-function ZapIcon(props: any) {
+function ZapIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
       {...props}

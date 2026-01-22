@@ -111,7 +111,7 @@ export function ChatSidebar({
     return groups;
   }, [filteredChats]);
 
-  const handleDeleteChat = async (chatId: number, e: React.MouseEvent) => {
+  const handleDeleteChat = async (chatId: number, e: React.SyntheticEvent) => {
     e.stopPropagation();
     setDeletingId(chatId);
     try {
@@ -124,20 +124,20 @@ export function ChatSidebar({
   const handleStartEdit = (
     chatId: number,
     currentTitle: string,
-    e: React.MouseEvent
+    e: React.SyntheticEvent
   ) => {
     e.stopPropagation();
     setEditingId(chatId);
     setEditTitle(currentTitle);
   };
 
-  const handleCancelEdit = (e: React.MouseEvent) => {
+  const handleCancelEdit = (e: React.SyntheticEvent) => {
     e.stopPropagation();
     setEditingId(null);
     setEditTitle("");
   };
 
-  const handleSaveEdit = async (chatId: number, e: React.MouseEvent) => {
+  const handleSaveEdit = async (chatId: number, e: React.SyntheticEvent) => {
     e.stopPropagation();
     if (!editTitle.trim()) {
       setEditingId(null);
@@ -157,7 +157,7 @@ export function ChatSidebar({
   const handleEditKeyDown = (chatId: number, e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      handleSaveEdit(chatId, e as any);
+      handleSaveEdit(chatId, e);
     } else if (e.key === "Escape") {
       setEditingId(null);
       setEditTitle("");
@@ -369,11 +369,7 @@ export function ChatSidebar({
                                 <DropdownMenuItem
                                   onClick={e => {
                                     e.stopPropagation();
-                                    handleStartEdit(
-                                      chat.id,
-                                      chat.title,
-                                      e as any
-                                    );
+                                    handleStartEdit(chat.id, chat.title, e);
                                   }}
                                 >
                                   <Pencil className="h-3 w-3 mr-2" />
@@ -400,7 +396,7 @@ export function ChatSidebar({
                                 <DropdownMenuItem
                                   onClick={e => {
                                     e.stopPropagation();
-                                    handleDeleteChat(chat.id, e as any);
+                                    handleDeleteChat(chat.id, e);
                                   }}
                                   className="text-destructive focus:text-destructive"
                                 >

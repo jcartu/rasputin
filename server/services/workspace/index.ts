@@ -732,9 +732,12 @@ export async function startDevServer(
   const template = await detectTemplate(userId, workspaceId);
   const templateConfig = WORKSPACE_TEMPLATES[template as TemplateId];
 
-  const serverCommand =
-    command || (templateConfig as any)?.devServerCommand || "npm run dev";
-  const serverPort = port || (templateConfig as any)?.devServerPort || 3000;
+  const config = templateConfig as {
+    devServerCommand?: string;
+    devServerPort?: number;
+  };
+  const serverCommand = command || config.devServerCommand || "npm run dev";
+  const serverPort = port || config.devServerPort || 3000;
 
   // Check if package.json exists and has dependencies
   const packageJsonPath = path.join(workspacePath, "package.json");

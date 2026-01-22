@@ -227,7 +227,10 @@ export function WorkspaceIDE({ workspaceId, onBack }: WorkspaceIDEProps) {
       <ResizablePanelGroup direction="horizontal" className="flex-1">
         {/* Sidebar */}
         <ResizablePanel defaultSize={20} minSize={15} maxSize={40}>
-          <Tabs value={activeTab} onValueChange={v => setActiveTab(v as any)}>
+          <Tabs
+            value={activeTab}
+            onValueChange={v => setActiveTab(v as "files" | "git" | "terminal")}
+          >
             <TabsList className="w-full justify-start rounded-none border-b bg-transparent px-2">
               <TabsTrigger value="files" className="gap-2">
                 <FolderOpen className="h-4 w-4" />
@@ -292,7 +295,8 @@ export function WorkspaceIDE({ workspaceId, onBack }: WorkspaceIDEProps) {
                             <span className="font-mono text-xs">
                               {commit.hash.substring(0, 7)}
                             </span>
-                            {(commit as any).isCheckpoint && (
+                            {(commit as { isCheckpoint?: boolean })
+                              .isCheckpoint && (
                               <Badge variant="secondary" className="text-xs">
                                 Checkpoint
                               </Badge>

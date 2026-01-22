@@ -1,6 +1,6 @@
 import { getDb } from "../../db";
 import { episodicMemories, semanticMemories } from "../../../drizzle/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { getOllamaClient } from "../localLLM/ollama";
 import { getVLLMClient } from "../localLLM/vllm";
 

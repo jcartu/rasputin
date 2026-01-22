@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+// eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace Tool {
   export interface Context {
     abort: AbortSignal;

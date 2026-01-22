@@ -14,6 +14,10 @@ import {
   memoryAccessLog as _memoryAccessLog,
   learningEvents,
   trainingData,
+  type EpisodicMemory as EpisodicMemoryRow,
+  type SemanticMemory as SemanticMemoryRow,
+  type ProceduralMemory as ProceduralMemoryRow,
+  type TrainingData as TrainingDataRow,
 } from "../../../drizzle/schema";
 import { eq, and, desc, sql, like } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
@@ -251,7 +255,7 @@ export class MemoryService {
             );
 
           const memoryMap = new Map(
-            memories.map((m: any) => [m.id, this.mapEpisodicResult(m)])
+            memories.map(m => [m.id, this.mapEpisodicResult(m)])
           );
 
           return qdrantResults
@@ -286,23 +290,29 @@ export class MemoryService {
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(episodicMemories.importance));
 
-    const scored = memories
-      .filter((m: any) => m.memoryEmbeddings?.vector)
-      .map((m: any) => ({
+    type MemoryWithEmbedding = {
+      episodicMemories: typeof episodicMemories.$inferSelect;
+      memoryEmbeddings: { vector: number[] } | null;
+    };
+    type ScoredMemory = { memory: EpisodicMemory; relevance: number };
+
+    const scored = (memories as MemoryWithEmbedding[])
+      .filter(m => m.memoryEmbeddings?.vector)
+      .map(m => ({
         memory: this.mapEpisodicResult(m.episodicMemories),
         relevance: cosineSimilarity(
           queryEmbedding,
           m.memoryEmbeddings!.vector as number[]
         ),
       }))
-      .filter((m: any) => {
+      .filter((m: ScoredMemory) => {
         if (tags && tags.length > 0) {
           const memoryTags = m.memory.tags || [];
           return tags.some((t: string) => memoryTags.includes(t));
         }
         return true;
       })
-      .sort((a: any, b: any) => b.relevance - a.relevance)
+      .sort((a: ScoredMemory, b: ScoredMemory) => b.relevance - a.relevance)
       .slice(0, limit);
 
     return scored;
@@ -377,7 +387,7 @@ export class MemoryService {
       .where(and(...conditions))
       .orderBy(desc(semanticMemories.confidence));
 
-    return results.map((r: any) => this.mapSemanticResult(r));
+    return results.map(r => this.mapSemanticResult(r));
   }
 
   async searchSemanticMemories(
@@ -414,7 +424,7 @@ export class MemoryService {
             );
 
           const memoryMap = new Map(
-            memories.map((m: any) => [m.id, this.mapSemanticResult(m)])
+            memories.map(m => [m.id, this.mapSemanticResult(m)])
           );
 
           return qdrantResults
@@ -433,7 +443,20 @@ export class MemoryService {
     const conditions = [eq(semanticMemories.isValid, 1)];
     if (userId) conditions.push(eq(semanticMemories.userId, userId));
     if (category)
-      conditions.push(eq(semanticMemories.category, category as any));
+      conditions.push(
+        eq(
+          semanticMemories.category,
+          category as
+            | "system_info"
+            | "user_info"
+            | "domain_knowledge"
+            | "api_info"
+            | "file_structure"
+            | "configuration"
+            | "relationship"
+            | "definition"
+        )
+      );
 
     const memories = await database
       .select()
@@ -444,16 +467,25 @@ export class MemoryService {
       )
       .where(and(...conditions));
 
-    const scored = memories
-      .filter((m: any) => m.memoryEmbeddings?.vector)
-      .map((m: any) => ({
+    type SemanticWithEmbedding = {
+      semanticMemories: typeof semanticMemories.$inferSelect;
+      memoryEmbeddings: { vector: number[] } | null;
+    };
+    type ScoredSemanticMemory = { memory: SemanticMemory; relevance: number };
+
+    const scored = (memories as SemanticWithEmbedding[])
+      .filter(m => m.memoryEmbeddings?.vector)
+      .map(m => ({
         memory: this.mapSemanticResult(m.semanticMemories),
         relevance: cosineSimilarity(
           queryEmbedding,
           m.memoryEmbeddings!.vector as number[]
         ),
       }))
-      .sort((a: any, b: any) => b.relevance - a.relevance)
+      .sort(
+        (a: ScoredSemanticMemory, b: ScoredSemanticMemory) =>
+          b.relevance - a.relevance
+      )
       .slice(0, limit);
 
     return scored;
@@ -557,7 +589,7 @@ export class MemoryService {
             );
 
           const memoryMap = new Map(
-            memories.map((m: any) => [m.id, this.mapProceduralResult(m)])
+            memories.map(m => [m.id, this.mapProceduralResult(m)])
           );
 
           return qdrantResults
@@ -585,15 +617,15 @@ export class MemoryService {
       .where(and(...conditions));
 
     const scored = memories
-      .filter((m: any) => m.memoryEmbeddings?.vector)
-      .map((m: any) => ({
+      .filter(m => m.memoryEmbeddings?.vector)
+      .map(m => ({
         memory: this.mapProceduralResult(m.proceduralMemories),
         relevance: cosineSimilarity(
           queryEmbedding,
           m.memoryEmbeddings!.vector as number[]
         ),
       }))
-      .sort((a: any, b: any) => b.relevance - a.relevance)
+      .sort((a, b) => b.relevance - a.relevance)
       .slice(0, limit);
 
     return scored;
@@ -824,7 +856,10 @@ export class MemoryService {
       eq(trainingData.usedForTraining, 0),
       sql`${trainingData.qualityScore} >= ${minQuality}`,
     ];
-    if (dataType) conditions.push(eq(trainingData.dataType, dataType as any));
+    if (dataType)
+      conditions.push(
+        eq(trainingData.dataType, dataType as TrainingDataRow["dataType"])
+      );
 
     const results = await database
       .select()
@@ -833,10 +868,10 @@ export class MemoryService {
       .orderBy(desc(trainingData.qualityScore))
       .limit(limit);
 
-    return results.map((r: any) => ({
+    return results.map(r => ({
       id: r.id,
       taskId: r.taskId,
-      dataType: r.dataType as any,
+      dataType: r.dataType,
       input: r.input,
       output: r.output,
       qualityScore: r.qualityScore,
@@ -926,69 +961,71 @@ export class MemoryService {
   // HELPER METHODS
   // ============================================================================
 
-  private mapEpisodicResult(row: any): EpisodicMemory {
+  private mapEpisodicResult(row: EpisodicMemoryRow): EpisodicMemory {
     return {
       id: row.id,
-      userId: row.userId,
-      taskId: row.taskId,
+      userId: row.userId ?? undefined,
+      taskId: row.taskId ?? undefined,
       memoryType: row.memoryType,
       title: row.title,
       description: row.description,
-      context: row.context,
-      action: row.action,
-      outcome: row.outcome,
-      lessons: row.lessons as string[] | undefined,
-      entities: row.entities as string[] | undefined,
-      tags: row.tags as string[] | undefined,
+      context: row.context ?? undefined,
+      action: row.action ?? undefined,
+      outcome: row.outcome ?? undefined,
+      lessons: (row.lessons as string[] | null) ?? undefined,
+      entities: (row.entities as string[] | null) ?? undefined,
+      tags: (row.tags as string[] | null) ?? undefined,
       importance: row.importance,
       accessCount: row.accessCount,
-      lastAccessedAt: row.lastAccessedAt,
-      embeddingId: row.embeddingId,
+      lastAccessedAt: row.lastAccessedAt ?? undefined,
+      embeddingId: row.embeddingId ?? undefined,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
   }
 
-  private mapSemanticResult(row: any): SemanticMemory {
+  private mapSemanticResult(row: SemanticMemoryRow): SemanticMemory {
     return {
       id: row.id,
-      userId: row.userId,
+      userId: row.userId ?? undefined,
       category: row.category,
       subject: row.subject,
       predicate: row.predicate,
       object: row.object,
       confidence: row.confidence,
-      source: row.source,
-      sourceTaskId: row.sourceTaskId,
+      source: row.source ?? undefined,
+      sourceTaskId: row.sourceTaskId ?? undefined,
       isValid: row.isValid === 1,
-      lastVerifiedAt: row.lastVerifiedAt,
-      expiresAt: row.expiresAt,
+      lastVerifiedAt: row.lastVerifiedAt ?? undefined,
+      expiresAt: row.expiresAt ?? undefined,
       accessCount: row.accessCount,
-      embeddingId: row.embeddingId,
+      embeddingId: row.embeddingId ?? undefined,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
   }
 
-  private mapProceduralResult(row: any): ProceduralMemory {
+  private mapProceduralResult(row: ProceduralMemoryRow): ProceduralMemory {
     return {
       id: row.id,
-      userId: row.userId,
+      userId: row.userId ?? undefined,
       name: row.name,
       description: row.description,
-      triggerConditions: row.triggerConditions as string[] | undefined,
-      prerequisites: row.prerequisites as string[] | undefined,
-      steps: row.steps as any,
-      postConditions: row.postConditions as string[] | undefined,
-      errorHandlers: row.errorHandlers as any,
+      triggerConditions:
+        (row.triggerConditions as string[] | null) ?? undefined,
+      prerequisites: (row.prerequisites as string[] | null) ?? undefined,
+      steps: row.steps,
+      postConditions: (row.postConditions as string[] | null) ?? undefined,
+      errorHandlers: row.errorHandlers ?? undefined,
       successRate: row.successRate,
       executionCount: row.executionCount,
       successCount: row.successCount,
-      avgExecutionTimeMs: row.avgExecutionTimeMs,
-      relatedProcedures: row.relatedProcedures as number[] | undefined,
-      sourceTaskId: row.sourceTaskId,
+      avgExecutionTimeMs: row.avgExecutionTimeMs ?? undefined,
+      relatedProcedures:
+        (row.relatedProcedures as number[] | null) ?? undefined,
+      sourceTaskId: row.sourceTaskId ?? undefined,
       isActive: row.isActive === 1,
-      embeddingId: row.embeddingId,
+      embeddingId: row.embeddingId ?? undefined,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };

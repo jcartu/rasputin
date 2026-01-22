@@ -399,7 +399,7 @@ async function queryGoogleDirect(
           callbacks.onChunk(text);
         }
       }
-    } catch (e) {
+    } catch (_e) {
       console.error(
         `[Gemini] Failed to parse response: ${buffer.slice(0, 200)}`
       );

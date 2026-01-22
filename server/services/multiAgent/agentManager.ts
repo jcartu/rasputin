@@ -59,8 +59,7 @@ export class AgentManager {
       VALUES (${userId}, ${agentName}, ${config.type}, 'idle', ${systemPromptValue}, ${capabilitiesValue}, 0, 0, 0)
     `);
 
-    // Get the inserted ID from the result
-    const insertedId = (result[0] as any).insertId;
+    const insertedId = (result[0] as { insertId: number }).insertId;
     const inserted = { id: insertedId };
 
     const agent: Agent = {

@@ -74,12 +74,18 @@ export interface ToolResult {
   metadata?: Record<string, unknown>;
 }
 
+export interface ConversationMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export interface ExecutionContext {
   sessionId: string;
   userId: number;
   taskId: number;
   params: Record<string, unknown>;
   enrichment?: Record<string, unknown>;
+  conversationHistory?: ConversationMessage[];
   leaseManager: LeaseManager;
   qdrant: QdrantClient;
   redis: RedisClient;

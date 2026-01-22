@@ -82,11 +82,11 @@ export function startServer() {
 
     websocket: {
       open(_ws) {
-        console.log("[WS] Client connected");
+        console.info("[WS] Client connected");
       },
 
       close(_ws) {
-        console.log("[WS] Client disconnected");
+        console.info("[WS] Client disconnected");
       },
 
       async message(ws, message) {
@@ -170,8 +170,8 @@ export function startServer() {
     },
   });
 
-  console.log(`Desktop daemon running on http://localhost:${PORT}`);
-  console.log(`Available tools: ${ToolRegistry.ids().join(", ")}`);
+  console.info(`Desktop daemon running on http://localhost:${PORT}`);
+  console.info(`Available tools: ${ToolRegistry.ids().join(", ")}`);
 
   return server;
 }

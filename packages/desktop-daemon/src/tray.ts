@@ -304,7 +304,7 @@ export function startTrayServer() {
     },
   });
 
-  console.log(`Tray UI available at http://localhost:${TRAY_PORT}`);
+  console.info(`Tray UI available at http://localhost:${TRAY_PORT}`);
 
   openTrayUI();
 
@@ -324,7 +324,7 @@ async function openTrayUI() {
       await $`xdg-open ${url}`.quiet();
     }
   } catch {
-    console.log(`Open ${url} in your browser to access the tray UI`);
+    console.info(`Open ${url} in your browser to access the tray UI`);
   }
 }
 

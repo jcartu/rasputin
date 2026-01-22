@@ -73,7 +73,9 @@ async function captureScreen(options?: {
   } catch (error) {
     try {
       await unlink(tmpFile);
-    } catch {}
+    } catch {
+      // Cleanup failed, ignore
+    }
     throw error;
   }
 }

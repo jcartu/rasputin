@@ -9,6 +9,7 @@ import { FsDialogTool } from "./fs-dialog";
 import { ActiveWindowTool } from "./active-window";
 import { KeystrokesTool } from "./keystrokes";
 
+// eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace ToolRegistry {
   const tools: Map<string, Tool.Info> = new Map();
 

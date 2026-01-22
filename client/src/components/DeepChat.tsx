@@ -95,6 +95,7 @@ export const DeepChat: React.FC<DeepChatProps> = ({ scenario, onComplete }) => {
     return () => {
       _isMounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scenario]);
 
   const addMessage = (

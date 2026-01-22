@@ -256,10 +256,13 @@ export function VoiceConversation({
 
   // Expose speak function
   useEffect(() => {
-    (window as any).jarvisSpeakFn = speak;
+    (window as unknown as { jarvisSpeakFn?: typeof speak }).jarvisSpeakFn =
+      speak;
     return () => {
-      delete (window as any).jarvisSpeakFn;
+      delete (window as unknown as { jarvisSpeakFn?: typeof speak })
+        .jarvisSpeakFn;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voiceId, isMuted]);
 
   return (
@@ -366,7 +369,9 @@ export function VoiceConversation({
 // Hook to use voice conversation
 export function useVoiceConversation() {
   const speak = useCallback((text: string) => {
-    const speakFn = (window as any).jarvisSpeakFn;
+    const speakFn = (
+      window as unknown as { jarvisSpeakFn?: (t: string) => void }
+    ).jarvisSpeakFn;
     if (speakFn) {
       speakFn(text);
     }

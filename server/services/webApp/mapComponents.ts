@@ -687,7 +687,7 @@ export default memo(InteractiveMap);
 `;
 }
 
-export function generateDualMapComponentCode(config: MapConfig): string {
+export function generateDualMapComponentCode(_config: MapConfig): string {
   return `"use client";
 
 import { useState } from "react";

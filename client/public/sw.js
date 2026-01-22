@@ -12,12 +12,12 @@ const STATIC_ASSETS = [
 
 // Install event - cache static assets
 self.addEventListener("install", event => {
-  console.log("[SW] Installing service worker...");
+  console.info("[SW] Installing service worker...");
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      console.log("[SW] Caching static assets");
+      console.info("[SW] Caching static assets");
       return cache.addAll(STATIC_ASSETS).catch(err => {
-        console.log("[SW] Cache addAll failed, continuing anyway:", err);
+        console.info("[SW] Cache addAll failed, continuing anyway:", err);
         return Promise.resolve();
       });
     })
@@ -27,14 +27,14 @@ self.addEventListener("install", event => {
 
 // Activate event - clean up old caches
 self.addEventListener("activate", event => {
-  console.log("[SW] Activating service worker...");
+  console.info("[SW] Activating service worker...");
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames
           .filter(name => name !== CACHE_NAME)
           .map(name => {
-            console.log("[SW] Deleting old cache:", name);
+            console.info("[SW] Deleting old cache:", name);
             return caches.delete(name);
           })
       );

@@ -47,7 +47,10 @@ export function UserProfileMenu() {
   };
 
   // Check if user has a Google avatar (stored in avatarUrl or picture field)
-  const avatarUrl = (user as any).avatarUrl || (user as any).picture || null;
+  const avatarUrl =
+    (user as unknown as { avatarUrl?: string; picture?: string }).avatarUrl ||
+    (user as unknown as { avatarUrl?: string; picture?: string }).picture ||
+    null;
   const displayName = user.name || "User";
 
   return (

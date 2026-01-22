@@ -133,6 +133,9 @@ After writing code:
       "run_shell",
       "execute_python",
       "execute_javascript",
+      // Report generation tools
+      "generate_interactive_report",
+      "create_rich_report",
     ];
     return available.filter(t => codingTools.includes(t));
   },
@@ -331,6 +334,8 @@ Output format:
       "analyze_document",
       "get_weather",
       "task_complete",
+      "generate_interactive_report",
+      "create_rich_report",
     ];
 
     if (

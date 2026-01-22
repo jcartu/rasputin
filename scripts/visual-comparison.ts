@@ -120,19 +120,19 @@ async function comparePages(
   });
   const page = await context.newPage();
 
-  console.log(`\n📸 Capturing: ${pageConfig.name}`);
+  console.info(`\n📸 Capturing: ${pageConfig.name}`);
 
   const jarvisUrl = JARVIS_PORTAL + pageConfig.jarvisPath;
   const referenceUrl = REFERENCE_PORTAL + pageConfig.referencePath;
 
-  console.log(`  JARVIS: ${jarvisUrl}`);
+  console.info(`  JARVIS: ${jarvisUrl}`);
   const jarvisBase64 = await takeScreenshot(
     page,
     jarvisUrl,
     `jarvis-${pageConfig.name.toLowerCase().replace(/\s+/g, "-")}`
   );
 
-  console.log(`  Reference: ${referenceUrl}`);
+  console.info(`  Reference: ${referenceUrl}`);
   const referenceBase64 = await takeScreenshot(
     page,
     referenceUrl,
@@ -141,7 +141,7 @@ async function comparePages(
 
   await context.close();
 
-  console.log(`  🔍 Analyzing with ${VISION_MODEL}...`);
+  console.info(`  🔍 Analyzing with ${VISION_MODEL}...`);
 
   const analysisPrompt = `Analyze this web page screenshot in detail. Identify:
 1. Overall layout and structure
@@ -188,7 +188,7 @@ Be critical and specific.`;
   };
 }
 
-async function testInteraction(
+async function _testInteraction(
   page: Page,
   action: string,
   selector: string
@@ -213,11 +213,11 @@ async function testInteraction(
 }
 
 async function main() {
-  console.log("🚀 Visual Comparison Script");
-  console.log(`   Using: ${VISION_MODEL} on RTX 6000 Pro`);
-  console.log(`   JARVIS Portal: ${JARVIS_PORTAL}`);
-  console.log(`   Reference Portal: ${REFERENCE_PORTAL}`);
-  console.log("");
+  console.info("🚀 Visual Comparison Script");
+  console.info(`   Using: ${VISION_MODEL} on RTX 6000 Pro`);
+  console.info(`   JARVIS Portal: ${JARVIS_PORTAL}`);
+  console.info(`   Reference Portal: ${REFERENCE_PORTAL}`);
+  console.info("");
 
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
@@ -232,10 +232,10 @@ async function main() {
   const hasVision = models.models.some(m => m.name === VISION_MODEL);
   if (!hasVision) {
     console.error(`❌ Vision model ${VISION_MODEL} not available`);
-    console.log("   Available:", models.models.map(m => m.name).join(", "));
+    console.info("   Available:", models.models.map(m => m.name).join(", "));
     process.exit(1);
   }
-  console.log(`✅ Vision model ready: ${VISION_MODEL}\n`);
+  console.info(`✅ Vision model ready: ${VISION_MODEL}\n`);
 
   const browser = await chromium.launch({ headless: true });
 
@@ -250,7 +250,7 @@ async function main() {
     try {
       const result = await comparePages(browser, pageConfig);
       results.push(result);
-      console.log(`  ✅ ${pageConfig.name} analyzed`);
+      console.info(`  ✅ ${pageConfig.name} analyzed`);
     } catch (error) {
       console.error(
         `  ❌ ${pageConfig.name} failed:`,
@@ -292,16 +292,16 @@ ${r.comparison}
 
   const reportPath = path.join(OUTPUT_DIR, "comparison-report.md");
   fs.writeFileSync(reportPath, report);
-  console.log(`\n📄 Report saved: ${reportPath}`);
+  console.info(`\n📄 Report saved: ${reportPath}`);
 
-  console.log("\n" + "=".repeat(60));
-  console.log("QUICK SUMMARY");
-  console.log("=".repeat(60));
+  console.info("\n" + "=".repeat(60));
+  console.info("QUICK SUMMARY");
+  console.info("=".repeat(60));
 
   for (const r of results) {
-    console.log(`\n### ${r.name}`);
+    console.info(`\n### ${r.name}`);
     const lines = r.comparison.split("\n").slice(0, 15);
-    console.log(lines.join("\n"));
+    console.info(lines.join("\n"));
   }
 }
 

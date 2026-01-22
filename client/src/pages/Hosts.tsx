@@ -997,29 +997,33 @@ function AuditLogSheet({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {logsQuery.data?.map((log: any) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        {new Date(log.createdAt).toLocaleString()}
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {log.command || (
-                          <span className="italic text-muted-foreground">
-                            {log.action}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            log.status === "success" ? "outline" : "destructive"
-                          }
-                        >
-                          {log.status}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {logsQuery.data?.map(
+                    (log: (typeof logsQuery.data)[number]) => (
+                      <TableRow key={log.id}>
+                        <TableCell className="font-mono text-xs text-muted-foreground">
+                          {new Date(log.createdAt).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {log.command || (
+                            <span className="italic text-muted-foreground">
+                              command
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              log.status === "completed"
+                                ? "outline"
+                                : "destructive"
+                            }
+                          >
+                            {log.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  )}
                 </TableBody>
               </Table>
             </div>

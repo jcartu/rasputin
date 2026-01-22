@@ -1,128 +1,312 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  type ReactNode,
+} from "react";
 import { useLocation } from "wouter";
+import ReactMarkdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Terminal,
-  Cpu,
-  Activity,
-  Zap,
-  Shield,
-  MessageSquare,
   Mic,
   Send,
+  ChevronDown,
   ChevronRight,
-  ChevronLeft,
-  Brain,
-  Layers,
-  Code,
+  Plus,
+  Settings,
+  ExternalLink,
   Loader2,
   CheckCircle2,
   XCircle,
+  MessageSquare,
+  Sparkles,
+  Brain,
+  Cpu,
+  Activity,
+  Zap,
+  FileText,
+  FileDown,
+  Upload,
+  Copy,
+  RefreshCw,
+  Wifi,
+  WifiOff,
+  Search,
+  Database,
+  Code,
+  Globe,
+  FileCode,
+  Play,
   Clock,
-  StopCircle,
+  ArrowRight,
+  Circle,
+  AlertTriangle,
+  Info,
+  Server,
+  Boxes,
 } from "lucide-react";
-import { IntelligenceStream } from "@/components/IntelligenceStream";
+import { toast } from "sonner";
+
+type LogEvent = {
+  id: string;
+  timestamp: Date;
+  type:
+    | "websocket"
+    | "tool"
+    | "thinking"
+    | "api"
+    | "error"
+    | "memory"
+    | "system"
+    | "code"
+    | "search";
+  message: string;
+  details?: string;
+  status?: "running" | "success" | "error";
+};
+
+const eventConfig: Record<
+  LogEvent["type"],
+  { icon: typeof Wifi; color: string; bgColor: string; label: string }
+> = {
+  websocket: {
+    icon: Wifi,
+    color: "text-blue-400",
+    bgColor: "bg-blue-500/20",
+    label: "WS",
+  },
+  tool: {
+    icon: Boxes,
+    color: "text-green-400",
+    bgColor: "bg-green-500/20",
+    label: "TOOL",
+  },
+  thinking: {
+    icon: Brain,
+    color: "text-purple-400",
+    bgColor: "bg-purple-500/20",
+    label: "THINK",
+  },
+  api: {
+    icon: Globe,
+    color: "text-yellow-400",
+    bgColor: "bg-yellow-500/20",
+    label: "API",
+  },
+  error: {
+    icon: AlertTriangle,
+    color: "text-red-400",
+    bgColor: "bg-red-500/20",
+    label: "ERR",
+  },
+  memory: {
+    icon: Database,
+    color: "text-orange-400",
+    bgColor: "bg-orange-500/20",
+    label: "MEM",
+  },
+  system: {
+    icon: Server,
+    color: "text-cyan-400",
+    bgColor: "bg-cyan-500/20",
+    label: "SYS",
+  },
+  code: {
+    icon: Code,
+    color: "text-emerald-400",
+    bgColor: "bg-emerald-500/20",
+    label: "CODE",
+  },
+  search: {
+    icon: Search,
+    color: "text-pink-400",
+    bgColor: "bg-pink-500/20",
+    label: "SRCH",
+  },
+};
 import { Button } from "@/components/ui/button";
+
+function hasReportPath(text: string): boolean {
+  return text.includes("/tmp/jarvis-workspace/") && text.includes(".html");
+}
+
+function extractReportInfo(text: string): string {
+  const pathMatch = text.match(/\/tmp\/jarvis-workspace\/[^\s"']+\.html/);
+  if (!pathMatch) return text;
+
+  const path = pathMatch[0];
+  const titleMatch = text.match(/report[^.]*\.html/i);
+  const title = titleMatch
+    ? titleMatch[0].replace(".html", "").replace(/_/g, " ")
+    : "Report";
+
+  return `**Path:** ${path}\n**Title:** ${title}\n**Theme:** dark`;
+}
+
+const markdownComponents: Components = {
+  h1: ({ children }) => (
+    <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 mt-6 mb-4 pb-2 border-b border-white/10">
+      {children}
+    </h1>
+  ),
+  h2: ({ children }) => (
+    <h2 className="text-xl font-semibold text-cyan-400 mt-6 mb-3 flex items-center gap-2">
+      <div className="h-1 w-1 rounded-full bg-cyan-400" />
+      {children}
+    </h2>
+  ),
+  h3: ({ children }) => (
+    <h3 className="text-lg font-medium text-white/90 mt-4 mb-2">{children}</h3>
+  ),
+  p: ({ children }) => (
+    <p className="text-white/80 leading-relaxed my-3">{children}</p>
+  ),
+  strong: ({ children }) => (
+    <strong className="font-semibold text-cyan-300">{children}</strong>
+  ),
+  em: ({ children }) => <em className="italic text-white/70">{children}</em>,
+  code: ({ className, children }) => {
+    const isBlock = className?.includes("language-");
+    const codeContent = String(children || "");
+
+    // Hide HTML code blocks - they're generated reports that shouldn't be shown as code
+    if (
+      isBlock &&
+      (className?.includes("html") ||
+        codeContent.includes("<!DOCTYPE") ||
+        codeContent.includes("<html"))
+    ) {
+      return null;
+    }
+
+    if (isBlock) {
+      return (
+        <div className="my-4 rounded-lg overflow-hidden border border-white/10">
+          <div className="bg-[#1a1a2e] px-4 py-2 text-xs text-cyan-400/60 border-b border-white/10">
+            {className?.replace("language-", "") || "code"}
+          </div>
+          <pre className="bg-[#0d0d1a] p-4 overflow-x-auto">
+            <code className="text-sm font-mono text-cyan-300">{children}</code>
+          </pre>
+        </div>
+      );
+    }
+    return (
+      <code className="bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded text-sm font-mono">
+        {children}
+      </code>
+    );
+  },
+  pre: ({ children }) => <>{children}</>,
+  ul: ({ children }) => <ul className="my-3 space-y-2 ml-1">{children}</ul>,
+  ol: ({ children }) => (
+    <ol className="my-3 space-y-2 ml-1 list-decimal list-inside">{children}</ol>
+  ),
+  li: ({ children }) => (
+    <li className="text-white/80 flex items-start gap-2">
+      <span className="text-cyan-400 mt-1.5">•</span>
+      <span className="flex-1">{children}</span>
+    </li>
+  ),
+  table: ({ children }) => (
+    <div className="my-4 rounded-lg overflow-hidden border border-white/10">
+      <table className="w-full">{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => (
+    <thead className="bg-gradient-to-r from-cyan-500/20 to-blue-500/20">
+      {children}
+    </thead>
+  ),
+  tbody: ({ children }) => (
+    <tbody className="divide-y divide-white/5">{children}</tbody>
+  ),
+  tr: ({ children }) => (
+    <tr className="hover:bg-white/5 transition-colors">{children}</tr>
+  ),
+  th: ({ children }) => (
+    <th className="px-4 py-3 text-left text-xs font-semibold text-cyan-300 uppercase tracking-wider">
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td className="px-4 py-3 text-sm text-white/70">{children}</td>
+  ),
+  hr: () => <hr className="my-6 border-white/10" />,
+  blockquote: ({ children }) => (
+    <blockquote className="my-4 pl-4 border-l-2 border-cyan-500 bg-cyan-500/5 py-2 pr-4 rounded-r-lg italic text-white/70">
+      {children}
+    </blockquote>
+  ),
+  a: ({ href, children }) => (
+    <a
+      href={href}
+      className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2 transition-colors"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {children}
+    </a>
+  ),
+};
+
+function RichContent({
+  content,
+  isStreaming = false,
+}: {
+  content: string;
+  isStreaming?: boolean;
+}) {
+  if (isStreaming) {
+    return (
+      <div className="text-white/70 font-mono text-sm whitespace-pre-wrap animate-pulse">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rich-content">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={markdownComponents}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+}
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { ReportPreview } from "@/components/ToolOutputPreview";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useJarvisStream } from "@/hooks/useJarvisStream";
 import { getSocket } from "@/lib/socket";
-import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
-
-function TypewriterText({
-  text,
-  speed = 15,
-  className,
-}: {
-  text: string;
-  speed?: number;
-  className?: string;
-}) {
-  const [displayText, setDisplayText] = useState("");
-  const [isComplete, setIsComplete] = useState(false);
-
-  useEffect(() => {
-    if (!text) return;
-    setDisplayText("");
-    setIsComplete(false);
-    let index = 0;
-    const interval = setInterval(() => {
-      if (index < text.length) {
-        setDisplayText(text.slice(0, index + 1));
-        index++;
-      } else {
-        setIsComplete(true);
-        clearInterval(interval);
-      }
-    }, speed);
-    return () => clearInterval(interval);
-  }, [text, speed]);
-
-  return (
-    <span className={className}>
-      {displayText}
-      {!isComplete && (
-        <span className="inline-block w-2 h-4 ml-0.5 bg-cyan-400 animate-pulse" />
-      )}
-    </span>
-  );
-}
-
-const TOOL_TO_AGENT: Record<string, string> = {
-  web_search: "VIS",
-  browse_url: "VIS",
-  execute_python: "CODE",
-  execute_javascript: "CODE",
-  run_shell: "EXEC",
-  read_file: "MEM",
-  write_file: "MEM",
-  list_files: "MEM",
-  search_memory: "MEM",
-  store_memory: "MEM",
-  calculate: "CODE",
-  http_request: "VIS",
-  generate_image: "VIS",
-  task_complete: "VER",
-  create_rich_report: "CODE",
-};
 
 export default function Prototype() {
   const [, navigate] = useLocation();
   const { user, refresh: refreshAuth } = useAuth();
   const jarvis = useJarvisStream();
 
-  const [logs, setLogs] = useState<any[]>([]);
   const [input, setInput] = useState("");
-  const [isHudOpen, setIsHudOpen] = useState(true);
-  const [isListening, setIsListening] = useState(false);
-  const [gpuData, setGpuData] = useState<any[]>(() =>
-    Array.from({ length: 60 }).map((_, i) => ({
-      time: new Date(Date.now() - (60 - i) * 1000).toISOString(),
-      load: Math.floor(Math.random() * 10) + 5,
-      vram: Math.floor(Math.random() * 5) + 10,
-    }))
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isAgentMode, setIsAgentMode] = useState(true);
+  const [activeTab, setActiveTab] = useState<"agent" | "research" | "docs">(
+    "agent"
   );
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [authChecked, setAuthChecked] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const [isConnected, setIsConnected] = useState(false);
-  const [isOverride, setIsOverride] = useState(false);
-
-  const { data: systemStats } = trpc.localStats.get.useQuery(undefined, {
-    refetchInterval: 2000,
-  });
-
-  const { data: taskHistory } = trpc.jarvis.listTasks.useQuery({ limit: 20 });
+  const { data: taskHistory } = trpc.jarvis.listTasks.useQuery({ limit: 30 });
 
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
-  const { data: selectedTaskMessages } = trpc.jarvis.getTaskMessages.useQuery(
-    { taskId: selectedTaskId ?? undefined },
-    { enabled: !!selectedTaskId }
-  );
-  const selectedTask = taskHistory?.find((t: any) => t.id === selectedTaskId);
+  const selectedTask = taskHistory?.find(t => t.id === selectedTaskId);
 
   useEffect(() => {
     refreshAuth().then(() => setAuthChecked(true));
@@ -151,370 +335,33 @@ export default function Prototype() {
   }, []);
 
   useEffect(() => {
-    if (systemStats) {
-      setGpuData(prev => {
-        const now = new Date();
-        const time = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
-        const gpuTotal = systemStats.gpu?.memoryTotalMb ?? 1;
-        const gpuUsed = systemStats.gpu?.memoryUsedMb ?? 0;
-        const load =
-          systemStats.gpu?.utilizationPercent ??
-          Math.floor(Math.random() * 30) + 20;
-        const vram = Math.round((gpuUsed / gpuTotal) * 100);
-        const newData = [...prev, { time, load, vram }];
-        return newData.slice(-60);
-      });
-    }
-  }, [systemStats]);
+    if (
+      taskHistory &&
+      taskHistory.length > 0 &&
+      jarvis.exchanges.length === 0
+    ) {
+      const recentCompletedTasks = taskHistory
+        .filter(t => t.status === "completed" && t.summary)
+        .slice(0, 5)
+        .map(t => ({ query: t.query, summary: t.summary }));
 
-  // TTS Handler
-  const speak = async (text: string) => {
-    try {
-      // Using a high-quality default voice ID since exact Rasputin ID wasn't found
-      // Voice: "Josh" - deep, professional, authoritative
-      const VOICE_ID = "TxGEqnHWrfWFTfGW9XjX";
-      const API_KEY = "sk_dcd04145dad2fa39684fd10fe3973b56fe539614369e507f";
-
-      const response = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "xi-api-key": API_KEY,
-          },
-          body: JSON.stringify({
-            text,
-            model_id: "eleven_turbo_v2",
-            voice_settings: {
-              stability: 0.5,
-              similarity_boost: 0.75,
-            },
-          }),
-        }
-      );
-
-      if (!response.ok) throw new Error("TTS failed");
-
-      const blob = await response.blob();
-      const audio = new Audio(URL.createObjectURL(blob));
-      audio.play();
-    } catch (error) {
-      console.error("TTS Error:", error);
-    }
-  };
-
-  // Voice Command Handler
-  const toggleListening = () => {
-    if (isListening) {
-      setIsListening(false);
-      return;
-    }
-
-    if (!("webkitSpeechRecognition" in window)) {
-      alert("Voice command not supported in this browser.");
-      return;
-    }
-
-    setIsListening(true);
-    const recognition = new (window as any).webkitSpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = "en-US";
-
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setMessages(prev => [...prev, { role: "user", content: transcript }]);
-
-      // Trigger demo response for specific keywords
-      if (
-        transcript.toLowerCase().includes("analyze") ||
-        transcript.toLowerCase().includes("market")
-      ) {
-        runDemo();
-      } else if (
-        transcript.toLowerCase().includes("override") ||
-        transcript.toLowerCase().includes("control")
-      ) {
-        setIsOverride(true);
-        speak(
-          "Manual override engaged. Establishing secure VNC tunnel to Rasputin server."
-        );
+      if (recentCompletedTasks.length > 0) {
+        jarvis.loadConversationHistory(recentCompletedTasks);
       }
-    };
-
-    recognition.onerror = () => setIsListening(false);
-    recognition.onend = () => setIsListening(false);
-    recognition.start();
-  };
-
-  const [activeScenario, setActiveScenario] = useState<string | null>(null);
-  const [showStream, setShowStream] = useState(false);
-  const [_messages, setMessages] = useState<any[]>([]);
-  const [activeAgent, setActiveAgent] = useState<string | null>(null);
-  const [isTaskListOpen, setIsTaskListOpen] = useState(true);
-  const [_agentMetrics, setAgentMetrics] = useState<
-    Record<string, { cpu: number; mem: number; net: number }>
-  >({});
-
-  const currentRunningTool = jarvis.steps.find(
-    s => s.type === "tool" && s.tool?.status === "running"
-  )?.tool?.name;
-
-  const derivedActiveAgent = currentRunningTool
-    ? TOOL_TO_AGENT[currentRunningTool] || "ORCH"
-    : jarvis.isStreaming
-      ? "ORCH"
-      : null;
+    }
+  }, [taskHistory, jarvis.loadConversationHistory, jarvis.exchanges.length]);
 
   useEffect(() => {
-    if (derivedActiveAgent) {
-      setActiveAgent(derivedActiveAgent);
-    } else if (!jarvis.isStreaming) {
-      setActiveAgent(null);
+    if (user?.id && !jarvis.isStreaming) {
+      jarvis.rejoinTask(user.id);
     }
-  }, [derivedActiveAgent, jarvis.isStreaming]);
+  }, [user?.id, jarvis.rejoinTask, jarvis.isStreaming]);
 
   useEffect(() => {
-    const newLogs: any[] = [];
-    const now = new Date();
-
-    if (jarvis.isStreaming && jarvis.steps.length === 0) {
-      newLogs.push({
-        agent: "ORCH",
-        msg: "Using swarm mode with frontier APIs for multi-agent coordination...",
-        type: "info",
-        timestamp:
-          now.toLocaleTimeString([], {
-            hour12: false,
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-          }) +
-          "." +
-          String(now.getMilliseconds()).padStart(3, "0"),
-      });
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-
-    jarvis.steps.forEach((step, idx) => {
-      const stepTime = new Date(now.getTime() + idx * 100);
-      const timestamp =
-        stepTime.toLocaleTimeString([], {
-          hour12: false,
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        }) +
-        "." +
-        String(stepTime.getMilliseconds()).padStart(3, "0");
-
-      if (step.type === "tool" && step.tool) {
-        const agentCode = TOOL_TO_AGENT[step.tool.name] || "EXEC";
-        const statusSuffix =
-          step.tool.status === "running"
-            ? " [RUNNING]"
-            : step.tool.status === "failed"
-              ? " [FAILED]"
-              : " [DONE]";
-        newLogs.push({
-          agent: agentCode,
-          msg: `${step.tool.name}${statusSuffix}`,
-          type: step.tool.status === "failed" ? "error" : "exec",
-          timestamp,
-        });
-        if (step.tool.durationMs && step.tool.status !== "running") {
-          newLogs.push({
-            agent: agentCode,
-            msg: `└─ completed in ${(step.tool.durationMs / 1000).toFixed(2)}s`,
-            type: "info",
-            timestamp,
-          });
-        }
-      } else if (step.type === "thinking" && step.content) {
-        newLogs.push({
-          agent: "ORCH",
-          msg:
-            step.content.slice(0, 120) +
-            (step.content.length > 120 ? "..." : ""),
-          type: "info",
-          timestamp,
-        });
-      }
-    });
-
-    if (newLogs.length > 0) {
-      setLogs(newLogs);
-    }
-  }, [jarvis.steps, jarvis.isStreaming]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setAgentMetrics(prev => {
-        const next = { ...prev };
-        ["ORCH", "PLAN", "CODE", "VIS", "EXEC", "MEM", "VER", "SEC"].forEach(
-          agent => {
-            const isActive = activeAgent === agent;
-            next[agent] = {
-              cpu: isActive ? Math.random() * 40 + 50 : Math.random() * 10 + 2,
-              mem: isActive
-                ? Math.random() * 200 + 300
-                : Math.random() * 50 + 100,
-              net: isActive ? Math.random() * 50 + 10 : Math.random() * 2,
-            };
-          }
-        );
-        return next;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [activeAgent]);
-
-  // Scenarios
-  const scenarios = {
-    bugfix: {
-      name: "Bug Fix",
-      prompt: "Scan my screen and find the bug in this Python script.",
-      logs: [
-        {
-          agent: "Vision",
-          msg: "Capturing screen (2560x1440)...",
-          type: "vision",
-        },
-        {
-          agent: "Vision",
-          msg: "OCR processing: found 128 lines of code",
-          type: "vision",
-        },
-        {
-          agent: "Memory",
-          msg: "Loading python_expert context...",
-          type: "db",
-        },
-        {
-          agent: "Planner",
-          msg: "Identified infinite loop in line 42",
-          type: "action",
-        },
-      ],
-      response:
-        "I found the issue. You have an infinite loop in the `while` condition on line 42 because `i` is never incremented.\n\nHere is the fixed code block:",
-      speech:
-        "I found the issue. You have an infinite loop in the while condition on line 42.",
-      thinking: [
-        "Scanning screen buffer...",
-        "Parsing Python syntax tree...",
-        "Detected logic error: infinite loop",
-        "Generating fix...",
-      ],
-    },
-    security: {
-      name: "Global Cyber-Defense Audit",
-      prompt: "Initiate global security sweep. Scan all subnets for anomalies.",
-      logs: Array.from({ length: 50 }, (_, i) => ({
-        agent: ["SEC", "NET", "SCAN", "AI"][i % 4],
-        msg: `Scanning subnet 192.168.${i}.0/24... [${Math.floor(Math.random() * 100)}% COMPLETE]`,
-        type: ["info", "check", "vision", "db"][i % 4],
-      })),
-      response:
-        "Security sweep complete. Detected 3 anomalies in subnet 192.168.4.0/24. Isolating compromised nodes and patching firewall rules.",
-      speech: "Security sweep complete. Anomalies detected and isolated.",
-      thinking: [
-        "Initializing NMAP scan...",
-        "Analyzing packet headers...",
-        "Cross-referencing CVE database...",
-        "Deploying countermeasures...",
-      ],
-    },
-    saas: {
-      name: "Autonomous SaaS Deployment",
-      prompt: "Build and deploy a full-stack SaaS app for 'CryptoTracker'.",
-      logs: Array.from({ length: 50 }, (_, i) => ({
-        agent: ["CODE", "EXEC", "TEST", "DEP"][i % 4],
-        msg: `Compiling module core/v${i}... [SUCCESS]`,
-        type: ["exec", "action", "success", "info"][i % 4],
-      })),
-      response:
-        "SaaS deployment successful. 'CryptoTracker' is live at https://crypto-tracker.jarvis.ai. All unit tests passed (420/420).",
-      speech: "SaaS deployment successful. Application is live.",
-      thinking: [
-        "Scaffolding React frontend...",
-        "Configuring PostgreSQL schema...",
-        "Running CI/CD pipeline...",
-        "Verifying SSL certificates...",
-      ],
-    },
-    market: {
-      name: "Alpha-Centauri Market Arbitrage",
-      prompt: "Execute high-frequency arbitrage across all major exchanges.",
-      logs: Array.from({ length: 100 }, (_, i) => ({
-        agent: ["TRADER", "QUANT", "EXEC", "RISK"][i % 4],
-        msg: `Arbitrage opportunity: BTC/USD spread ${Math.random().toFixed(4)}% [EXECUTING]`,
-        type: ["success", "info", "action", "db"][i % 4],
-      })),
-      response:
-        "Arbitrage execution complete. Net profit: +4.20% ($12,450). Risk parameters maintained within 0.5% variance.",
-      speech: "Arbitrage execution complete. Net profit positive.",
-      thinking: [
-        "Analyzing order books (Binance, Coinbase)...",
-        "Calculating latency delta...",
-        "Executing flash loan...",
-        "Rebalancing portfolio...",
-      ],
-    },
-  };
-
-  const [selectedScenario, setSelectedScenario] =
-    useState<keyof typeof scenarios>("bugfix");
-
-  // Audio Synthesizer
-  const _playSound = (type: "type" | "alert" | "success" | "hover") => {
-    const ctx = new (window.AudioContext ||
-      (window as any).webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    const now = ctx.currentTime;
-
-    if (type === "type") {
-      // High-tech typing click
-      osc.type = "square";
-      osc.frequency.setValueAtTime(800 + Math.random() * 200, now);
-      osc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
-      gain.gain.setValueAtTime(0.05, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-      osc.start(now);
-      osc.stop(now + 0.05);
-    } else if (type === "alert") {
-      // Warning beep
-      osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(440, now);
-      osc.frequency.linearRampToValueAtTime(880, now + 0.1);
-      gain.gain.setValueAtTime(0.1, now);
-      gain.gain.linearRampToValueAtTime(0, now + 0.3);
-      osc.start(now);
-      osc.stop(now + 0.3);
-    } else if (type === "success") {
-      // Positive chime
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(880, now);
-      osc.frequency.exponentialRampToValueAtTime(1760, now + 0.2);
-      gain.gain.setValueAtTime(0.1, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-      osc.start(now);
-      osc.stop(now + 0.5);
-    } else if (type === "hover") {
-      // Subtle hover hum
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(220, now);
-      gain.gain.setValueAtTime(0.02, now);
-      gain.gain.linearRampToValueAtTime(0, now + 0.05);
-      osc.start(now);
-      osc.stop(now + 0.05);
-    }
-  };
+  }, [jarvis.steps, jarvis.summary]);
 
   const handleSubmit = useCallback(() => {
     if (!input.trim() || !user) {
@@ -522,1003 +369,796 @@ export default function Prototype() {
       return;
     }
     jarvis.startTask(input, user.id);
-    setShowStream(true);
-    setActiveScenario("jarvis");
     setSelectedTaskId(null);
     setInput("");
   }, [input, user, jarvis]);
 
-  const runDemo = () => {
-    const scenario = scenarios[selectedScenario];
-    if (user) {
-      jarvis.startTask(scenario.prompt, user.id);
-      setShowStream(true);
-      setActiveScenario(selectedScenario);
-    } else {
-      toast.error("Please sign in to use JARVIS");
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-[#050505] text-foreground font-sans overflow-hidden selection:bg-cyan-500/30">
-      {/* Background Grid */}
-      <div className="absolute inset-0 z-0 pointer-events-none bg-[linear-gradient(to_right,#1a1a1a_1px,transparent_1px),linear-gradient(to_bottom,#1a1a1a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_80%_at_50%_50%,#000_40%,transparent_100%)] opacity-20" />
+  const handleNewTask = () => {
+    jarvis.reset();
+    setSelectedTaskId(null);
+    inputRef.current?.focus();
+  };
 
-      {/* Main Layout */}
-      <div className="relative z-10 flex h-full">
-        {/* Left Sidebar (Navigation + Task List) */}
-        <div
-          className={cn(
-            "border-r border-white/10 flex flex-col bg-black/40 backdrop-blur-md transition-all duration-300",
-            isTaskListOpen ? "w-72" : "w-16"
-          )}
-        >
-          {/* Logo & Toggle */}
-          <div className="h-16 border-b border-white/10 flex items-center justify-between px-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-cyan-500/10 border border-cyan-500/50 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.3)] shrink-0">
-                <Terminal className="h-5 w-5 text-cyan-400" />
-              </div>
-              {isTaskListOpen && (
-                <span className="font-mono font-bold text-xs tracking-widest text-cyan-400 animate-in fade-in">
-                  TASKS
-                </span>
-              )}
-            </div>
+  const groupedTasks = taskHistory?.reduce(
+    (acc, task) => {
+      const date = new Date(task.createdAt);
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      let group: string;
+      if (date.toDateString() === today.toDateString()) {
+        group = "TODAY";
+      } else if (date.toDateString() === yesterday.toDateString()) {
+        group = "YESTERDAY";
+      } else {
+        group = "EARLIER";
+      }
+
+      if (!acc[group]) acc[group] = [];
+      acc[group].push(task);
+      return acc;
+    },
+    {} as Record<string, typeof taskHistory>
+  );
+
+  return (
+    <div className="fixed inset-0 bg-[#0a0a0a] text-white font-sans overflow-hidden">
+      <div className="flex h-full">
+        <div className="w-56 border-r border-white/10 flex flex-col bg-[#111]">
+          <div className="p-3">
             <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-muted-foreground hover:text-cyan-400"
-              onClick={() => setIsTaskListOpen(!isTaskListOpen)}
+              variant="outline"
+              className="w-full justify-start gap-2 h-9 bg-transparent border-white/20 text-white/80 hover:bg-white/5 hover:text-white"
+              onClick={handleNewTask}
             >
-              {isTaskListOpen ? (
-                <ChevronLeft className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
+              <Plus className="h-4 w-4" />
+              New Task
             </Button>
           </div>
 
-          {/* Task List */}
-          {isTaskListOpen && (
-            <ScrollArea className="flex-1 p-2">
-              <div className="space-y-1">
-                {taskHistory?.map((task: any) => (
-                  <button
-                    key={task.id}
-                    className={cn(
-                      "w-full text-left p-2 rounded-lg border transition-all duration-200 group",
-                      task.status === "completed"
-                        ? "border-green-500/20 bg-green-500/5 hover:bg-green-500/10"
-                        : task.status === "failed"
-                          ? "border-red-500/20 bg-red-500/5 hover:bg-red-500/10"
-                          : task.status === "running"
-                            ? "border-cyan-500/30 bg-cyan-500/10 animate-pulse"
-                            : "border-white/10 bg-white/5 hover:bg-white/10"
-                    )}
-                    onClick={() => setSelectedTaskId(task.id)}
-                  >
-                    <div className="flex items-start gap-2">
-                      {task.status === "completed" ? (
-                        <CheckCircle2 className="h-3 w-3 text-green-400 mt-0.5 shrink-0" />
-                      ) : task.status === "failed" ? (
-                        <XCircle className="h-3 w-3 text-red-400 mt-0.5 shrink-0" />
-                      ) : task.status === "running" ? (
-                        <Loader2 className="h-3 w-3 text-cyan-400 mt-0.5 shrink-0 animate-spin" />
-                      ) : (
-                        <Clock className="h-3 w-3 text-muted-foreground mt-0.5 shrink-0" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-mono text-white/90 truncate">
-                          {task.title ||
-                            task.query?.slice(0, 50) ||
-                            "Untitled Task"}
-                          {!task.title && task.query?.length > 50 && "..."}
-                        </p>
-                        <p className="text-[8px] font-mono text-muted-foreground mt-0.5">
-                          {new Date(task.createdAt).toLocaleDateString()} •{" "}
-                          {task.iterationCount || 0} steps
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-                {(!taskHistory || taskHistory.length === 0) && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Brain className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                    <p className="text-[10px] font-mono">No tasks yet</p>
+          <ScrollArea className="flex-1 px-2">
+            {groupedTasks &&
+              Object.entries(groupedTasks).map(([group, tasks]) => (
+                <div key={group} className="mb-4">
+                  <div className="text-[10px] font-medium text-cyan-400/60 px-2 py-2">
+                    {group}
                   </div>
-                )}
-              </div>
-            </ScrollArea>
-          )}
+                  <div className="space-y-1">
+                    {tasks?.map(task => (
+                      <button
+                        key={task.id}
+                        onClick={() => setSelectedTaskId(task.id)}
+                        className={cn(
+                          "w-full text-left px-2 py-2 rounded transition-colors",
+                          selectedTaskId === task.id
+                            ? "bg-cyan-500/10 text-cyan-300"
+                            : "text-cyan-400/70 hover:bg-cyan-500/5 hover:text-cyan-300"
+                        )}
+                      >
+                        <div className="flex items-start gap-2">
+                          <MessageSquare className="h-3.5 w-3.5 shrink-0 text-cyan-400/50 mt-0.5" />
+                          <span className="text-xs leading-relaxed break-words">
+                            {task.title || task.query || "New Task"}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+          </ScrollArea>
 
-          {/* Nav Icons (when collapsed) */}
-          {!isTaskListOpen && (
-            <nav className="flex flex-col items-center py-6 gap-4">
-              <NavIcon icon={MessageSquare} active />
-              <NavIcon icon={Layers} />
-              <NavIcon icon={Code} />
-              <NavIcon icon={Shield} />
-              <div className="mt-auto">
-                <NavIcon icon={Zap} />
+          <div className="p-3 border-t border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white text-xs font-semibold">
+                {user?.username?.slice(0, 2).toUpperCase() || "JS"}
               </div>
-            </nav>
-          )}
-        </div>
-
-        {/* Center Stage (Chat/Work) */}
-        <div className="flex-1 flex flex-col relative">
-          {/* Header */}
-          <header className="h-14 border-b border-white/10 flex items-center justify-between px-6 bg-black/20 backdrop-blur-sm">
-            <div className="flex items-center gap-2">
-              <span className="font-mono font-bold text-lg tracking-widest text-cyan-400">
-                JARVIS v3
-              </span>
-              <Badge
-                variant="outline"
-                className={cn(
-                  "text-[10px] h-5 transition-colors duration-500",
-                  isConnected
-                    ? "border-green-500/30 text-green-500/70 bg-green-500/5"
-                    : "border-yellow-500/30 text-yellow-500/70 bg-yellow-500/5"
-                )}
-              >
-                {isConnected ? "CONNECTED" : "CONNECTING..."}
-              </Badge>
-            </div>
-            <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <Cpu className="h-3 w-3" />
-                <span>GPU: {systemStats?.gpu?.utilizationPercent ?? 0}%</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Activity className="h-3 w-3" />
-                <span>
-                  MEM: {((systemStats?.memory?.usedMb ?? 0) / 1024).toFixed(1)}/
-                  {((systemStats?.memory?.totalMb ?? 0) / 1024).toFixed(0)}GB
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  className="h-7 bg-black/50 border border-cyan-500/30 text-cyan-400 text-[10px] font-mono rounded px-2 outline-none"
-                  value={selectedScenario}
-                  onChange={e => setSelectedScenario(e.target.value as any)}
-                >
-                  {Object.entries(scenarios).map(([key, val]) => (
-                    <option key={key} value={key}>
-                      {val.name}
-                    </option>
-                  ))}
-                </select>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs font-mono border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
-                  onClick={runDemo}
-                >
-                  ▶ RUN
-                </Button>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-cyan-300 truncate">
+                  {user?.username || "User"}
+                </div>
+                <div className="text-[10px] text-cyan-400/60">Pro Plan</div>
               </div>
               <Button
-                variant="destructive"
-                size="sm"
-                className="h-7 text-xs font-mono bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20"
-                onClick={() => {
-                  setIsOverride(!isOverride);
-                  if (!isOverride)
-                    speak(
-                      "Manual override engaged. Establishing secure VNC tunnel."
-                    );
-                }}
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-cyan-400/60 hover:text-cyan-300"
               >
-                {isOverride ? "DISCONNECT VNC" : "TAKE CONTROL"}
+                <Settings className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 flex flex-col">
+          <header className="h-12 border-b border-white/10 flex items-center justify-between px-4">
+            <div className="flex items-center gap-3">
+              <div
+                className={cn(
+                  "h-2 w-2 rounded-full",
+                  isConnected ? "bg-green-500" : "bg-yellow-500"
+                )}
+              />
+              <span className="font-semibold text-white/90">JARVIS v3.1</span>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-cyan-400/70">AGENT</span>
+                <Switch
+                  checked={isAgentMode}
+                  onCheckedChange={setIsAgentMode}
+                  className="data-[state=checked]:bg-cyan-600"
+                />
+              </div>
+              <div className="flex items-center gap-1 text-sm">
+                {(["research", "docs"] as const).map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={cn(
+                      "px-3 py-1 rounded transition-colors uppercase text-xs",
+                      activeTab === tab
+                        ? "text-cyan-300 bg-cyan-500/10"
+                        : "text-cyan-400/60 hover:text-cyan-400"
+                    )}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 text-xs text-white/60 hover:text-white"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                DETACH
               </Button>
             </div>
           </header>
 
-          {jarvis.isStreaming || jarvis.summary ? (
-            <div className="absolute inset-0 z-10 bg-black/90 backdrop-blur-sm p-6 overflow-hidden mt-14 mb-24">
-              <ScrollArea className="h-full">
-                <div className="max-w-3xl mx-auto space-y-4">
-                  {jarvis.exchanges.length > 0 && (
-                    <div className="p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
-                      <div className="text-xs font-mono text-cyan-400 mb-2">
-                        USER QUERY
-                      </div>
-                      <div className="text-sm text-white">
-                        {
-                          jarvis.exchanges[jarvis.exchanges.length - 1]
-                            ?.userQuery
-                        }
+          <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex flex-col">
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-6">
+                <div className="max-w-4xl mx-auto space-y-4">
+                  {!jarvis.isStreaming && !jarvis.summary && !selectedTask && (
+                    <div className="flex justify-center py-8">
+                      <div className="inline-flex items-center gap-3 px-5 py-3 rounded-2xl bg-[#151b23] border border-white/10">
+                        <div className="h-8 w-8 rounded-full bg-[#0d1117] flex items-center justify-center">
+                          <Terminal className="h-4 w-4 text-cyan-400" />
+                        </div>
+                        <span className="text-sm text-white/80">
+                          Awaiting command...
+                        </span>
                       </div>
                     </div>
                   )}
 
-                  {jarvis.steps.map((step, idx) => (
-                    <div
-                      key={step.id || idx}
-                      className={cn(
-                        "p-3 rounded-lg border animate-in fade-in slide-in-from-left-2",
-                        step.type === "thinking"
-                          ? "bg-purple-500/10 border-purple-500/20"
-                          : step.tool?.status === "running"
-                            ? "bg-cyan-500/10 border-cyan-500/30"
-                            : step.tool?.status === "failed"
-                              ? "bg-red-500/10 border-red-500/20"
-                              : "bg-green-500/10 border-green-500/20"
-                      )}
-                    >
-                      {step.type === "thinking" ? (
-                        <div className="flex items-start gap-3">
-                          <Brain className="h-4 w-4 text-purple-400 animate-pulse mt-0.5" />
-                          <div className="text-sm text-purple-200/90">
-                            <TypewriterText
-                              text={step.content || "Thinking..."}
-                              speed={8}
-                            />
+                  {selectedTask && !jarvis.isStreaming && (
+                    <>
+                      <div className="flex justify-center">
+                        <div className="inline-flex items-center gap-3 px-5 py-3 rounded-2xl bg-[#151b23] border border-white/10 max-w-2xl">
+                          <div className="h-8 w-8 rounded-full bg-[#0d1117] flex items-center justify-center shrink-0">
+                            <Terminal className="h-4 w-4 text-cyan-400" />
                           </div>
+                          <span className="text-sm text-white/80">
+                            {selectedTask.query}
+                          </span>
                         </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            {step.tool?.status === "running" ? (
-                              <Loader2 className="h-4 w-4 text-cyan-400 animate-spin" />
-                            ) : step.tool?.status === "failed" ? (
-                              <XCircle className="h-4 w-4 text-red-400" />
-                            ) : (
-                              <CheckCircle2 className="h-4 w-4 text-green-400" />
-                            )}
-                            <span className="font-mono text-sm text-white">
-                              {step.tool?.name}
+                      </div>
+                      {selectedTask.summary && (
+                        <div className="border-l-2 border-cyan-500 bg-[#0d1117] rounded-r-lg overflow-hidden">
+                          <div className="flex items-center gap-2 px-4 py-2 border-b border-white/10">
+                            <Sparkles className="h-3 w-3 text-cyan-400" />
+                            <span className="text-xs text-white/50 uppercase tracking-wide">
+                              Operation Log
                             </span>
-                            {step.tool?.durationMs && (
-                              <span className="text-xs text-muted-foreground">
-                                {(step.tool.durationMs / 1000).toFixed(2)}s
-                              </span>
+                            <ChevronDown className="h-3 w-3 text-white/30 ml-auto" />
+                          </div>
+                          <div className="p-4">
+                            {hasReportPath(selectedTask.summary) ? (
+                              <ReportPreview
+                                output={extractReportInfo(selectedTask.summary)}
+                                toolName="create_rich_report"
+                              />
+                            ) : (
+                              <RichContent content={selectedTask.summary} />
                             )}
                           </div>
-                          {step.tool?.output && (
-                            <>
-                              {step.tool.name === "generate_image" &&
-                                step.tool.output.includes(
-                                  "rasputin.studio/generated/"
-                                ) && (
-                                  <div className="mt-2">
-                                    {step.tool.output
-                                      .match(
-                                        /https:\/\/rasputin\.studio\/generated\/[^\s"]+\.png/g
-                                      )
-                                      ?.map((url: string, i: number) => (
-                                        <img
-                                          key={i}
-                                          src={url}
-                                          alt="Generated image"
-                                          className="max-w-full rounded-lg border border-white/10 mt-2"
-                                          style={{ maxHeight: "300px" }}
-                                        />
-                                      ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {(jarvis.isStreaming || jarvis.summary) && (
+                    <>
+                      {jarvis.exchanges.length > 0 && (
+                        <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+                          {jarvis.exchanges.map((exchange, idx) => (
+                            <div key={idx} className="space-y-3">
+                              <div className="flex justify-end">
+                                <div className="inline-flex items-center gap-3 px-5 py-3 rounded-2xl bg-cyan-600/20 border border-cyan-500/30 max-w-2xl">
+                                  <span className="text-sm text-white/90">
+                                    {exchange.userQuery}
+                                  </span>
+                                </div>
+                              </div>
+                              {exchange.assistantSummary && (
+                                <div className="flex justify-start">
+                                  <div className="inline-flex items-start gap-3 px-5 py-3 rounded-2xl bg-[#151b23] border border-white/10 max-w-3xl">
+                                    <div className="h-6 w-6 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center shrink-0 mt-0.5">
+                                      <Sparkles className="h-3 w-3 text-white" />
+                                    </div>
+                                    <div className="text-sm text-white/80 prose prose-invert prose-sm max-w-none">
+                                      {exchange.assistantSummary}
+                                    </div>
                                   </div>
-                                )}
-                              <pre className="text-xs text-muted-foreground bg-black/30 p-2 rounded overflow-x-auto max-h-32">
-                                {step.tool.output.slice(0, 500)}
-                                {step.tool.output.length > 500 && "..."}
-                              </pre>
-                            </>
-                          )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       )}
-                    </div>
-                  ))}
 
-                  {jarvis.summary && (
-                    <div className="p-4 rounded-lg bg-gradient-to-r from-purple-500/20 to-cyan-500/20 border border-purple-500/30">
-                      <div className="text-xs font-mono text-purple-400 mb-2">
-                        SYNTHESIS COMPLETE
-                      </div>
-                      <div className="text-sm text-white whitespace-pre-wrap">
-                        {jarvis.summary}
-                      </div>
-                    </div>
-                  )}
-
-                  {jarvis.error && (
-                    <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
-                      <div className="text-xs font-mono text-red-400 mb-2">
-                        ERROR
-                      </div>
-                      <div className="text-sm text-red-300">{jarvis.error}</div>
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
-              {!jarvis.isStreaming && (
-                <div className="absolute bottom-4 right-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs"
-                    onClick={() => {
-                      jarvis.reset();
-                      setShowStream(false);
-                      setActiveScenario(null);
-                    }}
-                  >
-                    Clear & New Task
-                  </Button>
-                </div>
-              )}
-            </div>
-          ) : selectedTask ? (
-            <div className="absolute inset-0 z-10 bg-black/90 backdrop-blur-sm p-6 overflow-hidden mt-14 mb-24">
-              <ScrollArea className="h-full">
-                <div className="max-w-3xl mx-auto space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex-1">
-                      <div className="text-xs font-mono text-cyan-400 mb-2">
-                        TASK QUERY
-                      </div>
-                      <div className="text-sm text-white">
-                        {selectedTask.query}
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="ml-4 text-muted-foreground hover:text-white"
-                      onClick={() => setSelectedTaskId(null)}
-                    >
-                      <XCircle className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-xs font-mono">
-                    <span
-                      className={cn(
-                        "px-2 py-1 rounded",
-                        selectedTask.status === "completed"
-                          ? "bg-green-500/20 text-green-400"
-                          : selectedTask.status === "failed"
-                            ? "bg-red-500/20 text-red-400"
-                            : "bg-cyan-500/20 text-cyan-400"
-                      )}
-                    >
-                      {selectedTask.status?.toUpperCase()}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {selectedTask.iterationCount || 0} iterations
-                    </span>
-                    {selectedTask.durationMs && (
-                      <span className="text-muted-foreground">
-                        {(selectedTask.durationMs / 1000).toFixed(1)}s
-                      </span>
-                    )}
-                  </div>
-
-                  {selectedTaskMessages?.map((msg: any, idx: number) => (
-                    <div
-                      key={msg.id || idx}
-                      className={cn(
-                        "p-3 rounded-lg border animate-in fade-in",
-                        msg.role === "user"
-                          ? "bg-cyan-500/10 border-cyan-500/20"
-                          : msg.role === "tool"
-                            ? "bg-purple-500/10 border-purple-500/20"
-                            : "bg-white/5 border-white/10"
-                      )}
-                    >
-                      <div className="text-xs font-mono text-muted-foreground mb-1">
-                        {msg.role?.toUpperCase()}
-                      </div>
-                      <div className="text-sm text-white whitespace-pre-wrap">
-                        {msg.content?.slice(0, 1000)}
-                        {msg.content?.length > 1000 && "..."}
-                      </div>
-                    </div>
-                  ))}
-
-                  {selectedTask.summary && (
-                    <div className="p-4 rounded-lg bg-gradient-to-r from-purple-500/20 to-cyan-500/20 border border-purple-500/30">
-                      <div className="text-xs font-mono text-purple-400 mb-2">
-                        RESULT
-                      </div>
-                      {selectedTask.summary.includes(
-                        "rasputin.studio/generated/"
-                      ) && (
-                        <div className="mb-3">
-                          {selectedTask.summary
-                            .match(
-                              /https:\/\/rasputin\.studio\/generated\/[^\s"]+\.png/g
-                            )
-                            ?.map((url: string, i: number) => (
-                              <img
-                                key={i}
-                                src={url}
-                                alt="Generated image"
-                                className="max-w-full rounded-lg border border-white/10 mb-2"
-                                style={{ maxHeight: "400px" }}
+                      {jarvis.isStreaming ? (
+                        <>
+                          <div className="border-l-2 border-cyan-500/50 bg-[#0d1117]/50 rounded-r-lg overflow-hidden">
+                            <div className="flex items-center gap-2 px-4 py-2 border-b border-white/10">
+                              <Loader2 className="h-3 w-3 text-cyan-400 animate-spin" />
+                              <span className="text-xs text-white/50 uppercase tracking-wide">
+                                Processing
+                              </span>
+                              <span className="text-xs text-cyan-400/70 ml-auto font-mono">
+                                {jarvis.currentIteration}/
+                                {jarvis.maxIterations || 10}
+                              </span>
+                            </div>
+                            <div className="p-4 space-y-3 max-h-96 overflow-y-auto">
+                              {jarvis.steps.slice(-10).map((step, idx) => (
+                                <div
+                                  key={step.id || idx}
+                                  className="flex items-start gap-2 text-sm animate-in fade-in slide-in-from-bottom-2 duration-300"
+                                >
+                                  {step.type === "thinking" ? (
+                                    <>
+                                      <Brain className="h-3 w-3 text-purple-400 mt-0.5 shrink-0" />
+                                      <span className="text-white/60 leading-relaxed">
+                                        {step.content?.slice(0, 200)}
+                                        {(step.content?.length || 0) > 200 &&
+                                          "..."}
+                                      </span>
+                                    </>
+                                  ) : step.type === "tool" && step.tool ? (
+                                    <div className="flex flex-col gap-1 w-full">
+                                      <div className="flex items-center gap-2">
+                                        {step.tool.status === "running" ? (
+                                          <Loader2 className="h-3 w-3 text-yellow-400 animate-spin shrink-0" />
+                                        ) : step.tool.isError ? (
+                                          <XCircle className="h-3 w-3 text-red-500 shrink-0" />
+                                        ) : (
+                                          <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
+                                        )}
+                                        <span
+                                          className={
+                                            step.tool.status === "running"
+                                              ? "text-yellow-400 font-medium"
+                                              : step.tool.isError
+                                                ? "text-red-400"
+                                                : "text-green-400"
+                                          }
+                                        >
+                                          {step.tool.name}
+                                        </span>
+                                        {step.tool.durationMs && (
+                                          <span className="text-white/30 text-xs ml-auto">
+                                            {(
+                                              step.tool.durationMs / 1000
+                                            ).toFixed(1)}
+                                            s
+                                          </span>
+                                        )}
+                                      </div>
+                                      {step.tool.output && (
+                                        <div className="ml-5 text-xs text-white/40 truncate max-w-full">
+                                          {step.tool.output.slice(0, 100)}
+                                          {step.tool.output.length > 100 &&
+                                            "..."}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      ) : jarvis.summary ? (
+                        <div className="bg-gradient-to-br from-[#0d1117] to-[#0a0f14] rounded-xl border border-white/10 overflow-hidden shadow-xl">
+                          <div className="px-6 py-4 border-b border-white/10 bg-gradient-to-r from-cyan-500/10 to-transparent">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+                                  <Sparkles className="h-4 w-4 text-white" />
+                                </div>
+                                <div>
+                                  <div className="text-sm font-medium text-white">
+                                    Response
+                                  </div>
+                                  <div className="text-xs text-white/40">
+                                    Task completed successfully
+                                  </div>
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-white/40 hover:text-white gap-1.5"
+                                onClick={() => {
+                                  jarvis.startTask(
+                                    "Create an interactive HTML report with charts, visualizations, and professional styling based on the previous response. Use generate_interactive_report tool.",
+                                    user?.id || 0
+                                  );
+                                }}
+                              >
+                                <RefreshCw className="h-3.5 w-3.5" />
+                                <span className="text-xs">Generate Report</span>
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="p-6">
+                            {hasReportPath(jarvis.summary) ? (
+                              <ReportPreview
+                                output={extractReportInfo(jarvis.summary)}
+                                toolName="create_rich_report"
                               />
-                            ))}
+                            ) : (
+                              <RichContent content={jarvis.summary} />
+                            )}
+                          </div>
+                          <div className="px-6 py-4 border-t border-white/10 bg-gradient-to-r from-transparent to-cyan-500/5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-1.5 border-white/10 text-white/70 hover:text-white hover:bg-white/5"
+                                  onClick={async () => {
+                                    try {
+                                      const response = await fetch("/api/pdf", {
+                                        method: "POST",
+                                        headers: {
+                                          "Content-Type": "application/json",
+                                        },
+                                        body: JSON.stringify({
+                                          html: jarvis.summary,
+                                        }),
+                                      });
+                                      const blob = await response.blob();
+                                      const url = URL.createObjectURL(blob);
+                                      const a = document.createElement("a");
+                                      a.href = url;
+                                      a.download = "jarvis-response.pdf";
+                                      a.click();
+                                      toast.success("PDF downloaded!");
+                                    } catch {
+                                      toast.error("Failed to export PDF");
+                                    }
+                                  }}
+                                >
+                                  <FileDown className="h-3.5 w-3.5" />
+                                  PDF
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-1.5 border-white/10 text-white/70 hover:text-white hover:bg-white/5"
+                                  onClick={() => {
+                                    const blob = new Blob(
+                                      [jarvis.summary || ""],
+                                      { type: "text/markdown" }
+                                    );
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement("a");
+                                    a.href = url;
+                                    a.download = "jarvis-response.md";
+                                    a.click();
+                                    toast.success("Markdown downloaded!");
+                                  }}
+                                >
+                                  <FileText className="h-3.5 w-3.5" />
+                                  DOC
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-1.5 border-white/10 text-white/70 hover:text-white hover:bg-white/5"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(
+                                      jarvis.summary || ""
+                                    );
+                                    toast.success("Copied to clipboard!");
+                                  }}
+                                >
+                                  <Copy className="h-3.5 w-3.5" />
+                                  Copy
+                                </Button>
+                              </div>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="gap-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500"
+                                onClick={() => {
+                                  toast.info("Deploy to Vercel coming soon!");
+                                }}
+                              >
+                                <Upload className="h-3.5 w-3.5" />
+                                Deploy to Vercel
+                              </Button>
+                            </div>
+                          </div>
                         </div>
-                      )}
-                      <div className="text-sm text-white whitespace-pre-wrap">
-                        {selectedTask.summary}
-                      </div>
-                    </div>
+                      ) : null}
+                    </>
                   )}
-
-                  {selectedTask.errorMessage && (
-                    <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
-                      <div className="text-xs font-mono text-red-400 mb-2">
-                        ERROR
-                      </div>
-                      <div className="text-sm text-red-300">
-                        {selectedTask.errorMessage}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
-            </div>
-          ) : showStream && activeScenario && activeScenario !== "jarvis" ? (
-            <div className="absolute inset-0 z-10 bg-black/90 backdrop-blur-sm p-6 overflow-hidden mt-14 mb-24">
-              <IntelligenceStream
-                scenario={activeScenario}
-                onComplete={() => setActiveAgent(null)}
-                onLog={log => {
-                  setLogs(prev => [...prev, log]);
-                  const agentMap: Record<string, string> = {
-                    VISION: "VIS",
-                    EXEC: "EXEC",
-                    MEMORY: "MEM",
-                    PLANNER: "PLAN",
-                    SYSTEM: "ORCH",
-                    SEC: "SEC",
-                    NET: "SEC",
-                    CODE: "CODE",
-                    TEST: "VER",
-                    DEP: "EXEC",
-                  };
-                  const gridCode = agentMap[log.agent] || "ORCH";
-                  setActiveAgent(gridCode);
-                  setTimeout(() => setActiveAgent(null), 800);
-                }}
-              />
-            </div>
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center flex-col text-muted-foreground opacity-50 pointer-events-none z-0 mt-14 mb-24">
-              <Brain className="w-16 h-16 mb-4 animate-pulse text-cyan-500/50" />
-              <p className="font-mono text-sm text-cyan-500/50 tracking-widest">
-                AWAITING COMMAND INPUT
-              </p>
-            </div>
-          )}
-
-          {/* Chat Area - Hidden when stream is active */}
-          <div className="flex-1" />
-
-          {/* VNC Overlay */}
-          {isOverride && (
-            <div className="absolute inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center animate-in fade-in duration-300">
-              <div className="w-[90%] h-[80%] bg-black border border-red-500/30 rounded-xl overflow-hidden shadow-[0_0_50px_rgba(239,68,68,0.2)] flex flex-col">
-                <div className="h-10 bg-red-950/30 border-b border-red-500/20 flex items-center justify-between px-4">
-                  <div className="flex items-center gap-2 text-red-400 font-mono text-xs tracking-widest">
-                    <Shield className="h-3 w-3" />
-                    SECURE VNC TUNNEL // ROOT ACCESS
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 text-[10px] text-red-400 hover:bg-red-500/20"
-                    onClick={() => setIsOverride(false)}
-                  >
-                    TERMINATE SESSION
-                  </Button>
-                </div>
-                <div className="flex-1 relative bg-[#1a1a1a] flex items-center justify-center">
-                  <div className="text-center space-y-4">
-                    <div className="h-16 w-16 border-2 border-red-500/50 rounded-full flex items-center justify-center mx-auto animate-pulse">
-                      <Shield className="h-8 w-8 text-red-500" />
-                    </div>
-                    <div className="font-mono text-red-400 text-sm">
-                      ESTABLISHING CONNECTION...
-                    </div>
-                    <div className="font-mono text-red-500/50 text-xs">
-                      &gt; Handshake initiated
-                      <br />
-                      &gt; Authenticating root@rasputin
-                      <br />
-                      &gt; Decrypting video stream...
-                    </div>
-                  </div>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Input Area */}
-          <div className="p-4 lg:p-6 lg:pb-8">
-            <div className="max-w-3xl mx-auto relative">
-              <div className="absolute inset-0 bg-cyan-500/5 blur-xl rounded-full" />
-              <div className="relative bg-black/60 border border-white/10 rounded-xl flex items-center p-2 gap-2 shadow-2xl backdrop-blur-xl">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "transition-all duration-300",
-                    isListening
-                      ? "text-red-500 animate-pulse bg-red-500/10"
-                      : "text-muted-foreground hover:text-cyan-400"
-                  )}
-                  onClick={toggleListening}
-                >
-                  <Mic className="h-5 w-5" />
-                </Button>
-                <input
-                  type="text"
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && handleSubmit()}
-                  placeholder="Command JARVIS..."
-                  className="flex-1 bg-transparent border-none outline-none text-sm px-2 placeholder:text-muted-foreground/50"
-                  disabled={jarvis.isStreaming}
-                />
-                {jarvis.isStreaming ? (
+              <div className="border-t border-white/10 p-4">
+                <div className="max-w-4xl mx-auto flex items-center gap-3">
                   <Button
+                    variant="ghost"
                     size="icon"
-                    variant="destructive"
-                    className="rounded-lg h-8 w-8"
-                    onClick={() => jarvis.cancelTask()}
+                    className="h-9 w-9 text-white/40 hover:text-white shrink-0"
                   >
-                    <StopCircle className="h-4 w-4" />
+                    <Mic className="h-4 w-4" />
                   </Button>
-                ) : (
+                  <div className="flex-1 relative">
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={input}
+                      onChange={e => setInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="What's up"
+                      className="w-full h-10 bg-[#1a1a1a] border border-white/10 rounded-lg px-4 pr-16 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/20"
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                      <kbd className="text-[10px] text-white/30 bg-white/5 px-1.5 py-0.5 rounded">
+                        ⌘ K
+                      </kbd>
+                    </div>
+                  </div>
                   <Button
-                    size="icon"
-                    className="bg-cyan-500 hover:bg-cyan-400 text-black rounded-lg h-8 w-8"
                     onClick={handleSubmit}
-                    disabled={!input.trim()}
+                    disabled={!input.trim() || jarvis.isStreaming}
+                    className="h-9 w-9 p-0 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50"
                   >
                     <Send className="h-4 w-4" />
                   </Button>
-                )}
-              </div>
-              {jarvis.isStreaming && (
-                <div className="mt-2 text-center">
-                  <span className="text-xs font-mono text-cyan-400 animate-pulse">
-                    ITERATION {jarvis.currentIteration}/{jarvis.maxIterations}
-                  </span>
                 </div>
-              )}
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Right HUD (The Hive) */}
-        <div
-          className={cn(
-            "border-l border-white/10 bg-black/80 backdrop-blur-xl transition-all duration-300 flex flex-col shadow-2xl shadow-cyan-900/20",
-            isHudOpen ? "w-[450px]" : "w-0 opacity-0 overflow-hidden"
-          )}
-        >
-          {/* Header */}
-          <div className="h-12 border-b border-white/10 flex items-center justify-between px-4 bg-black/40">
-            <div className="flex items-center gap-2">
-              <Layers className="h-4 w-4 text-cyan-400 animate-pulse" />
-              <span className="font-mono font-bold text-xs tracking-[0.2em] text-cyan-100">
-                HIVE TELEMETRY
-              </span>
-            </div>
-            <div className="flex items-center gap-3 text-[10px] font-mono">
-              <span className="text-muted-foreground">UPTIME: 14:02:11</span>
-              <div className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]" />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 ml-2"
-                onClick={() => setIsHudOpen(false)}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-
-          {/* 1. Active Swarm Grid */}
-          <div className="p-4 border-b border-white/10 bg-black/20">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] font-mono text-muted-foreground tracking-widest">
-                ACTIVE AGENTS
-              </span>
-              <span className="text-[10px] font-mono text-cyan-500">
-                7/7 ONLINE
-              </span>
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              {["ORCH", "PLAN", "CODE", "VIS", "EXEC", "MEM", "VER", "SEC"].map(
-                agent => {
-                  const isActive = activeAgent === agent;
-                  return (
+            <div className="w-80 border-l border-white/10 bg-[#0a0a0f] flex flex-col overflow-hidden">
+              <div className="p-3 border-b border-white/10 bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
                     <div
-                      key={agent}
                       className={cn(
-                        "h-16 border rounded flex flex-col items-center justify-center gap-1 transition-all duration-200",
-                        isActive
-                          ? "border-cyan-500 bg-cyan-500/20 shadow-[0_0_20px_rgba(6,182,212,0.4)] scale-105 z-10"
-                          : "border-white/5 bg-white/5 opacity-50 scale-100"
+                        "h-2 w-2 rounded-full",
+                        isConnected
+                          ? "bg-green-400 animate-pulse"
+                          : "bg-red-400"
+                      )}
+                    />
+                    <span className="text-xs font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 uppercase tracking-wider">
+                      Live Telemetry
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {isConnected ? (
+                      <Wifi className="h-3 w-3 text-green-400" />
+                    ) : (
+                      <WifiOff className="h-3 w-3 text-red-400" />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-2 border-b border-white/5 bg-black/20">
+                <div className="flex items-center justify-between text-[10px]">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-3 w-3 text-cyan-400/60" />
+                      <span className="text-cyan-400/80 font-mono">
+                        {jarvis.currentIteration}/{jarvis.maxIterations}
+                      </span>
+                    </div>
+                    <div
+                      className={cn(
+                        "px-1.5 py-0.5 rounded text-[9px] font-bold uppercase",
+                        jarvis.isStreaming
+                          ? "bg-cyan-500/20 text-cyan-400 animate-pulse"
+                          : jarvis.success
+                            ? "bg-green-500/20 text-green-400"
+                            : "bg-white/5 text-white/40"
                       )}
                     >
-                      <div
-                        className={cn(
-                          "h-1.5 w-1.5 rounded-full transition-colors duration-200",
-                          isActive ? "bg-cyan-400 animate-ping" : "bg-white/20"
-                        )}
-                      />
-                      <span
-                        className={cn(
-                          "text-[9px] font-mono font-bold transition-colors duration-200",
-                          isActive ? "text-cyan-300" : "text-white/80"
-                        )}
-                      >
-                        {agent}
-                      </span>
+                      {jarvis.isStreaming
+                        ? "● LIVE"
+                        : jarvis.success
+                          ? "✓ DONE"
+                          : "○ IDLE"}
                     </div>
-                  );
-                }
-              )}
-            </div>
-          </div>
-
-          {/* 2. Qdrant Memory Core */}
-          <div className="p-4 border-b border-white/10 bg-black/20 relative overflow-hidden">
-            <div className="flex items-center justify-between mb-2 relative z-10">
-              <span className="text-[10px] font-mono text-muted-foreground tracking-widest flex items-center gap-2">
-                <Brain className="h-3 w-3" /> MEMORY CORE (QDRANT)
-              </span>
-              <span
-                className={cn(
-                  "text-[10px] font-mono transition-colors duration-300",
-                  activeAgent === "MEM" ? "text-cyan-400" : "text-white/20"
-                )}
-              >
-                {activeAgent === "MEM" ? "ACTIVE" : "STANDBY"}
-              </span>
-            </div>
-
-            <div className="h-24 border border-white/5 bg-black/40 rounded relative overflow-hidden flex items-center justify-center">
-              {/* Neural Data Stream Visualization */}
-              <div className="absolute inset-0 flex items-center justify-center gap-1 opacity-20">
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className="w-1 h-full bg-white/5" />
-                ))}
+                  </div>
+                </div>
               </div>
 
-              {/* Active State Visualization */}
-              {activeAgent === "MEM" ? (
-                <div className="relative z-10 w-full h-full flex items-center justify-center">
-                  {/* Reading State (Cyan) */}
-                  <div className="absolute inset-0 bg-cyan-500/5 animate-pulse" />
-                  <div className="flex gap-1 h-12 items-end">
-                    {Array.from({ length: 8 }).map((_, i) => (
+              {jarvis.isStreaming && (
+                <div className="p-2 border-b border-white/5 bg-gradient-to-r from-purple-500/5 to-cyan-500/5">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1 bg-black/30 rounded-full overflow-hidden">
                       <div
-                        key={i}
-                        className="w-2 bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)] animate-[bounce_1s_infinite]"
+                        className="h-full bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 rounded-full animate-pulse"
                         style={{
-                          height: `${Math.random() * 100}%`,
-                          animationDelay: `${i * 0.1}s`,
+                          width: `${Math.min((jarvis.currentIteration / jarvis.maxIterations) * 100, 100)}%`,
                         }}
                       />
-                    ))}
+                    </div>
                   </div>
-                  <div className="absolute bottom-2 right-2 text-[9px] font-mono text-cyan-400">
-                    RETRIEVING CONTEXT...
-                  </div>
-                </div>
-              ) : activeAgent === "EXEC" ? (
-                <div className="relative z-10 w-full h-full flex items-center justify-center">
-                  {/* Writing State (Purple) */}
-                  <div className="absolute inset-0 bg-purple-500/5 animate-pulse" />
-                  <div className="flex gap-1 h-12 items-center">
-                    {Array.from({ length: 8 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)] animate-ping"
-                        style={{ animationDelay: `${i * 0.15}s` }}
-                      />
-                    ))}
-                  </div>
-                  <div className="absolute bottom-2 right-2 text-[9px] font-mono text-purple-400">
-                    STORING VECTORS...
-                  </div>
-                </div>
-              ) : (
-                <div className="text-[10px] font-mono text-white/20">
-                  NO ACTIVE OPERATIONS
                 </div>
               )}
-            </div>
-          </div>
 
-          {/* 3. Hyper-Stream Logs - Flying Logs Terminal */}
-          <div className="flex-1 overflow-hidden flex flex-col bg-black/95 relative border-t border-cyan-500/20">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500/10 to-purple-500/10 border-b border-white/5">
-              <Terminal className="h-3 w-3 text-cyan-400" />
-              <span className="text-[10px] font-mono text-cyan-300 tracking-wider">
-                LIVE STREAM
-              </span>
-              {jarvis.isStreaming && (
-                <span className="ml-auto flex items-center gap-1 text-[10px] text-green-400">
-                  <Activity className="h-3 w-3 animate-pulse" />
-                  ACTIVE
-                </span>
-              )}
-            </div>
-            <div className="absolute top-8 left-0 right-0 h-6 bg-gradient-to-b from-black/80 to-transparent z-10 pointer-events-none" />
-            <ScrollArea
-              className="flex-1 p-3 font-mono text-[10px] leading-relaxed"
-              ref={scrollRef}
-            >
-              <div className="space-y-1">
-                {logs.length === 0 && !jarvis.isStreaming && (
-                  <div className="text-white/20 text-center py-4">
-                    Awaiting task execution...
-                  </div>
-                )}
-                {logs.map((log, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      "flex gap-2 group hover:bg-white/5 p-1 rounded transition-all duration-150",
-                      "animate-in fade-in slide-in-from-left-4 duration-200",
-                      i === logs.length - 1 &&
-                        jarvis.isStreaming &&
-                        "bg-cyan-500/5 border-l-2 border-cyan-500"
-                    )}
-                    style={{ animationDelay: `${Math.min(i * 30, 300)}ms` }}
-                  >
-                    <span className="text-white/30 w-20 shrink-0 select-none tabular-nums">
-                      {log.timestamp ||
-                        new Date().toLocaleTimeString([], {
-                          hour12: false,
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit",
-                          fractionalSecondDigits: 3,
-                        } as any)}
+              <ScrollArea className="flex-1">
+                <div className="p-2 space-y-1">
+                  {jarvis.steps.length === 0 && !jarvis.isStreaming ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <div className="h-12 w-12 rounded-full bg-gradient-to-br from-cyan-500/20 to-purple-500/20 flex items-center justify-center mb-3">
+                        <Activity className="h-6 w-6 text-cyan-400/50" />
+                      </div>
+                      <div className="text-xs text-cyan-400/50">
+                        Awaiting activity...
+                      </div>
+                      <div className="text-[10px] text-white/30 mt-1">
+                        Events will appear here in real-time
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {jarvis.steps.map((step, idx) => {
+                        const isLatest = idx === jarvis.steps.length - 1;
+
+                        if (step.type === "thinking" && step.content) {
+                          const config = eventConfig.thinking;
+                          const Icon = config.icon;
+                          return (
+                            <div
+                              key={step.id || idx}
+                              className={cn(
+                                "group rounded-lg p-2 transition-all duration-300",
+                                isLatest && jarvis.isStreaming
+                                  ? "bg-purple-500/10 border border-purple-500/30"
+                                  : "hover:bg-white/5"
+                              )}
+                            >
+                              <div className="flex items-start gap-2">
+                                <div
+                                  className={cn("p-1 rounded", config.bgColor)}
+                                >
+                                  <Icon
+                                    className={cn("h-3 w-3", config.color)}
+                                  />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className={cn(
+                                        "text-[10px] font-bold",
+                                        config.color
+                                      )}
+                                    >
+                                      {config.label}
+                                    </span>
+                                    <span className="text-[9px] text-white/30">
+                                      {new Date().toLocaleTimeString()}
+                                    </span>
+                                    {isLatest && jarvis.isStreaming && (
+                                      <span className="flex h-2 w-2">
+                                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-purple-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] text-white/60 mt-0.5 font-mono leading-relaxed line-clamp-3">
+                                    {step.content.slice(0, 150)}
+                                    {step.content.length > 150 ? "..." : ""}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        if (step.type === "tool" && step.tool) {
+                          const isRunning = step.tool.status === "running";
+                          const isFailed = step.tool.status === "failed";
+                          const toolName = step.tool.name || "unknown";
+
+                          let eventType: LogEvent["type"] = "tool";
+                          if (
+                            toolName.includes("search") ||
+                            toolName.includes("web")
+                          )
+                            eventType = "search";
+                          if (
+                            toolName.includes("python") ||
+                            toolName.includes("code")
+                          )
+                            eventType = "code";
+                          if (toolName.includes("memory")) eventType = "memory";
+                          if (
+                            toolName.includes("api") ||
+                            toolName.includes("fetch")
+                          )
+                            eventType = "api";
+
+                          const config = eventConfig[eventType];
+                          const Icon = config.icon;
+
+                          return (
+                            <div
+                              key={step.id || idx}
+                              className={cn(
+                                "group rounded-lg p-2 transition-all duration-300",
+                                isRunning
+                                  ? "bg-yellow-500/10 border border-yellow-500/30 animate-pulse"
+                                  : isFailed
+                                    ? "bg-red-500/10 border border-red-500/30"
+                                    : isLatest
+                                      ? "bg-green-500/10 border border-green-500/30"
+                                      : "hover:bg-white/5"
+                              )}
+                            >
+                              <div className="flex items-start gap-2">
+                                <div
+                                  className={cn(
+                                    "p-1 rounded",
+                                    isRunning
+                                      ? "bg-yellow-500/20"
+                                      : isFailed
+                                        ? "bg-red-500/20"
+                                        : config.bgColor
+                                  )}
+                                >
+                                  {isRunning ? (
+                                    <Loader2 className="h-3 w-3 text-yellow-400 animate-spin" />
+                                  ) : isFailed ? (
+                                    <XCircle className="h-3 w-3 text-red-400" />
+                                  ) : (
+                                    <Icon
+                                      className={cn("h-3 w-3", config.color)}
+                                    />
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className={cn(
+                                        "text-[10px] font-bold",
+                                        isRunning
+                                          ? "text-yellow-400"
+                                          : isFailed
+                                            ? "text-red-400"
+                                            : config.color
+                                      )}
+                                    >
+                                      {config.label}
+                                    </span>
+                                    {step.tool.durationMs && (
+                                      <span className="text-[9px] text-white/40 font-mono">
+                                        {(step.tool.durationMs / 1000).toFixed(
+                                          1
+                                        )}
+                                        s
+                                      </span>
+                                    )}
+                                    {isRunning && (
+                                      <span className="text-[9px] text-yellow-400 animate-pulse">
+                                        Running...
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div
+                                    className={cn(
+                                      "text-[10px] mt-0.5 font-mono truncate",
+                                      isRunning
+                                        ? "text-yellow-400/80"
+                                        : isFailed
+                                          ? "text-red-400/80"
+                                          : "text-white/60"
+                                    )}
+                                  >
+                                    {toolName}
+                                  </div>
+                                  {step.tool.output && !isRunning && (
+                                    <div className="text-[9px] text-white/40 mt-1 line-clamp-2 font-mono">
+                                      {step.tool.output.slice(0, 80)}
+                                      {step.tool.output.length > 80
+                                        ? "..."
+                                        : ""}
+                                    </div>
+                                  )}
+                                </div>
+                                {!isRunning && !isFailed && (
+                                  <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return null;
+                      })}
+                    </>
+                  )}
+                </div>
+              </ScrollArea>
+
+              <div className="p-2 border-t border-white/10 bg-black/30">
+                <div className="grid grid-cols-3 gap-1 text-[9px]">
+                  <div className="flex items-center gap-1 px-2 py-1.5 rounded bg-cyan-500/10">
+                    <Brain className="h-3 w-3 text-purple-400" />
+                    <span className="text-purple-400 font-mono">
+                      {jarvis.steps.filter(s => s.type === "thinking").length}
                     </span>
-                    <div className="flex-1 break-all">
-                      <span
-                        className={cn(
-                          "font-bold mr-2 px-1 rounded text-[9px]",
-                          (log.agent === "ORCH" ||
-                            log.agent === "Orchestrator") &&
-                            "text-purple-300 bg-purple-500/20",
-                          (log.agent === "PLAN" || log.agent === "Planner") &&
-                            "text-blue-300 bg-blue-500/20",
-                          (log.agent === "MEM" || log.agent === "Memory") &&
-                            "text-yellow-300 bg-yellow-500/20",
-                          (log.agent === "VIS" || log.agent === "Vision") &&
-                            "text-cyan-300 bg-cyan-500/20",
-                          (log.agent === "EXEC" || log.agent === "Executor") &&
-                            "text-green-300 bg-green-500/20",
-                          (log.agent === "VER" || log.agent === "Verifier") &&
-                            "text-orange-300 bg-orange-500/20",
-                          log.agent === "CODE" &&
-                            "text-amber-300 bg-amber-500/20",
-                          log.agent === "SEC" && "text-red-300 bg-red-500/20",
-                          log.type === "error" && "text-red-300 bg-red-500/20"
-                        )}
-                      >
-                        [{log.agent?.toUpperCase?.() || "SYS"}]
-                      </span>
-                      <span
-                        className={cn(
-                          "text-white/80 group-hover:text-white transition-colors",
-                          log.type === "error" && "text-red-300"
-                        )}
-                      >
-                        {log.msg}
-                      </span>
+                  </div>
+                  <div className="flex items-center gap-1 px-2 py-1.5 rounded bg-green-500/10">
+                    <Boxes className="h-3 w-3 text-green-400" />
+                    <span className="text-green-400 font-mono">
+                      {jarvis.steps.filter(s => s.type === "tool").length}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 px-2 py-1.5 rounded bg-red-500/10">
+                    <AlertTriangle className="h-3 w-3 text-red-400" />
+                    <span className="text-red-400 font-mono">
+                      {
+                        jarvis.steps.filter(
+                          s => s.type === "tool" && s.tool?.status === "failed"
+                        ).length
+                      }
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {jarvis.error && (
+                <div className="p-2 border-t border-red-500/30 bg-red-500/10">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-3 w-3 text-red-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] font-bold text-red-400">
+                        ERROR
+                      </div>
+                      <div className="text-[9px] text-red-300/80 font-mono mt-0.5 line-clamp-3">
+                        {jarvis.error.slice(0, 100)}
+                      </div>
                     </div>
                   </div>
-                ))}
-                {jarvis.isStreaming && (
-                  <div className="flex items-center gap-2 text-cyan-400 pt-2">
-                    <div className="flex gap-0.5">
-                      <div
-                        className="h-2 w-2 bg-cyan-400 rounded-full animate-bounce"
-                        style={{ animationDelay: "0ms" }}
-                      />
-                      <div
-                        className="h-2 w-2 bg-cyan-400 rounded-full animate-bounce"
-                        style={{ animationDelay: "150ms" }}
-                      />
-                      <div
-                        className="h-2 w-2 bg-cyan-400 rounded-full animate-bounce"
-                        style={{ animationDelay: "300ms" }}
-                      />
-                    </div>
-                    <span className="text-[9px]">Processing...</span>
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-            <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-black to-transparent pointer-events-none" />
-          </div>
-
-          {/* 4. Model Telemetry & Vitals */}
-          <div className="h-80 border-t border-white/10 bg-black/40 p-4 space-y-3 flex flex-col">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono text-muted-foreground">
-                SYSTEM VITALS
-              </span>
-              <span
-                className={cn(
-                  "text-[10px] font-mono",
-                  jarvis.isStreaming
-                    ? "text-cyan-400 animate-pulse"
-                    : "text-purple-400"
-                )}
-              >
-                {jarvis.isStreaming ? "JARVIS ACTIVE" : "STANDBY"}
-              </span>
-            </div>
-
-            <div className="space-y-2">
-              <div className="space-y-1">
-                <div className="flex justify-between text-[9px] font-mono text-white/50">
-                  <span>VRAM ({systemStats?.gpu?.count ?? 0}x GPU)</span>
-                  <span>
-                    {systemStats?.gpu?.memoryUsedMb
-                      ? `${(systemStats.gpu.memoryUsedMb / 1024).toFixed(1)}/${(systemStats.gpu.memoryTotalMb / 1024).toFixed(0)}GB`
-                      : `${gpuData[gpuData.length - 1]?.vram || 0}%`}
-                  </span>
                 </div>
-                <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-cyan-500 transition-all duration-300"
-                    style={{
-                      width: `${gpuData[gpuData.length - 1]?.vram || 0}%`,
-                    }}
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <div className="flex justify-between text-[9px] font-mono text-white/50">
-                  <span>GPU UTIL</span>
-                  <span>
-                    {systemStats?.gpu?.utilizationPercent ??
-                      gpuData[gpuData.length - 1]?.load ??
-                      0}
-                    %
-                  </span>
-                </div>
-                <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-purple-500 transition-all duration-300"
-                    style={{
-                      width: `${systemStats?.gpu?.utilizationPercent ?? gpuData[gpuData.length - 1]?.load ?? 0}%`,
-                    }}
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <div className="flex justify-between text-[9px] font-mono text-white/50">
-                  <span>CPU ({systemStats?.cpu?.cores ?? 0} cores)</span>
-                  <span>{systemStats?.cpu?.loadPercent?.toFixed(0) ?? 0}%</span>
-                </div>
-                <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-blue-500 transition-all duration-500"
-                    style={{ width: `${systemStats?.cpu?.loadPercent ?? 0}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Sparkline Graph */}
-            <div className="flex-1 mt-2 relative border border-white/5 bg-black/20 rounded overflow-hidden">
-              <div className="absolute inset-0 flex items-end">
-                <svg
-                  className="w-full h-full"
-                  viewBox="0 0 100 100"
-                  preserveAspectRatio="none"
-                >
-                  {/* Grid Lines */}
-                  <line
-                    x1="0"
-                    y1="25%"
-                    x2="100%"
-                    y2="25%"
-                    stroke="rgba(255,255,255,0.05)"
-                    strokeWidth="1"
-                  />
-                  <line
-                    x1="0"
-                    y1="50%"
-                    x2="100%"
-                    y2="50%"
-                    stroke="rgba(255,255,255,0.05)"
-                    strokeWidth="1"
-                  />
-                  <line
-                    x1="0"
-                    y1="75%"
-                    x2="100%"
-                    y2="75%"
-                    stroke="rgba(255,255,255,0.05)"
-                    strokeWidth="1"
-                  />
-
-                  {/* VRAM Path */}
-                  <path
-                    d={`M 0 ${100 - (gpuData[0]?.vram || 0)} ${gpuData.map((d, i) => `L ${(i / (gpuData.length - 1)) * 100} ${100 - d.vram}`).join(" ")}`}
-                    fill="none"
-                    stroke="#06b6d4"
-                    strokeWidth="1.5"
-                    className="opacity-80"
-                  />
-                  {/* Load Path */}
-                  <path
-                    d={`M 0 ${100 - (gpuData[0]?.load || 0)} ${gpuData.map((d, i) => `L ${(i / (gpuData.length - 1)) * 100} ${100 - d.load}`).join(" ")}`}
-                    fill="none"
-                    stroke="#a855f7"
-                    strokeWidth="1.5"
-                    className="opacity-80"
-                  />
-                </svg>
-              </div>
-              <div className="absolute top-1 right-1 text-[8px] font-mono text-white/30">
-                60s HISTORY
-              </div>
+              )}
             </div>
           </div>
         </div>
-
-        {/* HUD Toggle (When Closed) */}
-        {!isHudOpen && (
-          <div className="absolute right-0 top-1/2 -translate-y-1/2">
-            <Button
-              variant="secondary"
-              className="h-12 w-6 rounded-l-xl rounded-r-none border-r-0 p-0 bg-cyan-950/30 border-cyan-500/30 text-cyan-400 hover:bg-cyan-900/50"
-              onClick={() => setIsHudOpen(true)}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
       </div>
-    </div>
-  );
-}
-
-function NavIcon({ icon: Icon, active }: { icon: any; active?: boolean }) {
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      className={cn(
-        "rounded-xl transition-all duration-200",
-        active
-          ? "bg-cyan-500/10 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.2)]"
-          : "text-muted-foreground hover:text-cyan-200 hover:bg-white/5"
-      )}
-    >
-      <Icon className="h-5 w-5" />
-    </Button>
-  );
-}
-
-function _AgentStatus({ name, active }: { name: string; active?: boolean }) {
-  return (
-    <div
-      className={cn(
-        "h-8 rounded border flex items-center justify-center text-[10px] font-bold tracking-wider transition-all",
-        active
-          ? "bg-cyan-500/20 border-cyan-500/50 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.15)]"
-          : "bg-white/5 border-white/10 text-muted-foreground/50"
-      )}
-    >
-      {name}
     </div>
   );
 }

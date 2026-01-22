@@ -173,7 +173,7 @@ class TrainingJobManager extends EventEmitter {
     job: TrainingJob,
     configPath: string,
     trainPath: string,
-    evalPath: string
+    _evalPath: string
   ): Promise<void> {
     const modelPath = MODEL_PATHS[job.config.baseModel];
     const lora = job.config.loraConfig;

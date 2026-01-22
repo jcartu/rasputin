@@ -45,7 +45,9 @@ const getThemeProfile = (theme: Theme) => {
 export const playSound = (type: SoundType, theme: Theme = "cyber-blue") => {
   // Check if audio context is supported
   const AudioContextClass =
-    window.AudioContext || (window as any).webkitAudioContext;
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext: typeof AudioContext })
+      .webkitAudioContext;
   if (!AudioContextClass) return;
 
   const ctx = new AudioContextClass();

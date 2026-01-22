@@ -79,7 +79,7 @@ function Router() {
 }
 
 function App() {
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(false);
 
   return (
     <ErrorBoundary>

@@ -26,6 +26,7 @@ import {
   Search,
   BookOpen,
   Vote,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -40,7 +41,7 @@ type AgentType =
 
 const AGENT_CONFIG: Record<
   string,
-  { color: string; icon: any; label: string }
+  { color: string; icon: LucideIcon; label: string }
 > = {
   planner: {
     color: "text-blue-400 border-blue-400/30 bg-blue-400/10",
@@ -104,14 +105,20 @@ export function SwarmActivityPanel() {
     let totalDuration = 0;
     let count = 0;
 
-    Object.values(metricsData.agentMetrics).forEach((m: any) => {
-      totalTasks += m.tasksCompleted;
-      totalFailed += m.tasksFailed;
-      if (m.avgDurationMs > 0) {
-        totalDuration += m.avgDurationMs;
-        count++;
+    Object.values(metricsData.agentMetrics).forEach(
+      (m: {
+        tasksCompleted: number;
+        tasksFailed: number;
+        avgDurationMs: number;
+      }) => {
+        totalTasks += m.tasksCompleted;
+        totalFailed += m.tasksFailed;
+        if (m.avgDurationMs > 0) {
+          totalDuration += m.avgDurationMs;
+          count++;
+        }
       }
-    });
+    );
 
     return {
       totalTasks,
@@ -146,7 +153,9 @@ export function SwarmActivityPanel() {
     ];
 
     return allTypes.map(type => {
-      const active = agents.find((a: any) => a.type === type);
+      const active = agents.find(
+        (a: { type: string; currentTask?: string }) => a.type === type
+      );
       const metrics = metricsData?.agentMetrics?.[type];
       return {
         type,
@@ -499,7 +508,16 @@ export function SwarmActivityPanel() {
                       {consensusHistory.length > 0 ? (
                         <div className="space-y-2">
                           {consensusHistory.slice(0, 10).map((event, i) => {
-                            const data = event.data as any;
+                            const data = event.data as {
+                              decision?: string;
+                              agent?: string;
+                              vote?: string;
+                              agentType?: string;
+                              totalVotes?: number;
+                              approvalPercentage?: number;
+                              question?: string;
+                              reasoning?: string;
+                            };
                             const isComplete =
                               event.type === "consensus_complete";
                             const isVote = event.type === "vote";
@@ -560,7 +578,7 @@ export function SwarmActivityPanel() {
                                 </div>
                                 <div className="text-muted-foreground line-clamp-2">
                                   {isComplete
-                                    ? `${data.totalVotes} votes, ${Math.round(data.approvalPercentage)}% approval`
+                                    ? `${data.totalVotes ?? 0} votes, ${Math.round(data.approvalPercentage ?? 0)}% approval`
                                     : data.question || data.reasoning}
                                 </div>
                               </div>

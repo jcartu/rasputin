@@ -472,9 +472,16 @@ export default function Memory() {
                             Steps ({m.steps.length}):
                           </strong>
                           <ol className="list-decimal list-inside text-sm text-muted-foreground mt-1">
-                            {m.steps.slice(0, 3).map((s: any, i: number) => (
-                              <li key={i}>{s.description || s.action}</li>
-                            ))}
+                            {m.steps
+                              .slice(0, 3)
+                              .map(
+                                (
+                                  s: { description?: string; action?: string },
+                                  i: number
+                                ) => (
+                                  <li key={i}>{s.description || s.action}</li>
+                                )
+                              )}
                             {m.steps.length > 3 && (
                               <li className="text-muted-foreground/50">
                                 ...and {m.steps.length - 3} more

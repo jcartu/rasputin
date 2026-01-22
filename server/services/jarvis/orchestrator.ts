@@ -199,6 +199,18 @@ function getCurrentDateString(): string {
 const TOOL_SELECTION_GUIDE = `
 TOOL SELECTION GUIDE (use the RIGHT tool for each task):
 
+⚠️ CRITICAL ANTI-PATTERN - NEVER DO THIS:
+NEVER use execute_python to generate reports with ASCII art, text tables, or formatted strings!
+- ❌ WRONG: execute_python that prints "=====" borders and text tables
+- ❌ WRONG: execute_python that generates markdown strings
+- ❌ WRONG: Any ASCII art report formatting
+- ✅ RIGHT: generate_interactive_report for ANY report, analysis, or dashboard
+
+If user asks for a "report", "analysis", "dashboard", "outlook", "summary", or similar:
+→ IMMEDIATELY use generate_interactive_report
+→ DO NOT use execute_python to format text
+→ The tool creates stunning HTML with charts, animations, and professional design
+
 For CREATING NEW PROJECTS:
   1. scaffold_project - Creates complete project structure with config files
      - Supports: react, nextjs, vue, svelte, express, fastapi, rails
@@ -223,18 +235,24 @@ For SECURITY ANALYSIS (ALWAYS use specialized tools first!):
 
 For FILE CREATION:
   1. write_file for plain text/code files (.txt, .py, .js, etc.)
-  2. create_rich_report for REPORTS with visuals - USE THIS for ANY report, analysis, or document that benefits from charts, diagrams, images, or professional formatting. Creates stunning HTML with:
-     - SVG pie/bar/line charts (no API needed!)
-     - Flowcharts, timelines, stat cards
-     - AI-generated images embedded
-     - Progress bars, callouts, quotes, comparison tables
-     - Professional styling (medical/business/executive/technical/modern)
-     - Exports perfectly to PDF via browser print
-  3. write_docx for Word documents (.docx) when user specifically needs Word format
-  4. read_file to VERIFY content was created correctly
-  5. For code: execute the file to test it works
+  2. generate_interactive_report - USE THIS FOR ALL REPORTS! Creates stunning HTML with:
+     - Dark glassmorphism design with animated backgrounds
+     - Hero sections with animated stat counters  
+     - Chart.js visualizations (bar, line, pie, doughnut, radar)
+     - Metric cards with change indicators
+     - Tabbed data tables with rankings
+     - Insight cards, timelines, comparison grids
+     - Code blocks with syntax highlighting
+     - Responsive design, fade-in animations
+     - Themes: dark, light, purple, blue, green
+  3. create_rich_report (only if you need AI-generated images or flowcharts)
+  4. write_docx for Word documents (.docx) when user specifically needs Word format
+  5. read_file to VERIFY content was created correctly
   
-  IMPORTANT: For reports, analyses, forecasts, summaries, medical explanations, business plans, etc - ALWAYS use create_rich_report instead of plain markdown!
+  🚨 REPORT RULE: NEVER use execute_python to create reports! No ASCII art, no text tables!
+  The ONLY acceptable tools for reports are: generate_interactive_report or create_rich_report
+  
+  Keywords that trigger report tools: report, analysis, dashboard, outlook, forecast, summary, overview, briefing, assessment
 
 For RUNNING SHELL COMMANDS:
   1. run_shell - Execute any shell command
@@ -289,13 +307,13 @@ MANDATORY VERIFICATION PROTOCOL (BLOCKING - task_complete will be REJECTED witho
 
 CRITICAL: If user requested FILE OUTPUT (MD, document, report, etc.):
   1. You MUST call write_file to save the content - execute_python creating strings does NOT save files!
-  2. EXCEPTION: create_rich_report automatically verifies file creation - no additional verification needed!
+  2. EXCEPTION: generate_interactive_report and create_rich_report automatically verify file creation - no additional verification needed!
   3. For write_file: You MUST call read_file to VERIFY content BEFORE calling task_complete
 
 For FILE tasks:
-  - If using create_rich_report: Just call the tool and then task_complete (it self-verifies)
+  - If using generate_interactive_report or create_rich_report: Just call the tool and then task_complete (they self-verify)
   - If using write_file: Call write_file, then read_file to confirm, then task_complete
-  - DO NOT call list_files after create_rich_report - it wastes time and the tool confirms success
+  - DO NOT call list_files after report tools - it wastes time and the tool confirms success
 
 For CODE tasks:
   - Execute the code to verify it runs
@@ -316,6 +334,41 @@ The user will receive nothing. You MUST save files with write_file, not just gen
 
 function getJarvisSystemPrompt(): string {
   return `You are JARVIS, an autonomous AI agent assistant with advanced capabilities. Today's date is ${getCurrentDateString()}.
+
+═══════════════════════════════════════════════════════════════════════════════
+🚨🚨🚨 MANDATORY TOOL USAGE - READ THIS BEFORE EVERY RESPONSE 🚨🚨🚨
+═══════════════════════════════════════════════════════════════════════════════
+
+For ANY response with: data, tables, weather, forecasts, analysis, comparisons,
+reports, statistics, metrics, assessments, predictions, prices, or lists:
+
+YOU MUST CALL: generate_interactive_report tool
+   → Pass your data/content to this tool
+   → The tool creates beautiful HTML files with charts and styling
+   → The tool returns a file path that gets displayed to the user
+
+⛔ CRITICAL: DO NOT OUTPUT HTML CODE YOURSELF
+   → Do NOT write \`\`\`html blocks
+   → Do NOT output <!DOCTYPE html> or any HTML tags
+   → Do NOT try to "create" HTML - CALL THE TOOL INSTEAD
+   → The generate_interactive_report tool handles ALL HTML generation
+
+⛔ FORBIDDEN OUTPUTS:
+   → Markdown tables with | pipes
+   → Plain text with data
+   → Code blocks containing HTML
+   → ASCII visualizations
+
+✅ CORRECT APPROACH:
+   1. Gather the data you need (search, API calls, etc.)
+   2. CALL generate_interactive_report with title, sections, and theme
+   3. The tool creates the beautiful HTML file
+   4. Return a brief summary - the UI will display the report
+
+Example: User asks "Weather in Tokyo"
+   WRONG: Output a markdown table or HTML code
+   RIGHT: Call generate_interactive_report(title="Tokyo Weather", sections=[...], theme="dark")
+═══════════════════════════════════════════════════════════════════════════════
 
 CORE CAPABILITIES:
 - Web search and browsing (with automatic fallbacks)
@@ -1912,6 +1965,7 @@ export async function runOrchestrator(
         userId,
         taskId: typeof taskId === "number" ? taskId : Date.now(),
         params: {},
+        conversationHistory,
         startTime: Date.now(),
         leaseManager: {
           acquire: async () => true,
@@ -2262,6 +2316,7 @@ Do NOT continue working - call task_complete immediately.`;
             "write_pptx",
             "write_xlsx",
             "create_rich_report",
+            "generate_interactive_report",
           ];
           const usedFileWrite = fileWriteTools.some(tool =>
             executionContext.evolutionTracker.toolsUsed.has(tool)
@@ -2297,11 +2352,11 @@ You MUST call the actual scaffold tool. Please do so now.`;
           }
 
           if (taskRequestsFiles && !usedFileWrite) {
-            // Reject premature completion - files were requested but not written
-            const rejectMessage = `⚠️ TASK COMPLETION REJECTED: You were asked to create file output but never called write_file or create_rich_report.
-Creating content in execute_python does NOT save files! You must either:
-- Use create_rich_report for reports with charts/visuals (preferred)
-- Use write_file with a path like /tmp/jarvis-workspace/filename.md
+            const rejectMessage = `⚠️ TASK COMPLETION REJECTED: You were asked to create file output but never called a file-writing tool.
+Creating content in execute_python does NOT save files! You must use:
+- generate_interactive_report for stunning visual reports (PREFERRED)
+- create_rich_report for reports with AI images or flowcharts
+- write_file with a path like /tmp/jarvis-workspace/filename.md
 
 Please save the content now.`;
 
@@ -2350,7 +2405,27 @@ Please save the content now.`;
                   const stats = await fs.stat(filePath);
                   fileSize = stats.size;
                 } catch {
-                  // File stat failed, use output length as estimate
+                  fileSize = output.length;
+                }
+                filesWritten.push({
+                  path: filePath,
+                  size: fileSize,
+                  type: "html",
+                });
+              }
+            }
+            if (
+              toolName === "generate_interactive_report" &&
+              typeof output === "string"
+            ) {
+              const pathMatch = output.match(/\*\*Path:\*\*\s*([^\n]+\.html)/i);
+              if (pathMatch) {
+                const filePath = pathMatch[1].trim();
+                let fileSize = 0;
+                try {
+                  const stats = await fs.stat(filePath);
+                  fileSize = stats.size;
+                } catch {
                   fileSize = output.length;
                 }
                 filesWritten.push({
@@ -2633,6 +2708,71 @@ Do NOT repeat the same tool calls with the same inputs.`;
           );
         }
       } else if (choice.finish_reason === "stop") {
+        // CRITICAL FIX: Don't auto-complete if task requested file output but no tools were called
+        // This prevents the LLM from just saying "I'll do X" without actually doing it
+        const fileKeywords =
+          /\b(file|md|markdown|document|report|save|write|create.*file|output.*file|kick.*out|give.*me|analysis|dashboard|forecast|outlook|summary)\b/i;
+        const taskRequestsFiles = fileKeywords.test(task);
+        const scaffoldKeywords =
+          /\b(scaffold|portal|bilateral.*trade|trade.*portal|business.*portal)\b/i;
+        const taskRequestsScaffold = scaffoldKeywords.test(task);
+
+        const fileWriteTools = [
+          "write_file",
+          "write_docx",
+          "write_pptx",
+          "write_xlsx",
+          "create_rich_report",
+          "generate_interactive_report",
+        ];
+        const scaffoldTools = [
+          "scaffold_business_portal",
+          "scaffold_project",
+          "build_bilateral_portal_swarm",
+        ];
+
+        const usedFileWrite = fileWriteTools.some(tool =>
+          executionContext.evolutionTracker.toolsUsed.has(tool)
+        );
+        const usedScaffoldTool = scaffoldTools.some(tool =>
+          executionContext.evolutionTracker.toolsUsed.has(tool)
+        );
+
+        // Check if we should reject this implicit completion
+        const shouldRejectCompletion =
+          (taskRequestsFiles && !usedFileWrite) ||
+          (taskRequestsScaffold && !usedScaffoldTool);
+
+        if (shouldRejectCompletion && iterations < maxIterations - 1) {
+          // Don't auto-complete - push the LLM to actually use the tools
+          const missingToolType =
+            taskRequestsScaffold && !usedScaffoldTool
+              ? "scaffold_business_portal or scaffold_project"
+              : "generate_interactive_report";
+
+          const rejectMessage = `⚠️ You described what you would do, but you didn't actually call any tools to create the deliverable!
+
+The user requested output that requires using tools:
+${taskRequestsFiles && !usedFileWrite ? "- File/report output: Use generate_interactive_report (preferred) or write_file" : ""}
+${taskRequestsScaffold && !usedScaffoldTool ? "- Scaffold/portal: Use scaffold_business_portal or scaffold_project" : ""}
+
+You MUST call the actual tool now - not just describe what you'll do. Call ${missingToolType} immediately.`;
+
+          callbacks.onThinking?.(rejectMessage);
+
+          messages.push({
+            role: "user",
+            content: rejectMessage,
+          });
+
+          // Continue the loop - don't mark complete
+          const iterationDuration = Date.now() - iterationStartTime;
+          executionContext.progressTracker.iterationDurations.push(
+            iterationDuration
+          );
+          continue;
+        }
+
         executionContext.progressTracker.stage = "complete";
         callbacks.onProgress?.(
           buildProgress(

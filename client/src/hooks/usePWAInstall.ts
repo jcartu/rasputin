@@ -26,11 +26,12 @@ export function usePWAInstall() {
     const checkInstalled = () => {
       const isStandalone =
         window.matchMedia("(display-mode: standalone)").matches ||
-        (window.navigator as any).standalone === true ||
+        (window.navigator as unknown as { standalone?: boolean }).standalone ===
+          true ||
         document.referrer.includes("android-app://");
 
       if (isStandalone) {
-        console.log("[PWA] App is running in standalone mode");
+        console.info("[PWA] App is running in standalone mode");
         setIsInstalled(true);
         return true;
       }
@@ -43,7 +44,7 @@ export function usePWAInstall() {
     const handleBeforeInstallPrompt = (e: BeforeInstallPromptEvent) => {
       // Prevent the mini-infobar from appearing on mobile
       e.preventDefault();
-      console.log("[PWA] beforeinstallprompt event fired");
+      console.info("[PWA] beforeinstallprompt event fired");
       // Store the event for later use
       deferredPrompt = e;
       setInstallPrompt(e);
@@ -52,7 +53,7 @@ export function usePWAInstall() {
 
     // Listen for app installed event
     const handleAppInstalled = () => {
-      console.log("[PWA] App was installed");
+      console.info("[PWA] App was installed");
       setIsInstalled(true);
       setIsInstallable(false);
       setInstallPrompt(null);
@@ -94,7 +95,7 @@ export function usePWAInstall() {
     const promptToUse = installPrompt || deferredPrompt;
 
     if (!promptToUse) {
-      console.log(
+      console.info(
         "[PWA] No install prompt available, showing manual instructions"
       );
       setShowManualInstructions(true);
@@ -102,10 +103,10 @@ export function usePWAInstall() {
     }
 
     try {
-      console.log("[PWA] Triggering install prompt");
+      console.info("[PWA] Triggering install prompt");
       await promptToUse.prompt();
       const { outcome } = await promptToUse.userChoice;
-      console.log("[PWA] User choice:", outcome);
+      console.info("[PWA] User choice:", outcome);
 
       if (outcome === "accepted") {
         setIsInstalled(true);

@@ -296,13 +296,18 @@ async function startServer() {
 
   app.post("/api/files/export-pdf", express.json(), async (req, res) => {
     try {
-      const { html, filename = "report.pdf" } = req.body as {
+      const {
+        html,
+        url,
+        filename = "report.pdf",
+      } = req.body as {
         html?: string;
+        url?: string;
         filename?: string;
       };
 
-      if (!html) {
-        res.status(400).json({ error: "HTML content required" });
+      if (!html && !url) {
+        res.status(400).json({ error: "HTML content or URL required" });
         return;
       }
 
@@ -310,43 +315,62 @@ async function startServer() {
       const browser = await chromium.launch({ headless: true });
       const page = await browser.newPage();
 
-      const styledHtml = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              line-height: 1.6;
-              max-width: 800px;
-              margin: 0 auto;
-              padding: 40px;
-              color: #333;
-            }
-            h1, h2, h3 { color: #1a1a1a; margin-top: 1.5em; }
-            h1 { border-bottom: 2px solid #0066cc; padding-bottom: 0.3em; }
-            code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
-            pre { background: #f4f4f4; padding: 16px; border-radius: 6px; overflow-x: auto; }
-            pre code { background: none; padding: 0; }
-            blockquote { border-left: 4px solid #0066cc; margin-left: 0; padding-left: 16px; color: #666; }
-            table { border-collapse: collapse; width: 100%; margin: 1em 0; }
-            th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
-            th { background: #f4f4f4; }
-            a { color: #0066cc; }
-            img { max-width: 100%; height: auto; }
-          </style>
-        </head>
-        <body>${html}</body>
-        </html>
-      `;
+      if (url) {
+        await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
+        await page.waitForTimeout(1000);
+      } else if (html) {
+        const isCompleteDocument =
+          html.trim().toLowerCase().startsWith("<!doctype") ||
+          html.trim().toLowerCase().startsWith("<html");
 
-      await page.setContent(styledHtml, { waitUntil: "networkidle" });
+        if (isCompleteDocument) {
+          await page.setContent(html, { waitUntil: "networkidle" });
+          await page.waitForTimeout(500);
+        } else {
+          const styledHtml = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="UTF-8">
+              <style>
+                body {
+                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                  line-height: 1.6;
+                  max-width: 800px;
+                  margin: 0 auto;
+                  padding: 40px;
+                  color: #333;
+                }
+                h1, h2, h3 { color: #1a1a1a; margin-top: 1.5em; }
+                h1 { border-bottom: 2px solid #0066cc; padding-bottom: 0.3em; }
+                code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+                pre { background: #f4f4f4; padding: 16px; border-radius: 6px; overflow-x: auto; }
+                pre code { background: none; padding: 0; }
+                blockquote { border-left: 4px solid #0066cc; margin-left: 0; padding-left: 16px; color: #666; }
+                table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+                th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+                th { background: #f4f4f4; }
+                a { color: #0066cc; }
+                img { max-width: 100%; height: auto; }
+              </style>
+            </head>
+            <body>${html}</body>
+            </html>
+          `;
+          await page.setContent(styledHtml, { waitUntil: "networkidle" });
+        }
+      }
+
+      // Wait for Chart.js and other JS to render (charts render to canvas)
+      await page.waitForSelector("canvas", { timeout: 3000 }).catch(() => {});
+      // Extra time for chart animations to complete
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
       const pdfBuffer = await page.pdf({
         format: "A4",
-        margin: { top: "20mm", right: "20mm", bottom: "20mm", left: "20mm" },
+        margin: { top: "15mm", right: "15mm", bottom: "15mm", left: "15mm" },
         printBackground: true,
+        preferCSSPageSize: true,
       });
 
       await browser.close();
@@ -360,6 +384,85 @@ async function startServer() {
     } catch (error) {
       console.error("[PDF Export] Error:", error);
       res.status(500).json({ error: "Failed to generate PDF" });
+    }
+  });
+
+  app.post("/api/jarvis/publish-report", express.json(), async (req, res) => {
+    try {
+      const { filePath, title } = req.body as {
+        filePath: string;
+        title?: string;
+      };
+
+      if (!filePath) {
+        res.status(400).json({ error: "filePath required" });
+        return;
+      }
+
+      const fs = await import("fs/promises");
+      const path = await import("path");
+      const os = await import("os");
+      const { exec } = await import("child_process");
+      const { promisify } = await import("util");
+      const execAsync = promisify(exec);
+
+      const htmlContent = await fs.readFile(filePath, "utf-8");
+      const projectName = title
+        ? title
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, "-")
+            .slice(0, 30)
+        : `report-${Date.now()}`;
+      const tempDir = path.join(os.tmpdir(), `vercel-report-${Date.now()}`);
+
+      await fs.mkdir(tempDir, { recursive: true });
+      await fs.writeFile(path.join(tempDir, "index.html"), htmlContent);
+      await fs.writeFile(
+        path.join(tempDir, "vercel.json"),
+        JSON.stringify({
+          name: projectName,
+          version: 2,
+          builds: [{ src: "index.html", use: "@vercel/static" }],
+          routes: [{ src: "/(.*)", dest: "/index.html" }],
+        })
+      );
+
+      const vercelToken = process.env.VERCEL_TOKEN;
+      if (!vercelToken) {
+        res.status(400).json({
+          error: "VERCEL_TOKEN not configured",
+          message: "Set VERCEL_TOKEN environment variable to enable publishing",
+        });
+        return;
+      }
+
+      const { stdout, stderr } = await execAsync(
+        `npx vercel --yes --prod --token ${vercelToken}`,
+        {
+          cwd: tempDir,
+          timeout: 120000,
+          env: { ...process.env, VERCEL_TOKEN: vercelToken },
+        }
+      );
+
+      const urlMatch = (stdout + stderr).match(/https:\/\/[^\s]+\.vercel\.app/);
+      const deployedUrl = urlMatch?.[0];
+
+      await fs.rm(tempDir, { recursive: true, force: true });
+
+      if (deployedUrl) {
+        console.info(`[Report] Published to: ${deployedUrl}`);
+        res.json({ url: deployedUrl, projectName });
+      } else {
+        console.error("[Report] No URL found in output:", stdout, stderr);
+        res
+          .status(500)
+          .json({ error: "Deployment succeeded but no URL found" });
+      }
+    } catch (error) {
+      console.error("[Report Publish] Error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to publish report", message });
     }
   });
 

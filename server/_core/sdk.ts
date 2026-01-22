@@ -134,15 +134,19 @@ class SDKServer {
     const data = await this.oauthService.getUserInfoByToken({
       accessToken,
     } as ExchangeTokenResponse);
+    // OAuth server may return additional fields not in the type definition
+    const rawData = data as GetUserInfoResponse & {
+      platforms?: string[];
+    };
     const loginMethod = this.deriveLoginMethod(
-      (data as any)?.platforms,
-      (data as any)?.platform ?? data.platform ?? null
+      rawData.platforms,
+      rawData.platform ?? null
     );
     return {
-      ...(data as any),
+      ...rawData,
       platform: loginMethod,
       loginMethod,
-    } as GetUserInfoResponse;
+    };
   }
 
   private parseCookies(cookieHeader: string | undefined) {
@@ -245,15 +249,18 @@ class SDKServer {
       payload
     );
 
+    const rawData = data as GetUserInfoWithJwtResponse & {
+      platforms?: string[];
+    };
     const loginMethod = this.deriveLoginMethod(
-      (data as any)?.platforms,
-      (data as any)?.platform ?? data.platform ?? null
+      rawData.platforms,
+      rawData.platform ?? null
     );
     return {
-      ...(data as any),
+      ...rawData,
       platform: loginMethod,
       loginMethod,
-    } as GetUserInfoWithJwtResponse;
+    };
   }
 
   async authenticateRequest(req: Request): Promise<User> {
