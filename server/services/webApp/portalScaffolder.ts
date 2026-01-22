@@ -3985,11 +3985,14 @@ export function RegionDetail({ regionId }: RegionDetailProps) {
     if (loc === 'ru' && obj[\`\${field}Ru\`]) return obj[\`\${field}Ru\`] as string;
     return obj[field] as string;
   }
-  const targetCountry = getTargetCountry(locale);
+  const localeCountry = getTargetCountry(locale);
   const [pathData, setPathData] = useState<string>('');
   const [viewBox, setViewBox] = useState<string>('0 0 100 100');
   
-  const regionData = getRegionData(regionId, targetCountry);
+  const ruData = getRegionData(regionId, 'RU');
+  const cnData = getRegionData(regionId, 'CN');
+  const regionData = ruData || cnData;
+  const targetCountry = ruData ? 'RU' : (cnData ? 'CN' : localeCountry);
   const fallbackData = {
     name: regionId,
     nameRu: undefined as string | undefined,
@@ -7132,12 +7135,44 @@ export const RUSSIA_REGIONS: Record<string, RegionData> = {
 export function getRegionData(regionName: string, country: 'CN' | 'RU'): RegionData | null {
   const data = country === 'CN' ? CHINA_REGIONS : RUSSIA_REGIONS;
   
+  // Direct match
   if (data[regionName]) return data[regionName];
   
+  // Normalize: lowercase and replace dashes with spaces
   const urlStyleToNormalized = regionName.toLowerCase().replace(/-/g, ' ');
   for (const key of Object.keys(data)) {
     if (key.toLowerCase() === urlStyleToNormalized) {
       return data[key];
+    }
+  }
+  
+  // For Russia: strip common prefixes like "Republic of", "Krai", "Oblast"
+  if (country === 'RU') {
+    const prefixes = ['republic of ', 'republic ', 'autonomous oblast ', 'autonomous okrug '];
+    const suffixes = [' krai', ' oblast', ' okrug'];
+    let stripped = regionName.toLowerCase();
+    
+    // Strip prefixes
+    for (const prefix of prefixes) {
+      if (stripped.startsWith(prefix)) {
+        stripped = stripped.slice(prefix.length);
+        break;
+      }
+    }
+    
+    // Strip suffixes
+    for (const suffix of suffixes) {
+      if (stripped.endsWith(suffix)) {
+        stripped = stripped.slice(0, -suffix.length);
+        break;
+      }
+    }
+    
+    // Try matching stripped version
+    for (const key of Object.keys(data)) {
+      if (key.toLowerCase() === stripped || key.toLowerCase().includes(stripped)) {
+        return data[key];
+      }
     }
   }
   
