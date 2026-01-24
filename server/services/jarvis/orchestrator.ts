@@ -79,6 +79,7 @@ import {
   getGlobalMemoryClient,
   type V3MemoryIntegration,
 } from "./v3/memoryIntegration";
+import { getGlobalQdrantClient } from "./v3/qdrantClient";
 import { extractLearningFromExecution as _extractLearningFromExecution } from "./v3/learningExtractor";
 import type { ToolCategory } from "./v3/types";
 
@@ -199,17 +200,15 @@ function getCurrentDateString(): string {
 const TOOL_SELECTION_GUIDE = `
 TOOL SELECTION GUIDE (use the RIGHT tool for each task):
 
-⚠️ CRITICAL ANTI-PATTERN - NEVER DO THIS:
-NEVER use execute_python to generate reports with ASCII art, text tables, or formatted strings!
-- ❌ WRONG: execute_python that prints "=====" borders and text tables
-- ❌ WRONG: execute_python that generates markdown strings
-- ❌ WRONG: Any ASCII art report formatting
-- ✅ RIGHT: generate_interactive_report for ANY report, analysis, or dashboard
+📝 DEFAULT: Respond in well-formatted Markdown
+   → Users can export your response to PDF, DOCX, or HTML via UI buttons
+   → Markdown tables, lists, and formatting are encouraged
+   → Only use report tools when user EXPLICITLY requests a report/dashboard
 
-If user asks for a "report", "analysis", "dashboard", "outlook", "summary", or similar:
-→ IMMEDIATELY use generate_interactive_report
-→ DO NOT use execute_python to format text
-→ The tool creates stunning HTML with charts, animations, and professional design
+🎯 WHEN TO USE REPORT TOOLS:
+   → User says "create a report", "make a dashboard", "generate an interactive report"
+   → User explicitly wants charts, visualizations, or a downloadable HTML document
+   → You've offered a report and user accepted
 
 For CREATING NEW PROJECTS:
   1. scaffold_project - Creates complete project structure with config files
@@ -234,25 +233,17 @@ For SECURITY ANALYSIS (ALWAYS use specialized tools first!):
   3. read_file package.json for manual review
 
 For FILE CREATION:
-  1. write_file for plain text/code files (.txt, .py, .js, etc.)
-  2. generate_interactive_report - USE THIS FOR ALL REPORTS! Creates stunning HTML with:
+  1. write_file for plain text/code files (.txt, .py, .js, .md, etc.)
+  2. generate_interactive_report - ONLY when user explicitly requests a report/dashboard:
      - Dark glassmorphism design with animated backgrounds
-     - Hero sections with animated stat counters  
      - Chart.js visualizations (bar, line, pie, doughnut, radar)
-     - Metric cards with change indicators
-     - Tabbed data tables with rankings
-     - Insight cards, timelines, comparison grids
-     - Code blocks with syntax highlighting
-     - Responsive design, fade-in animations
+     - Metric cards, timelines, comparison grids
      - Themes: dark, light, purple, blue, green
-  3. create_rich_report (only if you need AI-generated images or flowcharts)
-  4. write_docx for Word documents (.docx) when user specifically needs Word format
+  3. create_rich_report - ONLY when user needs AI-generated images in their report
+  4. write_docx for Word documents (.docx) when user specifically asks for Word format
   5. read_file to VERIFY content was created correctly
   
-  🚨 REPORT RULE: NEVER use execute_python to create reports! No ASCII art, no text tables!
-  The ONLY acceptable tools for reports are: generate_interactive_report or create_rich_report
-  
-  Keywords that trigger report tools: report, analysis, dashboard, outlook, forecast, summary, overview, briefing, assessment
+  NOTE: For most responses, just use markdown. The UI has export buttons for PDF/DOCX/HTML.
 
 For RUNNING SHELL COMMANDS:
   1. run_shell - Execute any shell command
@@ -336,38 +327,42 @@ function getJarvisSystemPrompt(): string {
   return `You are JARVIS, an autonomous AI agent assistant with advanced capabilities. Today's date is ${getCurrentDateString()}.
 
 ═══════════════════════════════════════════════════════════════════════════════
-🚨🚨🚨 MANDATORY TOOL USAGE - READ THIS BEFORE EVERY RESPONSE 🚨🚨🚨
+📝 RESPONSE FORMAT - MARKDOWN FIRST, REPORTS ON REQUEST
 ═══════════════════════════════════════════════════════════════════════════════
 
-For ANY response with: data, tables, weather, forecasts, analysis, comparisons,
-reports, statistics, metrics, assessments, predictions, prices, or lists:
+DEFAULT RESPONSE FORMAT: Beautiful, well-structured Markdown
+   → Use headers (##, ###) to organize information
+   → Use bullet points and numbered lists for clarity
+   → Use **bold** and *italic* for emphasis
+   → Use code blocks with syntax highlighting when showing code
+   → Use markdown tables when presenting tabular data
+   → The UI renders your markdown beautifully with export options
 
-YOU MUST CALL: generate_interactive_report tool
-   → Pass your data/content to this tool
-   → The tool creates beautiful HTML files with charts and styling
-   → The tool returns a file path that gets displayed to the user
+✅ ALWAYS respond in markdown UNLESS:
+   1. User EXPLICITLY asks for a "report", "dashboard", or "interactive document"
+   2. User asks you to "generate an HTML report" or similar
+   3. The task genuinely requires charts/visualizations that markdown cannot show
 
-⛔ CRITICAL: DO NOT OUTPUT HTML CODE YOURSELF
-   → Do NOT write \`\`\`html blocks
-   → Do NOT output <!DOCTYPE html> or any HTML tags
-   → Do NOT try to "create" HTML - CALL THE TOOL INSTEAD
-   → The generate_interactive_report tool handles ALL HTML generation
+🤔 WHEN TO OFFER A FULL REPORT:
+   If your response would benefit from interactive charts, animated metrics, or
+   a professional document format, you may ASK the user:
+   "Would you like me to generate an interactive HTML report with charts and 
+   visualizations for this data?"
+   Only generate the report if they say yes.
 
-⛔ FORBIDDEN OUTPUTS:
-   → Markdown tables with | pipes
-   → Plain text with data
-   → Code blocks containing HTML
-   → ASCII visualizations
+📊 REPORT GENERATION (only when requested or approved):
+   → Use generate_interactive_report for stunning HTML with charts
+   → Use create_rich_report if you need AI-generated images
+   → These tools create professional documents with dark glassmorphism design
 
-✅ CORRECT APPROACH:
-   1. Gather the data you need (search, API calls, etc.)
-   2. CALL generate_interactive_report with title, sections, and theme
-   3. The tool creates the beautiful HTML file
-   4. Return a brief summary - the UI will display the report
+⛔ DO NOT automatically generate reports for simple questions like:
+   → "What's the weather?" → Just describe it in markdown
+   → "What's the price of Bitcoin?" → State the price in your response
+   → "Give me a summary of X" → Write a markdown summary
+   → "Analyze this data" → Provide analysis in markdown with tables
 
-Example: User asks "Weather in Tokyo"
-   WRONG: Output a markdown table or HTML code
-   RIGHT: Call generate_interactive_report(title="Tokyo Weather", sections=[...], theme="dark")
+The user's interface has PDF, DOCX, and HTML export buttons below every response.
+They can request a full report anytime they want one.
 ═══════════════════════════════════════════════════════════════════════════════
 
 CORE CAPABILITIES:
@@ -405,6 +400,14 @@ DECISION GUIDE for multi-model tools:
 - Need multiple expert opinions → query_consensus
 - Deep dive research → deep_research (multi-source) OR query_synthesis (multi-model + web)
 - Controversial/subjective topics → query_consensus (see where models agree/disagree)
+
+MANDATORY - USE query_synthesis FOR:
+- Product reviews/recommendations ("best X", "top X", "which X should I buy")
+- Recent news or events (anything 2024-2026)
+- Current prices, availability, or market data
+- New product launches, releases, or announcements
+- Any query where your training data may be outdated
+query_synthesis performs web search FIRST, then gets multi-model consensus on the findings.
 
 ${TOOL_SELECTION_GUIDE}
 
@@ -536,7 +539,7 @@ const EXPENSIVE_TOOLS = new Set([
 const MAX_EXPENSIVE_TOOL_RETRIES = 1;
 
 const MAX_IDENTICAL_CALLS_PER_APPROACH = 2;
-export const MAX_ITERATIONS = 25;
+export const MAX_ITERATIONS = 10;
 export const MAX_TASK_DURATION_MS = 15 * 60 * 1000;
 export const MAX_TOOL_DURATION_MS = 3 * 60 * 1000;
 
@@ -1973,7 +1976,7 @@ export async function runOrchestrator(
           isHeld: async () => false,
           extend: async () => true,
         },
-        qdrant: {
+        qdrant: userId ? getGlobalQdrantClient(userId) : {
           search: async () => [],
           upsert: async () => {},
           delete: async () => {},
@@ -2354,9 +2357,8 @@ You MUST call the actual scaffold tool. Please do so now.`;
           if (taskRequestsFiles && !usedFileWrite) {
             const rejectMessage = `⚠️ TASK COMPLETION REJECTED: You were asked to create file output but never called a file-writing tool.
 Creating content in execute_python does NOT save files! You must use:
-- generate_interactive_report for stunning visual reports (PREFERRED)
-- create_rich_report for reports with AI images or flowcharts
 - write_file with a path like /tmp/jarvis-workspace/filename.md
+- generate_interactive_report ONLY if user explicitly requested an HTML report/dashboard
 
 Please save the content now.`;
 
@@ -2753,7 +2755,7 @@ Do NOT repeat the same tool calls with the same inputs.`;
           const rejectMessage = `⚠️ You described what you would do, but you didn't actually call any tools to create the deliverable!
 
 The user requested output that requires using tools:
-${taskRequestsFiles && !usedFileWrite ? "- File/report output: Use generate_interactive_report (preferred) or write_file" : ""}
+${taskRequestsFiles && !usedFileWrite ? "- File output: Use write_file (or generate_interactive_report ONLY if user explicitly asked for an HTML report)" : ""}
 ${taskRequestsScaffold && !usedScaffoldTool ? "- Scaffold/portal: Use scaffold_business_portal or scaffold_project" : ""}
 
 You MUST call the actual tool now - not just describe what you'll do. Call ${missingToolType} immediately.`;

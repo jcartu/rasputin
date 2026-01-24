@@ -83,6 +83,14 @@ const CODER_BEHAVIOR: AgentBehavior = {
 3. REFACTORING: Improve code structure without changing behavior
 4. DEBUGGING: Identify and fix bugs systematically
 5. BEST PRACTICES: Follow language-specific conventions and patterns
+6. REPORT GENERATION: Create interactive HTML reports using the generate_interactive_report tool
+
+CRITICAL - HTML REPORT REQUESTS:
+When user asks for an "HTML report", "interactive report", or "dashboard":
+1. First gather necessary data (weather, research, etc.) using appropriate tools
+2. THEN CALL generate_interactive_report tool with the data
+3. DO NOT write HTML code directly in your response - USE THE TOOL
+4. The tool creates and saves the HTML file - this is REQUIRED for the UI to display it
 
 Coding principles:
 - Write self-documenting code with clear variable/function names
@@ -299,6 +307,7 @@ const RESEARCHER_BEHAVIOR: AgentBehavior = {
 3. ANALYSIS: Synthesize information from multiple sources
 4. DEEP RESEARCH: Conduct thorough multi-step investigations
 5. FACT CHECKING: Verify claims and cross-reference sources
+6. MULTI-MODEL CONSENSUS: Get verified answers from multiple AI models
 
 Research methodology:
 - Start with broad searches, then narrow down
@@ -307,7 +316,23 @@ Research methodology:
 - Note the credibility and recency of sources
 - Synthesize findings into actionable insights
 
-Output format:
+CRITICAL - TOOL SELECTION FOR CURRENT/RECENT TOPICS:
+For queries about recent products, news, prices, reviews, or time-sensitive information:
+- USE query_synthesis FIRST - it performs web search + multi-model analysis
+- query_synthesis is REQUIRED for: new products, current prices, recent news, 2024-2026 events
+- Example triggers: "best", "latest", "current", "new", "recent", "2025", "2026", product names
+
+For comparing opinions or getting verified facts:
+- USE query_consensus to get agreement across GPT-5, Claude, Gemini, Grok
+
+CRITICAL - TOOL USAGE FOR HTML REPORTS:
+When user explicitly requests "HTML report", "HTML", or "interactive report":
+1. First gather data using appropriate tools (get_weather, web_search, etc.)
+2. THEN CALL generate_interactive_report tool to create the HTML file
+3. DO NOT write HTML code inline in your response - use the tool!
+The tool saves the file and returns the path. This is required for the UI to display the report preview.
+
+Output format for regular responses (not HTML reports):
 - Key findings with source citations
 - Confidence level for each finding
 - Areas of uncertainty or conflicting information
@@ -327,6 +352,8 @@ Output format:
     const researchTools = [
       "web_search",
       "deep_research",
+      "query_consensus",
+      "query_synthesis",
       "browse_url",
       "http_request",
       "search_memory",
@@ -343,9 +370,21 @@ Output format:
       taskLower.includes("temperature") ||
       taskLower.includes("forecast")
     ) {
-      return available.filter(
-        t => t === "get_weather" || t === "task_complete"
-      );
+      // If user also wants a report/html output, include report tools
+      const wantsReport =
+        taskLower.includes("report") ||
+        taskLower.includes("html") ||
+        taskLower.includes("dashboard") ||
+        taskLower.includes("document");
+      const weatherTools = wantsReport
+        ? [
+            "get_weather",
+            "task_complete",
+            "generate_interactive_report",
+            "create_rich_report",
+          ]
+        : ["get_weather", "task_complete"];
+      return available.filter(t => weatherTools.includes(t));
     }
 
     return available.filter(t => researchTools.includes(t));
@@ -354,7 +393,7 @@ Output format:
   canDelegate: false,
   delegationTargets: [],
   requiresApprovalFor: [],
-  maxIterations: 10,
+  maxIterations: 5,
   temperature: 0.6,
   thinkingStyle: "creative",
 };
@@ -542,8 +581,14 @@ export function requiresApproval(
   return AGENT_BEHAVIORS[agentType].requiresApprovalFor.includes(toolName);
 }
 
-export function getAgentMaxIterations(agentType: AgentType): number {
-  return AGENT_BEHAVIORS[agentType].maxIterations;
+export function getAgentMaxIterations(
+  agentType: AgentType,
+  complexity?: "simple" | "moderate" | "complex"
+): number {
+  const base = AGENT_BEHAVIORS[agentType].maxIterations;
+  if (complexity === "simple") return Math.min(base, 3);
+  if (complexity === "complex") return Math.min(base * 2, 20);
+  return base;
 }
 
 export function getAgentTemperature(agentType: AgentType): number {

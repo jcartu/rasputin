@@ -1416,12 +1416,12 @@ export default function Prototype() {
             </div>
 
             {/* System Vitals */}
-            <div className="p-4 flex-1">
+            <div className="p-4 flex-1 flex flex-col min-h-0">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-xs font-medium text-white/50 uppercase tracking-wider">System Vitals</span>
                 <span className="text-[10px] text-cyan-400">GPT-5.2 PRO ACTIVE</span>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-4 shrink-0">
                 <VitalBar 
                   label={systemStats?.gpu ? "VRAM" : "VRAM (N/A)"} 
                   value={systemStats?.gpu ? Math.round((systemStats.gpu.memoryUsedMb / systemStats.gpu.memoryTotalMb) * 100) : 0} 
@@ -1445,14 +1445,14 @@ export default function Prototype() {
               </div>
               
               <div className="mt-4 flex-1 min-h-0 flex flex-col">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-2 shrink-0">
                   <div className="flex items-center gap-2">
                     <Activity className="h-3 w-3 text-cyan-400" />
                     <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">LIVE TELEMETRY</span>
                   </div>
                   <span className="text-[10px] text-cyan-600 font-mono">{logs.length} EVENTS</span>
                 </div>
-                <div ref={logsContainerRef} className="flex-1 overflow-y-auto space-y-1 pr-1 scrollbar-thin scrollbar-thumb-cyan-900/50 scrollbar-track-transparent font-mono text-[10px]">
+                <div ref={logsContainerRef} className="flex-1 min-h-0 overflow-y-auto space-y-1 pr-1 scrollbar-thin scrollbar-thumb-cyan-900/50 scrollbar-track-transparent font-mono text-[10px]">
                   {logs.length === 0 ? (
                     <div className="text-white/20 text-center py-4">Awaiting events...</div>
                   ) : (
