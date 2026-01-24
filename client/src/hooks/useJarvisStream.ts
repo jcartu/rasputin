@@ -75,40 +75,52 @@ const initialState: StreamingState = {
 export function useJarvisStream() {
   const [state, setState] = useState<StreamingState>(initialState);
   const activeTaskIdRef = useRef<number | null>(null);
+  const allowAutoAssignRef = useRef<boolean>(false);
 
-  const startTask = useCallback((task: string, userId: number) => {
-    const socket = getSocket();
+  const startTask = useCallback(
+    (task: string, userId: number, existingTaskId?: number) => {
+      const socket = getSocket();
+      
+      activeTaskIdRef.current = existingTaskId ?? null;
+      allowAutoAssignRef.current = !existingTaskId;
 
-    setState(prev => {
-      const conversationHistory: ConversationMessage[] = prev.exchanges.flatMap(
-        ex =>
-          ex.assistantSummary
-            ? [
-                { role: "user" as const, content: ex.userQuery },
-                { role: "assistant" as const, content: ex.assistantSummary },
-              ]
-            : [{ role: "user" as const, content: ex.userQuery }]
-      );
+      setState(prev => {
+        const conversationHistory: ConversationMessage[] =
+          prev.exchanges.flatMap(ex =>
+            ex.assistantSummary
+              ? [
+                  { role: "user" as const, content: ex.userQuery },
+                  { role: "assistant" as const, content: ex.assistantSummary },
+                ]
+              : [{ role: "user" as const, content: ex.userQuery }]
+          );
 
-      socket.emit("jarvis:start", { task, userId, conversationHistory });
+        socket.emit("jarvis:start", {
+          task,
+          userId,
+          conversationHistory,
+          taskId: existingTaskId,
+        });
 
-      return {
-        ...prev,
-        taskId: null,
-        isStreaming: true,
-        steps: [],
-        currentIteration: 0,
-        exchanges: [
-          ...prev.exchanges,
-          { userQuery: task, assistantSummary: null, timestamp: Date.now() },
-        ],
-        summary: null,
-        success: null,
-        error: null,
-        durationMs: null,
-      };
-    });
-  }, []);
+        return {
+          ...prev,
+          taskId: null,
+          isStreaming: true,
+          steps: [],
+          currentIteration: 0,
+          exchanges: [
+            ...prev.exchanges,
+            { userQuery: task, assistantSummary: null, timestamp: Date.now() },
+          ],
+          summary: null,
+          success: null,
+          error: null,
+          durationMs: null,
+        };
+      });
+    },
+    []
+  );
 
   const cancelTask = useCallback(() => {
     if (activeTaskIdRef.current) {
@@ -123,9 +135,18 @@ export function useJarvisStream() {
     }
   }, []);
 
-  const reset = useCallback(() => {
+  const reset = useCallback((nextTaskId?: number | string | null) => {
     setState(initialState);
-    activeTaskIdRef.current = null;
+    if (typeof nextTaskId === "number") {
+      activeTaskIdRef.current = nextTaskId;
+      allowAutoAssignRef.current = false;
+    } else if (nextTaskId === undefined) {
+      activeTaskIdRef.current = null;
+      allowAutoAssignRef.current = true;
+    } else {
+      activeTaskIdRef.current = null;
+      allowAutoAssignRef.current = false;
+    }
   }, []);
 
   const loadConversationHistory = useCallback(
@@ -161,10 +182,15 @@ export function useJarvisStream() {
 
     const handleThinking = (event: JarvisThinkingEvent) => {
       console.info("[JARVIS] thinking:", event.taskId);
-      if (activeTaskIdRef.current === null) {
+      if (activeTaskIdRef.current === null && allowAutoAssignRef.current) {
         activeTaskIdRef.current = event.taskId;
+        allowAutoAssignRef.current = false;
       }
-      if (event.taskId !== activeTaskIdRef.current) return;
+      if (
+        activeTaskIdRef.current !== null &&
+        event.taskId !== activeTaskIdRef.current
+      )
+        return;
 
       setState(prev => ({
         ...prev,
@@ -182,10 +208,15 @@ export function useJarvisStream() {
     };
 
     const handleThinkingChunk = (event: JarvisThinkingChunkEvent) => {
-      if (activeTaskIdRef.current === null) {
+      if (activeTaskIdRef.current === null && allowAutoAssignRef.current) {
         activeTaskIdRef.current = event.taskId;
+        allowAutoAssignRef.current = false;
       }
-      if (event.taskId !== activeTaskIdRef.current) return;
+      if (
+        activeTaskIdRef.current !== null &&
+        event.taskId !== activeTaskIdRef.current
+      )
+        return;
 
       setState(prev => {
         const steps = [...prev.steps];
