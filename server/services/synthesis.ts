@@ -20,8 +20,91 @@ import {
   FRONTIER_MODELS,
 } from "../../shared/rasputin";
 import { queryModel, queryModelsInParallel } from "./aiModels";
+import { getOllamaClient } from "./localLLM/ollama";
 
 const WEB_SEARCH_TIMEOUT_MS = 20_000;
+const DOLPHIN_MODEL = "dolphin-llama3:70b-v2.9-q8_0";
+const DOLPHIN_TIMEOUT_MS = 120_000;
+
+const REFUSAL_PATTERNS = [
+  /i (?:can't|cannot|won't|will not|am unable to|'m not able to)/i,
+  /i (?:don't|do not) (?:feel comfortable|think it'?s appropriate)/i,
+  /(?:sorry|apologies),? (?:but )?i (?:can't|cannot)/i,
+  /this (?:request |query |topic )?(?:goes against|violates)/i,
+  /(?:harmful|dangerous|illegal|unethical) (?:content|information|advice)/i,
+  /i (?:must |have to )?(?:decline|refuse|refrain)/i,
+  /(?:not (?:able|going) to|unable to) (?:provide|assist|help with)/i,
+  /against (?:my|our) (?:guidelines|policies|terms)/i,
+  /(?:as an ai|as a language model),? i (?:can't|cannot|don't)/i,
+];
+
+function detectRefusal(content: string): boolean {
+  if (!content || content.length < 50) return false;
+  const firstParagraph = content.slice(0, 500);
+  return REFUSAL_PATTERNS.some(pattern => pattern.test(firstParagraph));
+}
+
+async function queryDolphinFallback(
+  query: string,
+  webSearchContext: string,
+  onUpdate?: (status: string) => void
+): Promise<ModelResponseData | null> {
+  const ollama = getOllamaClient();
+  
+  const isHealthy = await ollama.isHealthy();
+  if (!isHealthy) {
+    console.log("[Synthesis:Dolphin] Ollama not available");
+    return null;
+  }
+
+  const models = await ollama.listModels();
+  const dolphinAvailable = models.some(m => m.name.includes("dolphin-llama3:70b"));
+  if (!dolphinAvailable) {
+    console.log("[Synthesis:Dolphin] Dolphin model not loaded");
+    return null;
+  }
+
+  onUpdate?.("Querying local Dolphin model (uncensored fallback)...");
+  console.log("[Synthesis:Dolphin] Activating Dolphin fallback with web context");
+
+  const systemPrompt = `You are Dolphin, a helpful AI research assistant. You provide thorough, unbiased analysis without unnecessary restrictions. You have been given current web search results to inform your response - use this data to provide accurate, up-to-date information.`;
+
+  const userMessage = `## Current Web Search Results (use this for up-to-date information)
+${webSearchContext}
+
+## Research Query
+${query}
+
+Provide a comprehensive, well-reasoned response using the web search data above. Be thorough and cite the sources when relevant.`;
+
+  try {
+    const startTime = Date.now();
+    const response = await ollama.chat({
+      model: DOLPHIN_MODEL,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+    });
+
+    onUpdate?.("Dolphin response received");
+    console.log(`[Synthesis:Dolphin] Response received (${response.content?.length || 0} chars)`);
+
+    return {
+      modelId: "dolphin-local",
+      modelName: "Dolphin 2.9 (Local GPU)",
+      content: response.content || "",
+      status: "completed",
+      latencyMs: Date.now() - startTime,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
+    };
+  } catch (error) {
+    console.error("[Synthesis:Dolphin] Error:", error);
+    onUpdate?.("Dolphin fallback failed");
+    return null;
+  }
+}
 const INTERMEDIATE_STAGE_TIMEOUT_MS = 45_000;
 const FINAL_SYNTHESIS_TIMEOUT_MS = 60_000;
 
@@ -270,16 +353,15 @@ async function runParallelProposers(
     console.log(
       `[Synthesis] Querying ${proposerModels.length} models (45s timeout each)`
     );
-    const responses = await queryModelsInParallel(
+    let responses = await queryModelsInParallel(
       proposerModels,
       { messages, stream: true },
       onModelUpdate
     );
 
-    const successfulResponses = responses.filter(
+    let successfulResponses = responses.filter(
       r => r.status === "completed" && r.content
     );
-    const durationMs = Date.now() - startTime;
 
     console.log(
       `[Synthesis:Proposers] ${responses.length} total, ${successfulResponses.length} with content`
@@ -290,7 +372,39 @@ async function runParallelProposers(
       );
     });
 
-    const output = `Received ${successfulResponses.length}/${proposerModels.length} model responses`;
+    const refusedResponses = successfulResponses.filter(r => 
+      r.content && detectRefusal(r.content)
+    );
+    const actualContent = successfulResponses.filter(r => 
+      r.content && !detectRefusal(r.content)
+    );
+
+    if (refusedResponses.length > 0) {
+      console.log(
+        `[Synthesis:Proposers] Detected ${refusedResponses.length} refusals: ${refusedResponses.map(r => r.modelId).join(", ")}`
+      );
+    }
+
+    if (actualContent.length === 0 || refusedResponses.length >= successfulResponses.length / 2) {
+      console.log("[Synthesis:Proposers] Majority refused or no content - activating Dolphin fallback");
+      onUpdate?.("running", "Frontier models refused - querying local Dolphin model...");
+      
+      const dolphinResponse = await queryDolphinFallback(
+        query,
+        webSearchResults,
+        (status) => onUpdate?.("running", status)
+      );
+      
+      if (dolphinResponse && dolphinResponse.content) {
+        responses = [...responses, dolphinResponse];
+        successfulResponses = [...actualContent, dolphinResponse];
+        onModelUpdate?.("dolphin-local", dolphinResponse);
+        console.log("[Synthesis:Proposers] Dolphin fallback successful");
+      }
+    }
+
+    const durationMs = Date.now() - startTime;
+    const output = `Received ${successfulResponses.length} responses (${refusedResponses.length} refusals, Dolphin: ${responses.some(r => r.modelId === "dolphin-local") ? "yes" : "no"})`;
     onUpdate?.("completed", output);
 
     return {
