@@ -15,7 +15,7 @@ import {
   type ToolResult,
   MAX_TOOL_DURATION_MS,
 } from "./jarvis/orchestrator";
-import { executeTool } from "./jarvis/tools";
+import { executeTool, synthesisProgressEmitter, type SynthesisProgressEvent } from "./jarvis/tools";
 
 function withTimeout<T>(
   promise: Promise<T>,
@@ -862,9 +862,23 @@ async function handleJarvisTask(
   }
 
   const toolStartTimes = new Map<string, number>();
-
-  // Map tool call IDs to tool names for use in tool_end
   const toolCallNames = new Map<string, string>();
+
+  const synthesisHandler = (event: SynthesisProgressEvent) => {
+    if (activeQueries.get(queryKey)?.cancelled) return;
+    socket.emit("jarvis:thinking", {
+      taskId,
+      content: `🔬 ${event.output || event.stage}`,
+      timestamp: event.timestamp,
+    });
+    addStepToActiveTask(userId, {
+      id: crypto.randomUUID(),
+      type: "thinking",
+      content: `🔬 Synthesis: ${event.output || event.stage}`,
+      timestamp: event.timestamp,
+    });
+  };
+  synthesisProgressEmitter.on("synthesis:progress", synthesisHandler);
 
   try {
     await runOrchestrator(
@@ -1106,6 +1120,8 @@ async function handleJarvisTask(
     hasError = true;
     const errorMsg = error instanceof Error ? error.message : String(error);
     if (!finalResult) finalResult = errorMsg;
+  } finally {
+    synthesisProgressEmitter.off("synthesis:progress", synthesisHandler);
   }
 
   const durationMs = Date.now() - startTime;

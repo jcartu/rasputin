@@ -66,7 +66,8 @@ import {
 } from "./memoryIntegration";
 import { generateConsensus } from "../consensus";
 import { generateSynthesis } from "../synthesis";
-import { SpeedTier } from "../../../shared/rasputin";
+import { SpeedTier, SynthesisStage } from "../../../shared/rasputin";
+import { EventEmitter } from "events";
 import {
   generateSearchQueries,
   scoreSourceCredibility,
@@ -164,6 +165,28 @@ function getMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
   return MIME_TYPES[ext] || "application/octet-stream";
 }
+
+export interface SynthesisProgressEvent {
+  stage: SynthesisStage;
+  status: "pending" | "running" | "completed" | "error";
+  output?: string;
+  timestamp: number;
+}
+
+class SynthesisProgressEmitter extends EventEmitter {
+  private static instance: SynthesisProgressEmitter;
+  static getInstance(): SynthesisProgressEmitter {
+    if (!SynthesisProgressEmitter.instance) {
+      SynthesisProgressEmitter.instance = new SynthesisProgressEmitter();
+    }
+    return SynthesisProgressEmitter.instance;
+  }
+  emitProgress(event: SynthesisProgressEvent): void {
+    this.emit("synthesis:progress", event);
+  }
+}
+
+export const synthesisProgressEmitter = SynthesisProgressEmitter.getInstance();
 
 type ToolResult = {
   success: boolean;
@@ -888,21 +911,39 @@ ${modelSummaries}
   }
 }
 
-/**
- * Run a deep synthesis pipeline that gathers web data, queries multiple models,
- * extracts information, detects gaps, and produces a comprehensive synthesis.
- */
 export async function querySynthesis(
   query: string,
   speedTier: SpeedTier = "normal"
 ): Promise<string> {
   const startTime = Date.now();
+  const stageLabels: Record<SynthesisStage, string> = {
+    web_search: "Web Search",
+    proposers: "Multi-Model Query",
+    information_extraction: "Information Extraction",
+    gap_detection: "Gap Detection",
+    meta_synthesis: "Final Synthesis",
+  };
+
+  synthesisProgressEmitter.emitProgress({
+    stage: "web_search",
+    status: "pending",
+    output: "Starting synthesis pipeline...",
+    timestamp: Date.now(),
+  });
 
   try {
     const result = await generateSynthesis({
       query,
       speedTier,
       conversationHistory: [],
+      onStageUpdate: (stage, status, output) => {
+        synthesisProgressEmitter.emitProgress({
+          stage,
+          status,
+          output: `${stageLabels[stage]}: ${status}${output ? ` - ${output.slice(0, 150)}` : ""}`,
+          timestamp: Date.now(),
+        });
+      },
     });
 
     const stagesSummary = result.stages
@@ -935,6 +976,12 @@ ${result.conflictsResolved?.length ? result.conflictsResolved.join("\n- ") : "No
 - Models queried: ${result.proposerResponses?.length || 0}
 - Speed tier: ${speedTier}`;
   } catch (error) {
+    synthesisProgressEmitter.emitProgress({
+      stage: "meta_synthesis",
+      status: "error",
+      output: `Error: ${error instanceof Error ? error.message : String(error)}`,
+      timestamp: Date.now(),
+    });
     return `Error running synthesis pipeline: ${error instanceof Error ? error.message : String(error)}`;
   }
 }
