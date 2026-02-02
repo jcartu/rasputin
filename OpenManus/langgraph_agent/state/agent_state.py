@@ -111,9 +111,14 @@ class AgentState(TypedDict):
     human_input_reason: Optional[str]
     mode: str
     routed_to: Optional[str]
+    project_instructions: Optional[str]
 
 
-def create_initial_state(user_message: str, mode: str = "adaptive") -> AgentState:
+def create_initial_state(
+    user_message: str, 
+    mode: str = "adaptive",
+    project_instructions: str = ""
+) -> AgentState:
     return AgentState(
         messages=[HumanMessage(content=user_message)],
         tasks=[],
@@ -133,4 +138,5 @@ def create_initial_state(user_message: str, mode: str = "adaptive") -> AgentStat
         human_input_reason=None,
         mode=mode,
         routed_to=None,
+        project_instructions=project_instructions or None,
     )

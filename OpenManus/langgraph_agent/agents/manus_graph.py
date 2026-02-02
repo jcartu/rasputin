@@ -151,6 +151,12 @@ class ManusAgent:
         if self.on_event:
             await self.on_event(event_type, data)
 
+    def _build_system_prompt(self, base_prompt: str, state: AgentState) -> str:
+        project_instructions = state.get("project_instructions")
+        if project_instructions:
+            return f"{base_prompt}\n\n## Project Instructions\n\nThe user has provided the following instructions for this project that you should follow:\n\n{project_instructions}"
+        return base_prompt
+
     def _build_graph(self) -> Any:
         workflow = StateGraph(AgentState)
         
@@ -279,8 +285,9 @@ class ManusAgent:
     async def _chat_response_node(self, state: AgentState) -> dict:
         await self._emit("status", {"state": "thinking"})
         
+        system_prompt = self._build_system_prompt(CHAT_SYSTEM_PROMPT, state)
         messages = [
-            SystemMessage(content=CHAT_SYSTEM_PROMPT),
+            SystemMessage(content=system_prompt),
             *state["messages"]
         ]
         
@@ -298,8 +305,9 @@ class ManusAgent:
     async def _planner_node(self, state: AgentState) -> dict:
         await self._emit("status", {"state": "planning"})
         
+        system_prompt = self._build_system_prompt(AGENT_SYSTEM_PROMPT, state)
         messages = [
-            SystemMessage(content=AGENT_SYSTEM_PROMPT),
+            SystemMessage(content=system_prompt),
             *state["messages"]
         ]
         
@@ -327,8 +335,9 @@ class ManusAgent:
             "max_steps": state["max_steps"]
         })
         
+        system_prompt = self._build_system_prompt(AGENT_SYSTEM_PROMPT, state)
         messages = [
-            SystemMessage(content=AGENT_SYSTEM_PROMPT),
+            SystemMessage(content=system_prompt),
             *state["messages"]
         ]
         
@@ -394,8 +403,18 @@ class ManusAgent:
                         ))
         return tasks
 
-    async def run(self, user_message: str, thread_id: Optional[str] = None, mode: str = "adaptive") -> AgentState:
-        initial_state = create_initial_state(user_message, mode=mode)
+    async def run(
+        self, 
+        user_message: str, 
+        thread_id: Optional[str] = None, 
+        mode: str = "adaptive",
+        project_instructions: str = ""
+    ) -> AgentState:
+        initial_state = create_initial_state(
+            user_message, 
+            mode=mode, 
+            project_instructions=project_instructions
+        )
         initial_state["workspace_path"] = self.workspace_path
         
         config = {"configurable": {"thread_id": thread_id or str(uuid.uuid4())}}

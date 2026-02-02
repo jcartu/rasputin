@@ -12,6 +12,7 @@ import aiofiles
 
 from ..agents.manus_graph import ManusAgent
 from ..storage.session_store import SessionStore
+from ..storage.project_store import ProjectStore
 
 
 class ConnectionManager:
@@ -36,6 +37,7 @@ class ConnectionManager:
 manager = ConnectionManager()
 sessions: dict[str, dict] = {}
 session_store = SessionStore()
+project_store = ProjectStore()
 
 app = FastAPI(title="Manus LangGraph Agent")
 
@@ -91,11 +93,16 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             if data.get("type") == "message":
                 prompt = data.get("content", "")
                 mode = data.get("mode", "adaptive")
+                project_id = data.get("project_id")
+                project_instructions = data.get("project_instructions", "")
 
                 stored_session = session_store.load(session_id)
                 if not stored_session:
                     title = prompt[:50] + ("..." if len(prompt) > 50 else "")
                     session_store.create(session_id, title)
+
+                if project_id:
+                    project_store.add_session(project_id, session_id)
 
                 session_store.add_message(session_id, "user", prompt)
 
@@ -116,7 +123,12 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 sessions[session_id]["agent"] = agent
 
                 try:
-                    result = await agent.run(prompt, thread_id=session_id, mode=mode)
+                    result = await agent.run(
+                        prompt, 
+                        thread_id=session_id, 
+                        mode=mode,
+                        project_instructions=project_instructions
+                    )
 
                     final_answer = result.get("final_answer", "")
                     if final_answer:
@@ -165,6 +177,93 @@ async def delete_session(session_id: str):
         return {"status": "deleted"}
     raise HTTPException(status_code=404, detail="Session not found")
 
+
+# ============ Project Endpoints ============
+
+@app.get("/api/projects")
+async def list_projects(limit: int = 100):
+    return {"projects": project_store.list_projects(limit)}
+
+
+@app.post("/api/projects")
+async def create_project(name: str, description: str = ""):
+    project_id = str(uuid.uuid4())
+    project = project_store.create(project_id, name, description)
+    return project.to_dict()
+
+
+@app.get("/api/projects/{project_id}")
+async def get_project(project_id: str):
+    project = project_store.load(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project.to_dict()
+
+
+@app.put("/api/projects/{project_id}")
+async def update_project(
+    project_id: str,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    instructions: Optional[str] = None,
+    pinned: Optional[bool] = None,
+):
+    project = project_store.update(project_id, name, description, instructions, pinned)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project.to_dict()
+
+
+@app.delete("/api/projects/{project_id}")
+async def delete_project(project_id: str):
+    if project_store.delete(project_id):
+        return {"status": "deleted"}
+    raise HTTPException(status_code=404, detail="Project not found")
+
+
+@app.post("/api/projects/{project_id}/sessions/{session_id}")
+async def add_session_to_project(project_id: str, session_id: str):
+    if project_store.add_session(project_id, session_id):
+        return {"status": "added"}
+    raise HTTPException(status_code=404, detail="Project not found")
+
+
+@app.delete("/api/projects/{project_id}/sessions/{session_id}")
+async def remove_session_from_project(project_id: str, session_id: str):
+    if project_store.remove_session(project_id, session_id):
+        return {"status": "removed"}
+    raise HTTPException(status_code=404, detail="Project not found")
+
+
+@app.post("/api/projects/{project_id}/files")
+async def upload_project_file(project_id: str, file: UploadFile = File(...)):
+    content = await file.read()
+    file_info = project_store.add_file(project_id, file.filename or "file", content)
+    if not file_info:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"status": "uploaded", "file": file_info}
+
+
+@app.delete("/api/projects/{project_id}/files/{filename}")
+async def delete_project_file(project_id: str, filename: str):
+    if project_store.remove_file(project_id, filename):
+        return {"status": "deleted"}
+    raise HTTPException(status_code=404, detail="Project or file not found")
+
+
+@app.get("/api/projects/{project_id}/files/{filename}")
+async def download_project_file(project_id: str, filename: str):
+    content = project_store.get_file_content(project_id, filename)
+    if content is None:
+        raise HTTPException(status_code=404, detail="File not found")
+    return Response(
+        content=content,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+# ============ Settings Endpoints ============
 
 def get_config_path() -> Path:
     return Path(__file__).parent.parent.parent / "config" / "config.toml"

@@ -13,6 +13,8 @@ import type { TerminalLine } from "./components/TerminalPanel";
 import { SessionHistory } from "./components/SessionHistory";
 import { CodeEditor } from "./components/CodeEditor";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { ProjectsPanel } from "./components/ProjectsPanel";
+import type { Project } from "./components/ProjectsPanel";
 
 const SUGGESTIONS = [
   {
@@ -71,6 +73,8 @@ function App() {
     "adaptive"
   );
   const [routedMode, setRoutedMode] = useState<string | null>(null);
+  const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [showProjects, setShowProjects] = useState(true);
 
   const wsRef = useRef<WebSocket | null>(null);
   const connectRef = useRef<() => void>(() => {});
@@ -406,10 +410,16 @@ function App() {
 
       addActionEvent("📤", "Sending message", text.slice(0, 50) + "...");
       wsRef.current.send(
-        JSON.stringify({ type: "message", content: text, mode: activeMode })
+        JSON.stringify({
+          type: "message",
+          content: text,
+          mode: activeMode,
+          project_id: currentProject?.id,
+          project_instructions: currentProject?.instructions,
+        })
       );
     },
-    [addActionEvent, activeMode]
+    [addActionEvent, activeMode, currentProject]
   );
 
   const handleTakeOver = useCallback(() => {
@@ -529,13 +539,39 @@ function App() {
         </div>
       ) : (
         <div className="flex-1 flex overflow-hidden">
+          {showProjects && (
+            <div className="w-[240px] flex-shrink-0">
+              <ProjectsPanel
+                currentProjectId={currentProject?.id || null}
+                onSelectProject={setCurrentProject}
+                onNewChat={projectId => {
+                  handleNewSession();
+                  if (projectId) {
+                    const proj =
+                      currentProject?.id === projectId ? currentProject : null;
+                    if (proj) setCurrentProject(proj);
+                  }
+                }}
+              />
+            </div>
+          )}
+
           <div className="w-[400px] border-r border-zinc-800 flex flex-col">
             <div className="px-4 py-2 border-b border-zinc-700/50 flex items-center justify-between">
-              <SessionHistory
-                currentSessionId={sessionId}
-                onSelectSession={handleSelectSession}
-                onNewSession={handleNewSession}
-              />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowProjects(!showProjects)}
+                  className="p-1 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded transition-colors"
+                  title={showProjects ? "Hide projects" : "Show projects"}
+                >
+                  {showProjects ? "◀" : "📁"}
+                </button>
+                <SessionHistory
+                  currentSessionId={sessionId}
+                  onSelectSession={handleSelectSession}
+                  onNewSession={handleNewSession}
+                />
+              </div>
               <div className="flex items-center gap-2">
                 <select
                   value={activeMode}
@@ -560,6 +596,11 @@ function App() {
                     }`}
                   >
                     {routedMode === "chat" ? "💬 Chat" : "🤖 Agent"}
+                  </span>
+                )}
+                {currentProject && (
+                  <span className="px-2 py-1 text-xs rounded-lg bg-green-500/20 text-green-400 truncate max-w-[100px]">
+                    📁 {currentProject.name}
                   </span>
                 )}
                 <button
