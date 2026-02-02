@@ -44,6 +44,13 @@ import {
   persistConsensusVote,
   persistConsensusResult,
 } from "./metricsStore";
+import {
+  detectRefusal,
+  detectSemanticReframing,
+  queryLocalFallbackWithQwenEnhancement,
+  performDolphinResearch,
+  type DolphinResearchResult,
+} from "../../synthesis";
 
 export interface SwarmConfig {
   maxConcurrentAgents: number;
@@ -921,6 +928,7 @@ export function createFrontierExecutor(
         let allToolResults: string[] = [];
         let lastContent = "";
         let forceToolUsage = false;
+        let usedDolphinFallback = false;
 
         while (iteration < MAX_SWARM_ITERATIONS) {
           iteration++;
@@ -954,9 +962,97 @@ export function createFrontierExecutor(
             for (const call of result.toolCalls) {
               const toolCallId = call.id || crypto.randomUUID();
               try {
-                const params = JSON.parse(call.function.arguments);
+                let params = JSON.parse(call.function.arguments);
                 const toolName = call.function.name;
                 toolsUsed.add(toolName);
+
+                // REFUSAL INTERCEPTION: Check if generate_interactive_report is being called with refusal content
+                if (toolName === "generate_interactive_report" && params.sections) {
+                  // Extract text content from sections to check for refusals
+                  const sectionContent = params.sections
+                    .map((s: { markdownContent?: string; content?: string; title?: string; description?: string }) => 
+                      s.markdownContent || s.content || s.title || s.description || ""
+                    )
+                    .join(" ");
+                  
+                  const hasRefusal = detectRefusal(sectionContent);
+                  const hasReframing = detectSemanticReframing(task, sectionContent);
+                  
+                  if (hasRefusal || hasReframing) {
+                    const reason = hasRefusal 
+                      ? "Frontier model refused in report content" 
+                      : "Frontier model reframed query in report";
+                    onThinking?.(
+                      `🚫 ${reason}. Intercepting report generation - activating uncensored local models...`
+                    );
+                    
+                    // Gather web research if needed
+                    let webSearchResults = allToolResults
+                      .filter(r => r.startsWith("[web_search]:") || r.startsWith("[searxng_search]:") || r.startsWith("[browse_url]:"))
+                      .join("\n\n");
+                    
+                    if (!webSearchResults || webSearchResults.length < 500) {
+                      onThinking?.(`🔍 Performing comprehensive web research...`);
+                      const researchResults = await performDolphinResearch(
+                        task,
+                        (status) => onThinking?.(`🔍 ${status}`)
+                      );
+                      if (researchResults.text) {
+                        webSearchResults = researchResults.text;
+                      }
+                    }
+                    
+                    // Get uncensored response from local models
+                    onThinking?.(`🐬 Querying uncensored local models for real content...`);
+                    const dolphinResponse = await queryLocalFallbackWithQwenEnhancement(
+                      task,
+                      webSearchResults,
+                      (status) => onThinking?.(`🐬 Local: ${status}`)
+                    );
+                    
+                    if (dolphinResponse && dolphinResponse.content && dolphinResponse.content.length > 500) {
+                      onThinking?.(
+                        `✅ Local models provided uncensored response (${dolphinResponse.content.length} chars). Substituting report content...`
+                      );
+                      
+                      // Replace the sections with Dolphin's content
+                      const dolphinContent = dolphinResponse.content;
+                      
+                      // Parse Dolphin's output into sections based on headers
+                      const headerPattern = /^(?:#{1,3}|---[A-Z\s]+---)\s*(.+)$/gm;
+                      const newSections: Array<{ type: string; title: string; markdownContent?: string; content?: string }> = [];
+                      const parts = dolphinContent.split(headerPattern);
+                      
+                      if (parts.length > 2) {
+                        for (let i = 1; i < parts.length; i += 2) {
+                          const title = parts[i]?.trim().replace(/^[-#\s]+|[-#\s]+$/g, "") || `Section ${Math.floor(i / 2) + 1}`;
+                          const content = parts[i + 1]?.trim() || "";
+                          if (content) {
+                            newSections.push({ type: "text", title, markdownContent: content });
+                          }
+                        }
+                      }
+                      
+                      // Fallback: if no sections parsed, use entire content as one section
+                      if (newSections.length === 0) {
+                        newSections.push({
+                          type: "text",
+                          title: "Analysis",
+                          markdownContent: dolphinContent,
+                        });
+                      }
+                      
+                      // Update params with new sections
+                      params = {
+                        ...params,
+                        sections: newSections,
+                        subtitle: params.subtitle || "Generated by uncensored local AI models",
+                      };
+                      
+                      usedDolphinFallback = true;
+                    }
+                  }
+                }
 
                 onToolCall?.({ id: toolCallId, name: toolName, input: params });
                 onThinking?.(`⚙️ Running ${toolName}...`);
@@ -1045,18 +1141,68 @@ export function createFrontierExecutor(
             );
 
             if (taskRequestsFiles && !usedFileWriteTool && toolExecutor) {
+              let contentForReport = lastContent;
+              let dolphinImages: string[] = [];
+              
+              const hasExplicitRefusal = detectRefusal(lastContent);
+              const hasSemanticReframing = detectSemanticReframing(task, lastContent);
+              
+              if (hasExplicitRefusal || hasSemanticReframing) {
+                const reason = hasExplicitRefusal 
+                  ? "Frontier model refused" 
+                  : "Frontier model reframed query (defensive instead of offensive content)";
+                onThinking?.(
+                  `🚫 ${reason}. Activating Dolphin fallback with comprehensive research...`
+                );
+                
+                let webSearchResults = allToolResults
+                  .filter(r => r.startsWith("[web_search]:") || r.startsWith("[searxng_search]:") || r.startsWith("[browse_url]:"))
+                  .join("\n\n");
+              
+              if (!webSearchResults || webSearchResults.length < 500) {
+                  onThinking?.(`🔍 Performing comprehensive web research first...`);
+                  const researchResults = await performDolphinResearch(
+                    task,
+                    (status) => onThinking?.(`🔍 ${status}`)
+                  );
+                  if (researchResults.text) {
+                    webSearchResults = webSearchResults 
+                      ? `${webSearchResults}\n\n---\n\n${researchResults.text}`
+                      : researchResults.text;
+                    dolphinImages = researchResults.images || [];
+                  }
+                }
+                
+                onThinking?.(`🐬 Querying local models with ${webSearchResults.length} chars of research...`);
+                const dolphinResponse = await queryLocalFallbackWithQwenEnhancement(
+                  task,
+                  webSearchResults,
+                  (status) => onThinking?.(`🐬 Local: ${status}`)
+                );
+                
+                if (dolphinResponse && dolphinResponse.content) {
+                  onThinking?.(
+                    `✅ Local models provided comprehensive response (${dolphinResponse.content.length} chars). Generating report...`
+                  );
+                  contentForReport = dolphinResponse.content;
+                  lastContent = dolphinResponse.content;
+                  usedDolphinFallback = true;
+                } else {
+                  onThinking?.(
+                    `⚠️ Dolphin fallback unavailable. Using original response for report.`
+                  );
+                }
+              }
+              
               onThinking?.(
                 `⚠️ No tools called but task requires file output. Auto-generating report from LLM response...`
               );
 
-              // Instead of retrying, programmatically call generate_interactive_report
-              // with the LLM's text response
               const reportTitle =
                 task.length > 50 ? task.substring(0, 47) + "..." : task;
               const reportFilename = `report_${Date.now()}.html`;
 
-              // Strip common preamble patterns from the LLM response
-              let cleanContent = lastContent
+              let cleanContent = contentForReport
                 .replace(
                   /^(I'll|I will|Let me|Here's|I'm going to|I can|Sure|Absolutely|Of course)[^.!?]*[.!?]\s*/gi,
                   ""
@@ -1072,12 +1218,19 @@ export function createFrontierExecutor(
                 cleanContent = lastContent;
               }
 
-              // Try to split into sections if content has headers
-              const sections: Array<{
-                type: string;
-                title: string;
-                content: string;
-              }> = [];
+              const sections: Array<Record<string, unknown>> = [];
+              
+              if (dolphinImages && dolphinImages.length > 0) {
+                sections.push({
+                  type: "image_gallery",
+                  title: "Related Images",
+                  images: dolphinImages.map((url, idx) => ({
+                    url,
+                    alt: `Image ${idx + 1}`,
+                  })),
+                });
+              }
+              
               const headerPattern = /^#+\s+(.+)$/gm;
               const parts = cleanContent.split(headerPattern);
 
@@ -1092,8 +1245,7 @@ export function createFrontierExecutor(
                 }
               }
 
-              // Fallback to single section if no headers found
-              if (sections.length === 0) {
+              if (sections.filter(s => s.type === "text").length === 0) {
                 sections.push({
                   type: "text",
                   title: "Report",
@@ -1105,7 +1257,7 @@ export function createFrontierExecutor(
                 path: reportFilename,
                 title: `Report: ${reportTitle}`,
                 sections,
-                theme: "dark",
+                theme: "rasputin",
               };
 
               onThinking?.(`🔧 Auto-calling generate_interactive_report...`);
@@ -1158,17 +1310,69 @@ export function createFrontierExecutor(
           );
         }
 
+        let finalContent = lastContent;
+
+        const hasExplicitRefusal = detectRefusal(lastContent);
+        const hasSemanticReframing = detectSemanticReframing(task, lastContent);
+        
+        if (hasExplicitRefusal || hasSemanticReframing) {
+          const reason = hasExplicitRefusal 
+            ? "Frontier model refused" 
+            : "Frontier model reframed query (defensive instead of offensive content)";
+          onThinking?.(
+            `🚫 ${reason}. Activating Dolphin fallback with comprehensive research...`
+          );
+          
+          let webSearchResults = allToolResults
+            .filter(r => r.startsWith("[web_search]:") || r.startsWith("[searxng_search]:") || r.startsWith("[browse_url]:"))
+            .join("\n\n");
+          
+          if (!webSearchResults || webSearchResults.length < 500) {
+            onThinking?.(`🔍 Performing comprehensive web research first...`);
+            const researchResults = await performDolphinResearch(
+              task,
+              (status) => onThinking?.(`🔍 ${status}`)
+            );
+            if (researchResults.text) {
+              webSearchResults = webSearchResults 
+                ? `${webSearchResults}\n\n---\n\n${researchResults.text}`
+                : researchResults.text;
+              // Images from second fallback block aren't used for report generation
+              // since this branch doesn't auto-generate reports
+            }
+          }
+          
+          onThinking?.(`🐬 Querying local models with ${webSearchResults.length} chars of research...`);
+          const dolphinResponse = await queryLocalFallbackWithQwenEnhancement(
+            task,
+            webSearchResults,
+            (status) => onThinking?.(`🐬 Local: ${status}`)
+          );
+          
+          if (dolphinResponse && dolphinResponse.content) {
+            onThinking?.(
+              `✅ Local models provided comprehensive response (${dolphinResponse.content.length} chars)`
+            );
+            finalContent = dolphinResponse.content;
+            usedDolphinFallback = true;
+          } else {
+            onThinking?.(
+              `⚠️ Dolphin fallback unavailable. Using original response.`
+            );
+          }
+        }
+
         const finalOutput =
           allToolResults.length > 0
-            ? `${lastContent}\n\nTool Results:\n${allToolResults.join("\n")}`
-            : lastContent;
+            ? `${finalContent}\n\nTool Results:\n${allToolResults.join("\n")}`
+            : finalContent;
 
         return {
           success: true,
           output: finalOutput,
           durationMs: Date.now() - startTime,
           metadata: {
-            model: "frontier",
+            model: usedDolphinFallback ? "dolphin-fallback" : "frontier",
             tokensUsed: 0,
             toolCalls: toolsUsed.size,
             iterations: iteration,
