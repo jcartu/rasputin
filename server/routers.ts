@@ -640,6 +640,7 @@ export const appRouter = router({
 
         return {
           ...task,
+          summary: task.result,
           messages: messages.map(m => ({
             id: m.id,
             role: m.role,
@@ -1478,6 +1479,172 @@ export const appRouter = router({
         );
       return leaderboard;
     }),
+
+    generateImage: protectedProcedure
+      .input(
+        z.object({
+          prompt: z.string().min(1),
+          model: z.enum(["flux", "pony", "auto"]).optional(),
+          size: z.enum(["1:1", "16:9", "9:16", "4:3", "3:4"]).optional(),
+          negativePrompt: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { generateImage } = await import("./_core/imageGeneration");
+        const result = await generateImage({
+          prompt: input.prompt,
+          model: input.model || "auto",
+          size: input.size || "1:1",
+          negativePrompt: input.negativePrompt,
+        });
+        return {
+          id: `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          url: result.url,
+          model: result.model || input.model || "auto",
+          provider: result.provider,
+          generationTime: result.generationTime,
+          prompt: input.prompt,
+          createdAt: new Date().toISOString(),
+        };
+      }),
+
+    generateImageBatch: protectedProcedure
+      .input(
+        z.object({
+          prompt: z.string().min(1),
+          model: z.enum(["flux", "pony", "auto"]).optional(),
+          size: z.enum(["1:1", "16:9", "9:16", "4:3", "3:4"]).optional(),
+          negativePrompt: z.string().optional(),
+          count: z.number().min(1).max(20).default(1),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { generateImageBatch } = await import("./_core/imageGeneration");
+        const results = await generateImageBatch(
+          {
+            prompt: input.prompt,
+            model: input.model || "auto",
+            size: input.size || "1:1",
+            negativePrompt: input.negativePrompt,
+          },
+          input.count
+        );
+        return results.map((result, idx) => ({
+          id: `img_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 8)}`,
+          url: result.url,
+          model: result.model || input.model || "auto",
+          provider: result.provider,
+          generationTime: result.generationTime,
+          prompt: input.prompt,
+          createdAt: new Date().toISOString(),
+        }));
+      }),
+
+    startImageBatch: protectedProcedure
+      .input(
+        z.object({
+          prompt: z.string().min(1),
+          model: z.enum(["flux", "pony", "auto"]).optional(),
+          size: z.enum(["1:1", "16:9", "9:16", "4:3", "3:4"]).optional(),
+          negativePrompt: z.string().optional(),
+          count: z.number().min(1).max(20).default(1),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { startImageBatchAsync } = await import(
+          "./_core/imageGeneration"
+        );
+        const batchId = startImageBatchAsync(
+          {
+            prompt: input.prompt,
+            model: input.model || "auto",
+            size: input.size || "1:1",
+            negativePrompt: input.negativePrompt,
+          },
+          input.count
+        );
+        return { batchId, totalCount: input.count };
+      }),
+
+    getImageBatchStatus: protectedProcedure
+      .input(z.object({ batchId: z.string() }))
+      .query(async ({ input }) => {
+        const { getBatchJob } = await import("./_core/imageGeneration");
+        const job = getBatchJob(input.batchId);
+
+        if (!job) {
+          return { found: false as const };
+        }
+
+        return {
+          found: true as const,
+          status: job.status,
+          totalCount: job.totalCount,
+          completedCount: job.completedCount,
+          images: job.images.map((img, idx) => ({
+            id: `img_${job.startedAt}_${idx}_${Math.random().toString(36).slice(2, 8)}`,
+            url: img.url,
+            model: img.model || job.options.model || "auto",
+            provider: img.provider,
+            generationTime: img.generationTime,
+            prompt: job.options.prompt,
+            createdAt: new Date(job.startedAt + idx * 1000).toISOString(),
+          })),
+          errors: job.errors,
+          elapsedMs: job.completedAt
+            ? job.completedAt - job.startedAt
+            : Date.now() - job.startedAt,
+        };
+      }),
+
+    cancelImageBatch: protectedProcedure
+      .input(z.object({ batchId: z.string() }))
+      .mutation(async ({ input }) => {
+        const { cancelBatchJob } = await import("./_core/imageGeneration");
+        const cancelled = cancelBatchJob(input.batchId);
+        return { success: cancelled };
+      }),
+
+    hostMarkdown: protectedProcedure
+      .input(
+        z.object({
+          taskId: z.number(),
+          content: z.string(),
+          title: z.string(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const timestamp = Date.now();
+        const slug = `report_${timestamp}`;
+        const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${input.title}</title>
+  <style>
+    body { font-family: system-ui; max-width: 800px; margin: 2rem auto; padding: 1rem; background: #0a0a12; color: #eee; }
+    h1, h2, h3 { color: #00d9c0; }
+    pre { background: #1a1a2e; padding: 1rem; border-radius: 8px; overflow: auto; }
+    code { color: #00d9c0; }
+    a { color: #00d9c0; }
+  </style>
+</head>
+<body>
+  <h1>${input.title}</h1>
+  <div>${input.content.replace(/\n/g, "<br>")}</div>
+</body>
+</html>`;
+
+        const fs = await import("fs/promises");
+        const path = await import("path");
+        const filePath = path.join("/tmp/jarvis-workspace", `${slug}.html`);
+        await fs.mkdir("/tmp/jarvis-workspace", { recursive: true });
+        await fs.writeFile(filePath, htmlContent);
+
+        const baseUrl = process.env.SERVER_BASE_URL || "http://localhost:3000";
+        return { url: `${baseUrl}/reports/${slug}.html`, filePath };
+      }),
   }),
 
   // ============================================================================
@@ -3192,6 +3359,48 @@ export const appRouter = router({
           })),
           total: Number(countResult[0]?.count || 0),
         };
+      }),
+
+    deleteEpisodic: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { getMemoryService } = await import(
+          "./services/memory/memoryService"
+        );
+        const memoryService = getMemoryService();
+        const deleted = await memoryService.deleteEpisodicMemory(
+          input.id,
+          ctx.user.id
+        );
+        return { success: deleted };
+      }),
+
+    deleteSemantic: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { getMemoryService } = await import(
+          "./services/memory/memoryService"
+        );
+        const memoryService = getMemoryService();
+        const deleted = await memoryService.deleteSemanticMemory(
+          input.id,
+          ctx.user.id
+        );
+        return { success: deleted };
+      }),
+
+    deleteProcedural: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { getMemoryService } = await import(
+          "./services/memory/memoryService"
+        );
+        const memoryService = getMemoryService();
+        const deleted = await memoryService.deleteProceduralMemory(
+          input.id,
+          ctx.user.id
+        );
+        return { success: deleted };
       }),
   }),
 });

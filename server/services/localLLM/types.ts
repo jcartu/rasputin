@@ -91,6 +91,8 @@ export interface CompletionRequest {
   temperature?: number;
   stream?: boolean;
   responseFormat?: ResponseFormat;
+  numCtx?: number; // Context window size (Ollama-specific)
+  numPredict?: number; // Max tokens to generate (Ollama-specific)
 }
 
 export interface ResponseFormat {
