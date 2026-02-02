@@ -7,10 +7,13 @@ const execAsync = promisify(exec);
 
 const SANDBOX_IMAGE = process.env.SANDBOX_IMAGE || "rasputin-sandbox:latest";
 const SANDBOX_NETWORK = process.env.SANDBOX_NETWORK || "none";
+const SANDBOX_RUNTIME = process.env.SANDBOX_RUNTIME || "auto";
 const DEFAULT_TIMEOUT_MS = 60000;
 const DEFAULT_MEMORY_LIMIT = "512m";
 const DEFAULT_CPU_LIMIT = "1.0";
 const CONTAINER_PREFIX = "jarvis-sandbox-";
+
+let gvisorAvailable: boolean | null = null;
 
 export interface SandboxConfig {
   timeoutMs?: number;
@@ -19,6 +22,7 @@ export interface SandboxConfig {
   networkEnabled?: boolean;
   workspacePath?: string;
   env?: Record<string, string>;
+  runtime?: "runc" | "runsc" | "auto";
 }
 
 export interface SandboxResult {
@@ -58,6 +62,52 @@ async function imagePulledOrBuilt(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function isGVisorAvailable(): Promise<boolean> {
+  if (gvisorAvailable !== null) {
+    return gvisorAvailable;
+  }
+
+  try {
+    const { stdout } = await execAsync("docker info --format '{{.Runtimes}}'", {
+      timeout: 5000,
+    });
+    gvisorAvailable = stdout.includes("runsc");
+    if (gvisorAvailable) {
+      console.info(
+        "[Sandbox] gVisor (runsc) runtime detected - using enhanced isolation"
+      );
+    }
+    return gvisorAvailable;
+  } catch {
+    gvisorAvailable = false;
+    return false;
+  }
+}
+
+async function selectRuntime(
+  preferredRuntime?: "runc" | "runsc" | "auto"
+): Promise<string | undefined> {
+  const runtime = preferredRuntime || SANDBOX_RUNTIME;
+
+  if (runtime === "runsc") {
+    const available = await isGVisorAvailable();
+    if (!available) {
+      console.warn(
+        "[Sandbox] gVisor requested but not available, falling back to runc"
+      );
+      return undefined;
+    }
+    return "runsc";
+  }
+
+  if (runtime === "auto") {
+    const available = await isGVisorAvailable();
+    return available ? "runsc" : undefined;
+  }
+
+  return undefined;
 }
 
 export async function buildSandboxImage(): Promise<string> {
@@ -120,11 +170,15 @@ export async function executeInSandbox(
     };
   }
 
-  const dockerArgs = [
-    "run",
-    "--rm",
-    "--name",
-    containerId,
+  const runtime = await selectRuntime(config.runtime);
+
+  const dockerArgs = ["run", "--rm", "--name", containerId];
+
+  if (runtime) {
+    dockerArgs.push("--runtime", runtime);
+  }
+
+  dockerArgs.push(
     "--memory",
     memoryLimit,
     "--cpus",
@@ -140,14 +194,13 @@ export async function executeInSandbox(
     "no-new-privileges:true",
     "--cap-drop",
     "ALL",
-    // Limit OpenBLAS/NumPy threading to prevent resource exhaustion
     "-e",
     "OPENBLAS_NUM_THREADS=1",
     "-e",
     "OMP_NUM_THREADS=1",
     "-e",
-    "MKL_NUM_THREADS=1",
-  ];
+    "MKL_NUM_THREADS=1"
+  );
 
   if (config.workspacePath) {
     dockerArgs.push("-v", `${config.workspacePath}:/workspace:rw`);
@@ -324,14 +377,19 @@ export async function killContainer(containerId: string): Promise<boolean> {
 export async function getSandboxStatus(): Promise<{
   dockerAvailable: boolean;
   imageBuilt: boolean;
+  gvisorAvailable: boolean;
+  activeRuntime: string;
   activeContainers: number;
 }> {
   const dockerAvailable = await isDockerAvailable();
   const imageBuilt = dockerAvailable ? await imagePulledOrBuilt() : false;
+  const gvisor = dockerAvailable ? await isGVisorAvailable() : false;
 
   return {
     dockerAvailable,
     imageBuilt,
+    gvisorAvailable: gvisor,
+    activeRuntime: gvisor ? "runsc (gVisor)" : "runc (standard)",
     activeContainers: activeContainers.size,
   };
 }
