@@ -86,6 +86,12 @@ def merge_tasks(left: list[Task], right: list[Task]) -> list[Task]:
     return list(task_map.values())
 
 
+class AgentMode(str, Enum):
+    ADAPTIVE = "adaptive"
+    CHAT = "chat"
+    AGENT = "agent"
+
+
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     tasks: Annotated[list[Task], merge_tasks]
@@ -103,9 +109,11 @@ class AgentState(TypedDict):
     error: Optional[str]
     human_input_needed: bool
     human_input_reason: Optional[str]
+    mode: str
+    routed_to: Optional[str]
 
 
-def create_initial_state(user_message: str) -> AgentState:
+def create_initial_state(user_message: str, mode: str = "adaptive") -> AgentState:
     return AgentState(
         messages=[HumanMessage(content=user_message)],
         tasks=[],
@@ -123,4 +131,6 @@ def create_initial_state(user_message: str) -> AgentState:
         error=None,
         human_input_needed=False,
         human_input_reason=None,
+        mode=mode,
+        routed_to=None,
     )

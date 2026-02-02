@@ -1,7 +1,8 @@
-from typing import Literal, Callable, Awaitable, Optional
+from typing import Literal, Callable, Awaitable, Optional, Any, Union
 from datetime import datetime
 import uuid
 import json
+import re
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
@@ -9,8 +10,22 @@ from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.memory import MemorySaver
 
+
+def get_message_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        texts = []
+        for item in content:
+            if isinstance(item, str):
+                texts.append(item)
+            elif isinstance(item, dict) and "text" in item:
+                texts.append(str(item["text"]))
+        return " ".join(texts)
+    return str(content)
+
 from ..state.agent_state import (
-    AgentState, Task, TaskStatus, BrowserState, 
+    AgentState, Task, TaskStatus, BrowserState, AgentMode,
     create_initial_state, FileInfo
 )
 from ..tools.browser_tool import BrowserTools, create_browser_tool
@@ -18,7 +33,7 @@ from ..tools.file_tools import FileTools, create_file_tools
 from ..tools.shell_tool import ShellTools, create_shell_tool
 
 
-SYSTEM_PROMPT = """You are Manus, a highly capable AI agent that can browse the web, write code, manage files, and execute tasks autonomously.
+AGENT_SYSTEM_PROMPT = """You are Manus, a highly capable AI agent that can browse the web, write code, manage files, and execute tasks autonomously.
 
 When given a task:
 1. First, break it down into clear subtasks and announce your plan
@@ -41,6 +56,38 @@ Format your task plan as a numbered list like:
 
 Update on progress after each major step."""
 
+CHAT_SYSTEM_PROMPT = """You are Manus, a helpful AI assistant. You're having a conversation with the user.
+
+Respond naturally and helpfully. You can:
+- Answer questions on any topic
+- Help with brainstorming and ideation
+- Explain concepts and provide information
+- Have casual conversations
+- Offer advice and suggestions
+
+Be concise but thorough. If a task requires autonomous execution (browsing, coding, file creation), let the user know you can help with that in Agent mode."""
+
+ROUTER_PROMPT = """Analyze this user message and determine if it requires autonomous agent execution or can be handled as a simple chat response.
+
+AGENT MODE is needed when the user wants to:
+- Browse websites or search the web
+- Create, edit, or manage files
+- Run code or shell commands
+- Build websites, apps, or documents
+- Perform multi-step tasks that require tools
+- Research and compile information from multiple sources
+
+CHAT MODE is sufficient when the user wants to:
+- Ask questions or get explanations
+- Have a conversation or discussion
+- Brainstorm or get ideas
+- Get quick answers or information
+- Casual chat or small talk
+
+User message: "{message}"
+
+Respond with ONLY one word: either "agent" or "chat"."""
+
 
 class ManusAgent:
     def __init__(
@@ -52,10 +99,12 @@ class ManusAgent:
     ):
         self.on_event = on_event
         self.workspace_path = workspace_path
+        self.api_key = api_key
+        self.model = model
         
         self.browser_tools = BrowserTools(on_screenshot=self._on_screenshot)
         self.file_tools = FileTools(workspace_path)
-        self.shell_tools = ShellTools(workspace_path)
+        self.shell_tools = ShellTools(workspace_path, on_output=self._on_terminal_output)
         
         browser_tool = create_browser_tool(self.browser_tools)
         file_tools = create_file_tools(self.file_tools)
@@ -63,11 +112,23 @@ class ManusAgent:
         
         self.tools = [browser_tool] + file_tools + [shell_tool]
         
-        self.llm = ChatAnthropic(
-            model=model,
+        self.agent_llm = ChatAnthropic(
+            model_name=model,
             api_key=api_key,
-            max_tokens=4096
+            max_tokens_to_sample=4096
         ).bind_tools(self.tools)
+        
+        self.chat_llm = ChatAnthropic(
+            model_name=model,
+            api_key=api_key,
+            max_tokens_to_sample=4096
+        )
+        
+        self.router_llm = ChatAnthropic(
+            model_name="claude-3-5-haiku-20241022",
+            api_key=api_key,
+            max_tokens_to_sample=10
+        )
         
         self.checkpointer = MemorySaver()
         self.graph = self._build_graph()
@@ -78,19 +139,40 @@ class ManusAgent:
         if self.on_event:
             await self.on_event("screenshot", {"base64_image": screenshot_b64})
 
+    async def _on_terminal_output(self, output_type: str, command: str, content: str):
+        if self.on_event:
+            await self.on_event("terminal_output", {
+                "type": output_type,
+                "command": command,
+                "content": content
+            })
+
     async def _emit(self, event_type: str, data: dict):
         if self.on_event:
             await self.on_event(event_type, data)
 
-    def _build_graph(self) -> StateGraph:
+    def _build_graph(self) -> Any:
         workflow = StateGraph(AgentState)
         
+        workflow.add_node("router", self._router_node)
+        workflow.add_node("chat_response", self._chat_response_node)
         workflow.add_node("planner", self._planner_node)
         workflow.add_node("executor", self._executor_node)
         workflow.add_node("tools", ToolNode(self.tools))
         workflow.add_node("check_completion", self._check_completion_node)
         
-        workflow.set_entry_point("planner")
+        workflow.set_entry_point("router")
+        
+        workflow.add_conditional_edges(
+            "router",
+            self._route_by_mode,
+            {
+                "chat": "chat_response",
+                "agent": "planner",
+            }
+        )
+        
+        workflow.add_edge("chat_response", END)
         
         workflow.add_edge("planner", "executor")
         workflow.add_conditional_edges(
@@ -113,24 +195,125 @@ class ManusAgent:
         
         return workflow.compile(checkpointer=self.checkpointer)
 
+    async def _router_node(self, state: AgentState) -> dict:
+        mode = state.get("mode", "adaptive")
+        
+        if mode == "chat":
+            await self._emit("mode_selected", {"mode": "chat", "reason": "User forced chat mode"})
+            return {"routed_to": "chat"}
+        
+        if mode == "agent":
+            await self._emit("mode_selected", {"mode": "agent", "reason": "User forced agent mode"})
+            return {"routed_to": "agent"}
+        
+        await self._emit("status", {"state": "routing"})
+        
+        user_message = ""
+        for msg in reversed(state["messages"]):
+            if isinstance(msg, HumanMessage):
+                content = msg.content
+                user_message = content if isinstance(content, str) else str(content)
+                break
+        
+        quick_result = self._quick_classify(user_message)
+        if quick_result == "chat":
+            await self._emit("mode_selected", {"mode": "chat", "reason": "Simple query detected"})
+            return {"routed_to": "chat"}
+        
+        if quick_result == "agent":
+            await self._emit("mode_selected", {"mode": "agent", "reason": "Action request detected"})
+            return {"routed_to": "agent"}
+        
+        try:
+            prompt = ROUTER_PROMPT.format(message=user_message[:500])
+            response = await self.router_llm.ainvoke([HumanMessage(content=prompt)])
+            resp_content = response.content
+            decision = (resp_content if isinstance(resp_content, str) else str(resp_content)).strip().lower()
+            
+            if "agent" in decision:
+                await self._emit("mode_selected", {"mode": "agent", "reason": "LLM classification"})
+                return {"routed_to": "agent"}
+            else:
+                await self._emit("mode_selected", {"mode": "chat", "reason": "LLM classification"})
+                return {"routed_to": "chat"}
+        except Exception:
+            await self._emit("mode_selected", {"mode": "agent", "reason": "Classification fallback"})
+            return {"routed_to": "agent"}
+
+    def _quick_classify(self, message: str) -> Optional[str]:
+        msg_lower = message.lower().strip()
+        
+        agent_patterns = [
+            r"\b(create|build|make|write|generate)\b.*(website|app|file|code|script|page)",
+            r"\b(browse|search|go to|visit|open)\b.*(web|site|url|http|www)",
+            r"\b(download|save|export)\b",
+            r"\b(run|execute|install)\b.*(command|script|code)",
+            r"\b(edit|modify|update|change)\b.*(file|code)",
+            r"\bcreate\s+(a|an|the)\s+\w+\s+(for|that|which)",
+        ]
+        
+        for pattern in agent_patterns:
+            if re.search(pattern, msg_lower):
+                return "agent"
+        
+        chat_patterns = [
+            r"^(what|who|when|where|why|how|is|are|can|could|would|should|do|does|did)\b",
+            r"^(hi|hello|hey|thanks|thank you|please)\b",
+            r"^(explain|tell me|describe|what is|what are)\b",
+            r"\?$",
+        ]
+        
+        for pattern in chat_patterns:
+            if re.search(pattern, msg_lower):
+                if not any(re.search(ap, msg_lower) for ap in agent_patterns):
+                    return "chat"
+        
+        return None
+
+    def _route_by_mode(self, state: AgentState) -> Literal["chat", "agent"]:
+        routed = state.get("routed_to")
+        if routed == "chat":
+            return "chat"
+        return "agent"
+
+    async def _chat_response_node(self, state: AgentState) -> dict:
+        await self._emit("status", {"state": "thinking"})
+        
+        messages = [
+            SystemMessage(content=CHAT_SYSTEM_PROMPT),
+            *state["messages"]
+        ]
+        
+        response = await self.chat_llm.ainvoke(messages)
+        
+        await self._emit("thought", {"content": response.content})
+        await self._emit("complete", {"success": True, "mode": "chat"})
+        
+        return {
+            "messages": [response],
+            "is_complete": True,
+            "final_answer": response.content,
+        }
+
     async def _planner_node(self, state: AgentState) -> dict:
         await self._emit("status", {"state": "planning"})
         
         messages = [
-            SystemMessage(content=SYSTEM_PROMPT),
+            SystemMessage(content=AGENT_SYSTEM_PROMPT),
             *state["messages"]
         ]
         
-        response = await self.llm.ainvoke(messages)
+        response = await self.agent_llm.ainvoke(messages)
+        content_text = get_message_text(response.content)
         
-        tasks = self._extract_tasks(response.content)
+        tasks = self._extract_tasks(content_text)
         
         if tasks:
             await self._emit("task_plan", {
                 "tasks": [t.to_dict() for t in tasks]
             })
         
-        await self._emit("thought", {"content": response.content})
+        await self._emit("thought", {"content": content_text})
         
         return {
             "messages": [response],
@@ -145,11 +328,11 @@ class ManusAgent:
         })
         
         messages = [
-            SystemMessage(content=SYSTEM_PROMPT),
+            SystemMessage(content=AGENT_SYSTEM_PROMPT),
             *state["messages"]
         ]
         
-        response = await self.llm.ainvoke(messages)
+        response = await self.agent_llm.ainvoke(messages)
         
         if response.content:
             await self._emit("thought", {"content": response.content})
@@ -172,14 +355,15 @@ class ManusAgent:
         last_message = state["messages"][-1]
         
         if state["step_count"] >= state["max_steps"]:
-            await self._emit("complete", {"success": True, "reason": "max_steps_reached"})
+            await self._emit("complete", {"success": True, "reason": "max_steps_reached", "mode": "agent"})
             return {"is_complete": True, "final_answer": "Task stopped: maximum steps reached"}
         
         if isinstance(last_message, AIMessage) and not last_message.tool_calls:
-            if any(phrase in last_message.content.lower() for phrase in 
+            content_text = get_message_text(last_message.content)
+            if any(phrase in content_text.lower() for phrase in 
                    ["task complete", "finished", "done", "completed successfully"]):
-                await self._emit("complete", {"success": True})
-                return {"is_complete": True, "final_answer": last_message.content}
+                await self._emit("complete", {"success": True, "mode": "agent"})
+                return {"is_complete": True, "final_answer": content_text}
         
         return {"is_complete": False}
 
@@ -210,8 +394,8 @@ class ManusAgent:
                         ))
         return tasks
 
-    async def run(self, user_message: str, thread_id: str = None) -> AgentState:
-        initial_state = create_initial_state(user_message)
+    async def run(self, user_message: str, thread_id: Optional[str] = None, mode: str = "adaptive") -> AgentState:
+        initial_state = create_initial_state(user_message, mode=mode)
         initial_state["workspace_path"] = self.workspace_path
         
         config = {"configurable": {"thread_id": thread_id or str(uuid.uuid4())}}

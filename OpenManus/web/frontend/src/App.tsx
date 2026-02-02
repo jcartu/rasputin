@@ -67,6 +67,10 @@ function App() {
   const [editingFile, setEditingFile] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [sessionId, setSessionId] = useState<string>(() => crypto.randomUUID());
+  const [activeMode, setActiveMode] = useState<"adaptive" | "chat" | "agent">(
+    "adaptive"
+  );
+  const [routedMode, setRoutedMode] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const connectRef = useRef<() => void>(() => {});
@@ -150,7 +154,23 @@ function App() {
             addActionEvent("🧠", "Agent is thinking...", undefined, "running");
           } else if (data.data.state === "planning") {
             addActionEvent("📋", "Planning tasks...", undefined, "running");
+          } else if (data.data.state === "routing") {
+            addActionEvent(
+              "🔀",
+              "Classifying request...",
+              undefined,
+              "running"
+            );
           }
+          break;
+
+        case "mode_selected":
+          setRoutedMode(data.data.mode);
+          addActionEvent(
+            data.data.mode === "chat" ? "💬" : "🤖",
+            `Mode: ${data.data.mode}`,
+            data.data.reason
+          );
           break;
 
         case "step_start":
@@ -382,11 +402,14 @@ function App() {
       setTasks([]);
       setCurrentTaskId(null);
       setTerminalLines([]);
+      setRoutedMode(null);
 
       addActionEvent("📤", "Sending message", text.slice(0, 50) + "...");
-      wsRef.current.send(JSON.stringify({ type: "message", content: text }));
+      wsRef.current.send(
+        JSON.stringify({ type: "message", content: text, mode: activeMode })
+      );
     },
-    [addActionEvent]
+    [addActionEvent, activeMode]
   );
 
   const handleTakeOver = useCallback(() => {
@@ -514,6 +537,31 @@ function App() {
                 onNewSession={handleNewSession}
               />
               <div className="flex items-center gap-2">
+                <select
+                  value={activeMode}
+                  onChange={e =>
+                    setActiveMode(
+                      e.target.value as "adaptive" | "chat" | "agent"
+                    )
+                  }
+                  className="px-2 py-1 text-xs bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  title="Select mode"
+                >
+                  <option value="adaptive">🔀 Adaptive</option>
+                  <option value="chat">💬 Chat Only</option>
+                  <option value="agent">🤖 Agent Only</option>
+                </select>
+                {routedMode && (
+                  <span
+                    className={`px-2 py-1 text-xs rounded-lg ${
+                      routedMode === "chat"
+                        ? "bg-blue-500/20 text-blue-400"
+                        : "bg-purple-500/20 text-purple-400"
+                    }`}
+                  >
+                    {routedMode === "chat" ? "💬 Chat" : "🤖 Agent"}
+                  </span>
+                )}
                 <button
                   onClick={() => setIsSettingsOpen(true)}
                   className="p-1.5 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
