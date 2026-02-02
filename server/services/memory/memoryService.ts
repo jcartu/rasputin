@@ -1057,6 +1057,146 @@ export class MemoryService {
       relevanceScore: r.relevanceScore,
     }));
   }
+
+  // ============================================================================
+  // MEMORY DELETION METHODS
+  // ============================================================================
+
+  async deleteEpisodicMemory(id: number, userId?: number): Promise<boolean> {
+    const database = await getDb();
+    if (!database) return false;
+
+    const conditions = userId
+      ? and(eq(episodicMemories.id, id), eq(episodicMemories.userId, userId))
+      : eq(episodicMemories.id, id);
+
+    const memory = await database
+      .select()
+      .from(episodicMemories)
+      .where(conditions)
+      .limit(1);
+
+    if (memory.length === 0) return false;
+
+    if (memory[0].embeddingId) {
+      await database
+        .delete(memoryEmbeddings)
+        .where(eq(memoryEmbeddings.id, memory[0].embeddingId));
+    }
+
+    await database.delete(episodicMemories).where(conditions);
+    return true;
+  }
+
+  async deleteSemanticMemory(id: number, userId?: number): Promise<boolean> {
+    const database = await getDb();
+    if (!database) return false;
+
+    const conditions = userId
+      ? and(eq(semanticMemories.id, id), eq(semanticMemories.userId, userId))
+      : eq(semanticMemories.id, id);
+
+    const memory = await database
+      .select()
+      .from(semanticMemories)
+      .where(conditions)
+      .limit(1);
+
+    if (memory.length === 0) return false;
+
+    if (memory[0].embeddingId) {
+      await database
+        .delete(memoryEmbeddings)
+        .where(eq(memoryEmbeddings.id, memory[0].embeddingId));
+    }
+
+    await database.delete(semanticMemories).where(conditions);
+    return true;
+  }
+
+  async deleteProceduralMemory(id: number, userId?: number): Promise<boolean> {
+    const database = await getDb();
+    if (!database) return false;
+
+    const conditions = userId
+      ? and(eq(proceduralMemories.id, id), eq(proceduralMemories.userId, userId))
+      : eq(proceduralMemories.id, id);
+
+    const memory = await database
+      .select()
+      .from(proceduralMemories)
+      .where(conditions)
+      .limit(1);
+
+    if (memory.length === 0) return false;
+
+    if (memory[0].embeddingId) {
+      await database
+        .delete(memoryEmbeddings)
+        .where(eq(memoryEmbeddings.id, memory[0].embeddingId));
+    }
+
+    await database.delete(proceduralMemories).where(conditions);
+    return true;
+  }
+
+  async listProceduralMemories(
+    userId?: number,
+    options?: { limit?: number; searchTerm?: string }
+  ): Promise<ProceduralMemory[]> {
+    const database = await getDb();
+    if (!database) return [];
+
+    let query = database.select().from(proceduralMemories);
+
+    if (userId) {
+      query = query.where(eq(proceduralMemories.userId, userId)) as typeof query;
+    }
+
+    if (options?.searchTerm) {
+      query = query.where(
+        like(proceduralMemories.name, `%${options.searchTerm}%`)
+      ) as typeof query;
+    }
+
+    query = query.orderBy(desc(proceduralMemories.createdAt)) as typeof query;
+
+    if (options?.limit) {
+      query = query.limit(options.limit) as typeof query;
+    }
+
+    const results = await query;
+    return results.map(r => this.mapProceduralResult(r));
+  }
+
+  async listEpisodicMemories(
+    userId?: number,
+    options?: { limit?: number; searchTerm?: string }
+  ): Promise<EpisodicMemory[]> {
+    const database = await getDb();
+    if (!database) return [];
+
+    let query = database.select().from(episodicMemories);
+
+    if (userId) {
+      query = query.where(eq(episodicMemories.userId, userId)) as typeof query;
+    }
+
+    if (options?.searchTerm) {
+      query = query.where(
+        like(episodicMemories.title, `%${options.searchTerm}%`)
+      ) as typeof query;
+    }
+
+    query = query.orderBy(desc(episodicMemories.createdAt)) as typeof query;
+
+    if (options?.limit) {
+      query = query.limit(options.limit) as typeof query;
+    }
+
+    const results = await query;
+    return results.map(r => this.mapEpisodicResult(r));
+  }
 }
 
 // Singleton instance

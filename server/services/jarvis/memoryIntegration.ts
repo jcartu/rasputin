@@ -16,6 +16,7 @@ import type {
   ProceduralMemory,
   LearningEvent,
 } from "../memory/types";
+import { detectRefusal } from "../synthesis";
 
 export interface TaskContext {
   taskId: number;
@@ -130,6 +131,15 @@ export async function learnFromTask(
   outcome: TaskOutcome
 ): Promise<void> {
   const memoryService = getMemoryService();
+
+  // Check for refusals - a refusal is NOT a successful task even if no error occurred
+  if (outcome.success && outcome.result && detectRefusal(outcome.result)) {
+    console.info(
+      `[Memory] Detected refusal in task result - marking as failure to prevent memory contamination`
+    );
+    outcome.success = false;
+    outcome.error = "Model refused to complete the task";
+  }
 
   // 1. Create episodic memory of this task
   const episodicMemory: Omit<EpisodicMemory, "id" | "createdAt" | "updatedAt"> =
