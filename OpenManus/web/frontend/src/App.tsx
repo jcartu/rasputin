@@ -8,6 +8,11 @@ import type { TaskItem } from "./components/TaskBreakdown";
 import { FileBrowser } from "./components/FileBrowser";
 import type { FileItem } from "./components/FileBrowser";
 import { VNCViewer } from "./components/VNCViewer";
+import { TerminalPanel } from "./components/TerminalPanel";
+import type { TerminalLine } from "./components/TerminalPanel";
+import { SessionHistory } from "./components/SessionHistory";
+import { CodeEditor } from "./components/CodeEditor";
+import { SettingsPanel } from "./components/SettingsPanel";
 
 const SUGGESTIONS = [
   {
@@ -36,7 +41,7 @@ const SUGGESTIONS = [
   },
 ];
 
-type RightPanelView = "browser" | "vnc" | "files";
+type RightPanelView = "browser" | "vnc" | "files" | "terminal" | "code";
 
 function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -58,9 +63,13 @@ function App() {
   const [isVncControlled, setIsVncControlled] = useState(false);
   const [rightPanelView, setRightPanelView] =
     useState<RightPanelView>("browser");
+  const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([]);
+  const [editingFile, setEditingFile] = useState<string | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [sessionId, setSessionId] = useState<string>(() => crypto.randomUUID());
 
   const wsRef = useRef<WebSocket | null>(null);
-  const sessionIdRef = useRef(crypto.randomUUID());
+  const connectRef = useRef<() => void>(() => {});
 
   const addActionEvent = useCallback(
     (
@@ -93,22 +102,27 @@ function App() {
     []
   );
 
-  const fetchFiles = useCallback(async (path = "") => {
-    try {
-      const res = await fetch(
-        `/api/sessions/${sessionIdRef.current}/files?path=${encodeURIComponent(path)}`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setFiles(data.files || []);
-        setFilePath(data.path || "");
+  const fetchFiles = useCallback(
+    async (path = "") => {
+      try {
+        const res = await fetch(
+          `/api/sessions/${sessionId}/files?path=${encodeURIComponent(path)}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setFiles(data.files || []);
+          setFilePath(data.path || "");
+        }
+      } catch {
+        void 0;
       }
-    } catch {}
-  }, []);
+    },
+    [sessionId]
+  );
 
   const connect = useCallback(() => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws/${sessionIdRef.current}`;
+    const wsUrl = `${protocol}//${window.location.host}/ws/${sessionId}`;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
@@ -121,7 +135,7 @@ function App() {
     ws.onclose = () => {
       setIsConnected(false);
       addActionEvent("⚠️", "Disconnected", "Reconnecting...", "error");
-      setTimeout(connect, 3000);
+      setTimeout(() => connectRef.current(), 3000);
     };
 
     ws.onerror = () => ws.close();
@@ -286,6 +300,20 @@ function App() {
           addActionEvent("📂", "Files updated");
           break;
 
+        case "terminal_output": {
+          const line: TerminalLine = {
+            id: crypto.randomUUID(),
+            type: data.data.type as TerminalLine["type"],
+            content: data.data.content,
+            timestamp: new Date(),
+          };
+          setTerminalLines(prev => [...prev.slice(-200), line]);
+          if (data.data.type === "command") {
+            setRightPanelView("terminal");
+          }
+          break;
+        }
+
         case "complete":
           setIsProcessing(false);
           setCurrentStep(0);
@@ -309,7 +337,12 @@ function App() {
           break;
       }
     };
-  }, [addActionEvent, updateActionEvent, fetchFiles, filePath]);
+  }, [sessionId, addActionEvent, updateActionEvent, fetchFiles, filePath]);
+
+  // Keep ref in sync for reconnection timer
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   useEffect(() => {
     connect();
@@ -348,6 +381,7 @@ function App() {
       setActionEvents([]);
       setTasks([]);
       setCurrentTaskId(null);
+      setTerminalLines([]);
 
       addActionEvent("📤", "Sending message", text.slice(0, 50) + "...");
       wsRef.current.send(JSON.stringify({ type: "message", content: text }));
@@ -365,6 +399,56 @@ function App() {
     setIsVncControlled(false);
     addActionEvent("🔙", "Returned control", "Agent is back in control");
   }, [addActionEvent]);
+
+  const handleSelectSession = useCallback(
+    async (selectedSessionId: string) => {
+      try {
+        const res = await fetch(`/api/sessions/${selectedSessionId}`);
+        if (res.ok) {
+          const session = await res.json();
+          setSessionId(selectedSessionId);
+          setMessages(
+            session.messages.map(
+              (m: { role: string; content: string; timestamp: string }) => ({
+                id: crypto.randomUUID(),
+                role: m.role as "user" | "assistant",
+                content: m.content,
+                timestamp: new Date(m.timestamp),
+              })
+            )
+          );
+          setTasks(
+            session.tasks.map(
+              (t: { id: string; title: string; status: string }) => ({
+                id: t.id,
+                title: t.title,
+                status: t.status as TaskItem["status"],
+              })
+            )
+          );
+          wsRef.current?.close();
+          connect();
+        }
+      } catch {
+        void 0;
+      }
+    },
+    [connect]
+  );
+
+  const handleNewSession = useCallback(() => {
+    setSessionId(crypto.randomUUID());
+    setMessages([]);
+    setTasks([]);
+    setActionEvents([]);
+    setTerminalLines([]);
+    setScreenshot(null);
+    setThought("");
+    setCurrentStep(0);
+    setFiles([]);
+    wsRef.current?.close();
+    connect();
+  }, [connect]);
 
   const showWelcome = messages.length === 0;
 
@@ -397,18 +481,54 @@ function App() {
             ))}
           </div>
 
-          <div className="flex items-center gap-2 text-sm">
-            <div
-              className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"}`}
+          <div className="flex items-center gap-4 text-sm">
+            <SessionHistory
+              currentSessionId={sessionId}
+              onSelectSession={handleSelectSession}
+              onNewSession={handleNewSession}
             />
-            <span className="text-zinc-500">
-              {isConnected ? "Connected and ready" : "Connecting..."}
-            </span>
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700/50 rounded-lg transition-colors"
+            >
+              <span>⚙️</span>
+              <span className="text-zinc-300">Settings</span>
+            </button>
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"}`}
+              />
+              <span className="text-zinc-500">
+                {isConnected ? "Connected and ready" : "Connecting..."}
+              </span>
+            </div>
           </div>
         </div>
       ) : (
         <div className="flex-1 flex overflow-hidden">
           <div className="w-[400px] border-r border-zinc-800 flex flex-col">
+            <div className="px-4 py-2 border-b border-zinc-700/50 flex items-center justify-between">
+              <SessionHistory
+                currentSessionId={sessionId}
+                onSelectSession={handleSelectSession}
+                onNewSession={handleNewSession}
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="p-1.5 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
+                  title="Settings"
+                >
+                  ⚙️
+                </button>
+                <button
+                  onClick={handleNewSession}
+                  className="px-3 py-1.5 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
+                >
+                  + New Chat
+                </button>
+              </div>
+            </div>
             <ChatPanel
               messages={messages}
               input={input}
@@ -456,6 +576,31 @@ function App() {
               >
                 📂 Files
               </button>
+              <button
+                onClick={() => setRightPanelView("terminal")}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  rightPanelView === "terminal"
+                    ? "bg-zinc-700 text-white"
+                    : "text-zinc-400 hover:text-white hover:bg-zinc-800"
+                }`}
+              >
+                ⌨️ Terminal
+                {terminalLines.length > 0 && (
+                  <span className="ml-1.5 px-1.5 py-0.5 bg-zinc-600 text-[10px] rounded-full">
+                    {terminalLines.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setRightPanelView("code")}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  rightPanelView === "code"
+                    ? "bg-zinc-700 text-white"
+                    : "text-zinc-400 hover:text-white hover:bg-zinc-800"
+                }`}
+              >
+                📝 Code
+              </button>
             </div>
 
             <div className="flex-1 flex overflow-hidden">
@@ -485,7 +630,7 @@ function App() {
                 {rightPanelView === "files" && (
                   <div className="h-full p-3">
                     <FileBrowser
-                      sessionId={sessionIdRef.current}
+                      sessionId={sessionId}
                       files={files}
                       currentPath={filePath}
                       onNavigate={path => {
@@ -493,6 +638,27 @@ function App() {
                         fetchFiles(path);
                       }}
                       onRefresh={() => fetchFiles(filePath)}
+                      onOpenFile={path => {
+                        setEditingFile(path);
+                        setRightPanelView("code");
+                      }}
+                    />
+                  </div>
+                )}
+                {rightPanelView === "terminal" && (
+                  <div className="h-full p-3">
+                    <TerminalPanel
+                      lines={terminalLines}
+                      onClear={() => setTerminalLines([])}
+                    />
+                  </div>
+                )}
+                {rightPanelView === "code" && (
+                  <div className="h-full p-3">
+                    <CodeEditor
+                      sessionId={sessionId}
+                      filePath={editingFile}
+                      onClose={() => setRightPanelView("files")}
                     />
                   </div>
                 )}
@@ -507,6 +673,10 @@ function App() {
           </div>
         </div>
       )}
+      <SettingsPanel
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </div>
   );
 }
