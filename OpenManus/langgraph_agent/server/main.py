@@ -4,7 +4,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
@@ -265,6 +265,59 @@ async def download_file(session_id: str, path: str):
         media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
+
+
+@app.post("/api/sessions/{session_id}/files/upload")
+async def upload_file(session_id: str, file: UploadFile = File(...), path: str = ""):
+    workspace = f"/tmp/manus-workspace/{session_id}"
+    os.makedirs(workspace, exist_ok=True)
+    
+    target_dir = os.path.join(workspace, path.lstrip("/")) if path else workspace
+    os.makedirs(target_dir, exist_ok=True)
+    
+    if not target_dir.startswith(workspace):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    file_path = os.path.join(target_dir, file.filename or "uploaded_file")
+    
+    async with aiofiles.open(file_path, "wb") as f:
+        content = await file.read()
+        await f.write(content)
+    
+    return {
+        "status": "uploaded",
+        "path": os.path.relpath(file_path, workspace),
+        "name": file.filename,
+        "size": len(content)
+    }
+
+
+@app.post("/api/sessions/{session_id}/files/upload-multiple")
+async def upload_multiple_files(session_id: str, files: list[UploadFile] = File(...), path: str = ""):
+    workspace = f"/tmp/manus-workspace/{session_id}"
+    os.makedirs(workspace, exist_ok=True)
+    
+    target_dir = os.path.join(workspace, path.lstrip("/")) if path else workspace
+    os.makedirs(target_dir, exist_ok=True)
+    
+    if not target_dir.startswith(workspace):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    uploaded = []
+    for file in files:
+        file_path = os.path.join(target_dir, file.filename or f"uploaded_file_{len(uploaded)}")
+        
+        async with aiofiles.open(file_path, "wb") as f:
+            content = await file.read()
+            await f.write(content)
+        
+        uploaded.append({
+            "path": os.path.relpath(file_path, workspace),
+            "name": file.filename,
+            "size": len(content)
+        })
+    
+    return {"status": "uploaded", "files": uploaded}
 
 
 static_path = Path(__file__).parent.parent.parent / "web" / "dist"

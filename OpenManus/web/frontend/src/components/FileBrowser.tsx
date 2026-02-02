@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 
 export interface FileItem {
   name: string;
@@ -13,6 +13,13 @@ interface FileBrowserProps {
   currentPath: string;
   onNavigate: (path: string) => void;
   onRefresh: () => void;
+  onOpenFile?: (path: string) => void;
+}
+
+interface UploadStatus {
+  uploading: boolean;
+  progress: number;
+  error?: string;
 }
 
 function formatSize(bytes: number): string {
@@ -54,8 +61,71 @@ export function FileBrowser({
   currentPath,
   onNavigate,
   onRefresh,
+  onOpenFile,
 }: FileBrowserProps) {
   const [viewMode, setViewMode] = useState<"list" | "tree">("list");
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>({
+    uploading: false,
+    progress: 0,
+  });
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = useCallback(
+    async (filesToUpload: FileList | null) => {
+      if (!filesToUpload || filesToUpload.length === 0) return;
+
+      setUploadStatus({ uploading: true, progress: 0 });
+
+      const formData = new FormData();
+      for (let i = 0; i < filesToUpload.length; i++) {
+        formData.append("files", filesToUpload[i]);
+      }
+
+      try {
+        const response = await fetch(
+          `/api/sessions/${sessionId}/files/upload-multiple?path=${encodeURIComponent(currentPath)}`,
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Upload failed");
+        }
+
+        setUploadStatus({ uploading: false, progress: 100 });
+        onRefresh();
+      } catch (error) {
+        setUploadStatus({
+          uploading: false,
+          progress: 0,
+          error: error instanceof Error ? error.message : "Upload failed",
+        });
+      }
+    },
+    [sessionId, currentPath, onRefresh]
+  );
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      handleUpload(e.dataTransfer.files);
+    },
+    [handleUpload]
+  );
 
   const handleDownload = useCallback(
     async (file: FileItem) => {
@@ -95,7 +165,22 @@ export function FileBrowser({
   });
 
   return (
-    <div className="flex flex-col h-full bg-zinc-800/50 rounded-lg border border-zinc-700/50 overflow-hidden">
+    <div
+      className={`flex flex-col h-full bg-zinc-800/50 rounded-lg border overflow-hidden transition-colors ${
+        isDragging ? "border-blue-500 bg-blue-500/10" : "border-zinc-700/50"
+      }`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={e => handleUpload(e.target.files)}
+      />
+
       <div className="px-3 py-2 border-b border-zinc-700/50 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-sm">📂</span>
@@ -104,6 +189,14 @@ export function FileBrowser({
           </span>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="p-1.5 text-zinc-500 hover:text-blue-400 hover:bg-zinc-700/50 rounded transition-colors"
+            title="Upload files"
+            disabled={uploadStatus.uploading}
+          >
+            {uploadStatus.uploading ? "⏳" : "⬆️"}
+          </button>
           <button
             onClick={() => setViewMode(viewMode === "list" ? "tree" : "list")}
             className="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50 rounded transition-colors"
@@ -120,6 +213,12 @@ export function FileBrowser({
           </button>
         </div>
       </div>
+
+      {uploadStatus.error && (
+        <div className="px-3 py-2 bg-red-500/10 border-b border-red-500/30 text-red-400 text-xs">
+          {uploadStatus.error}
+        </div>
+      )}
 
       <div className="px-3 py-1.5 border-b border-zinc-700/30 flex items-center gap-1 text-xs overflow-x-auto">
         <button
@@ -156,14 +255,26 @@ export function FileBrowser({
           </button>
         )}
 
+        {isDragging && (
+          <div className="absolute inset-0 flex items-center justify-center bg-blue-500/10 backdrop-blur-sm z-10">
+            <div className="flex flex-col items-center gap-2 text-blue-400">
+              <span className="text-3xl">⬆️</span>
+              <span className="text-sm font-medium">Drop files to upload</span>
+            </div>
+          </div>
+        )}
+
         {sortedFiles.length === 0 && !currentPath ? (
           <div className="flex flex-col items-center justify-center py-8 text-zinc-600">
-            <div className="w-10 h-10 mb-3 rounded-full border-2 border-zinc-700 border-dashed flex items-center justify-center">
-              <span>📂</span>
+            <div
+              className="w-16 h-16 mb-3 rounded-lg border-2 border-zinc-700 border-dashed flex items-center justify-center cursor-pointer hover:border-zinc-500 transition-colors"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <span className="text-2xl">⬆️</span>
             </div>
             <p className="text-sm">No files yet</p>
             <p className="text-xs text-zinc-700 mt-1">
-              Agent will create files
+              Drop files here or click to upload
             </p>
           </div>
         ) : (
@@ -176,9 +287,13 @@ export function FileBrowser({
                 {getFileIcon(file.name, file.is_dir)}
               </span>
               <button
-                onClick={() =>
-                  file.is_dir ? handleNavigate(file) : handleDownload(file)
-                }
+                onClick={() => {
+                  if (file.is_dir) {
+                    handleNavigate(file);
+                  } else if (onOpenFile) {
+                    onOpenFile(file.path);
+                  }
+                }}
                 className="flex-1 text-left text-sm text-zinc-300 group-hover:text-white truncate"
               >
                 {file.name}
@@ -187,13 +302,24 @@ export function FileBrowser({
                 {formatSize(file.size)}
               </span>
               {!file.is_dir && (
-                <button
-                  onClick={() => handleDownload(file)}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-zinc-300 transition-all"
-                  title="Download"
-                >
-                  ⬇️
-                </button>
+                <>
+                  {onOpenFile && (
+                    <button
+                      onClick={() => onOpenFile(file.path)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-blue-400 transition-all"
+                      title="Open in editor"
+                    >
+                      📝
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDownload(file)}
+                    className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-zinc-300 transition-all"
+                    title="Download"
+                  >
+                    ⬇️
+                  </button>
+                </>
               )}
             </div>
           ))
