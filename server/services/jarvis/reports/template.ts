@@ -106,6 +106,27 @@ const THEME_COLORS: Record<ReportTheme, Record<string, string>> = {
     gradientMid: "#134e4a",
     gradientEnd: "#0a1f1a",
   },
+  rasputin: {
+    primary: "#22d3ee",
+    primaryDark: "#06b6d4",
+    secondary: "#60a5fa",
+    accent: "#a855f7",
+    success: "#10b981",
+    info: "#22d3ee",
+    warning: "#fbbf24",
+    error: "#f87171",
+    dark: "#1a1a2e",
+    darker: "#0d1117",
+    light: "#f8fafc",
+    text: "rgba(255,255,255,0.9)",
+    textMuted: "rgba(255,255,255,0.5)",
+    textDark: "#22d3ee",
+    glass: "rgba(34,211,238,0.08)",
+    glassBorder: "rgba(34,211,238,0.15)",
+    gradientStart: "#0d1117",
+    gradientMid: "#0d0d1a",
+    gradientEnd: "#0d1117",
+  },
 };
 
 export function getBaseTemplate(config: ReportConfig): string {

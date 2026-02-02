@@ -10,6 +10,8 @@ import type {
   TimelineSection,
   ComparisonSection,
   CodeSection,
+  ImageSection,
+  ImageGallerySection,
 } from "./types";
 import { getBaseTemplate, escapeHtml } from "./template";
 
@@ -58,6 +60,10 @@ export class ReportBuilder {
         return this.renderCode(section);
       case "divider":
         return '<div class="divider"></div>';
+      case "image":
+        return this.renderImage(section);
+      case "image_gallery":
+        return this.renderImageGallery(section);
       default:
         return "";
     }
@@ -446,6 +452,50 @@ export class ReportBuilder {
           `
           }
           <pre><code class="language-${escapeHtml(section.language)}">${escapeHtml(section.code)}</code></pre>
+        </div>
+      </div>
+    </section>`;
+  }
+
+  private renderImage(section: ImageSection): string {
+    const width = section.width || "100%";
+    return `
+    <section>
+      <div class="container">
+        <div class="image-section fade-in">
+          <img src="${escapeHtml(section.url)}" alt="${escapeHtml(section.alt || "")}" style="max-width: ${width}; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);" onerror="this.style.display='none'">
+          ${section.caption ? `<p class="image-caption" style="text-align: center; color: var(--text-dark); margin-top: 0.75rem; font-size: 0.9rem;">${escapeHtml(section.caption)}</p>` : ""}
+        </div>
+      </div>
+    </section>`;
+  }
+
+  private renderImageGallery(section: ImageGallerySection): string {
+    const imagesHtml = section.images
+      .map(
+        img => `
+      <div class="gallery-item">
+        <img src="${escapeHtml(img.url)}" alt="${escapeHtml(img.alt || "")}" style="width: 100%; border-radius: 8px; aspect-ratio: 16/9; object-fit: cover;" onerror="this.parentElement.style.display='none'">
+        ${img.caption ? `<p class="gallery-caption" style="color: var(--text-dark); font-size: 0.8rem; margin-top: 0.5rem;">${escapeHtml(img.caption)}</p>` : ""}
+      </div>
+    `
+      )
+      .join("");
+
+    return `
+    <section>
+      <div class="container">
+        ${
+          section.title
+            ? `
+          <div class="section-header fade-in">
+            <h2>${escapeHtml(section.title)}</h2>
+          </div>
+        `
+            : ""
+        }
+        <div class="image-gallery fade-in" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem;">
+          ${imagesHtml}
         </div>
       </div>
     </section>`;

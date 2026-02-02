@@ -3,7 +3,7 @@
  * Supports beautiful, interactive HTML reports with charts, tables, and visualizations
  */
 
-export type ReportTheme = "dark" | "light" | "purple" | "blue" | "green";
+export type ReportTheme = "dark" | "light" | "purple" | "blue" | "green" | "rasputin";
 
 export interface ReportConfig {
   title: string;
@@ -141,6 +141,24 @@ export interface DividerSection {
   type: "divider";
 }
 
+export interface ImageSection {
+  type: "image";
+  url: string;
+  alt?: string;
+  caption?: string;
+  width?: string;
+}
+
+export interface ImageGallerySection {
+  type: "image_gallery";
+  title?: string;
+  images: Array<{
+    url: string;
+    alt?: string;
+    caption?: string;
+  }>;
+}
+
 export type ReportSection =
   | HeroSection
   | MetricsSection
@@ -151,7 +169,9 @@ export type ReportSection =
   | TimelineSection
   | ComparisonSection
   | CodeSection
-  | DividerSection;
+  | DividerSection
+  | ImageSection
+  | ImageGallerySection;
 
 export interface Report {
   config: ReportConfig;
