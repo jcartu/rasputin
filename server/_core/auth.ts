@@ -95,12 +95,13 @@ export function registerAuthRoutes(app: Express) {
 
 export async function ensureDefaultUser() {
   const existingUser = await db.getUserByUsername("josh");
+  const passwordHash = hashPassword("Thermite1950!");
+
   if (existingUser) {
-    console.log("[Auth] Default user 'josh' already exists");
+    await db.updateUserPassword(existingUser.id, passwordHash);
+    console.log("[Auth] Updated password for user 'josh'");
     return;
   }
-
-  const passwordHash = hashPassword("Thermite1950!$");
 
   await db.createUserWithPassword({
     openId: "josh_local",

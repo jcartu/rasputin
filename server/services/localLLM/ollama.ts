@@ -295,6 +295,7 @@ export class OllamaClient {
       options: {
         temperature: request.temperature,
         num_predict: request.maxTokens,
+        num_ctx: request.numCtx,
       },
       tools: this.convertTools(request.tools),
     };

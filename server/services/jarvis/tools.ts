@@ -918,7 +918,7 @@ export async function querySynthesis(
   const startTime = Date.now();
   const stageLabels: Record<SynthesisStage, string> = {
     web_search: "Web Search",
-    proposers: "Multi-Model Query",
+    parallel_proposers: "Multi-Model Query",
     information_extraction: "Information Extraction",
     gap_detection: "Gap Detection",
     meta_synthesis: "Final Synthesis",
@@ -3436,7 +3436,7 @@ interface InteractiveReportInput {
   path: string;
   title: string;
   subtitle?: string;
-  theme?: "dark" | "light" | "purple" | "blue" | "green";
+  theme?: "dark" | "light" | "purple" | "blue" | "green" | "rasputin";
   badge?: string;
   heroStats?: Array<{
     value: number | string;
@@ -3462,7 +3462,8 @@ export async function generateInteractiveReport(
     const heroStats =
       (input.heroStats as InteractiveReportInput["heroStats"]) || [];
     const sections = (input.sections as Array<Record<string, unknown>>) || [];
-    const theme = (input.theme as InteractiveReportInput["theme"]) || "dark";
+    const theme =
+      (input.theme as InteractiveReportInput["theme"]) || "rasputin";
 
     const reportSections: Report["sections"] = [];
 
@@ -3605,6 +3606,29 @@ export async function generateInteractiveReport(
 
         case "divider":
           reportSections.push({ type: "divider" });
+          break;
+
+        case "image":
+          reportSections.push({
+            type: "image",
+            url: section.url as string,
+            alt: section.alt as string | undefined,
+            caption: section.caption as string | undefined,
+            width: section.width as string | undefined,
+          });
+          break;
+
+        case "image_gallery":
+          reportSections.push({
+            type: "image_gallery",
+            title: section.title as string | undefined,
+            images:
+              (section.images as Array<{
+                url: string;
+                alt?: string;
+                caption?: string;
+              }>) || [],
+          });
           break;
       }
     }
@@ -12298,7 +12322,7 @@ export function getAvailableTools(): Array<{
         theme: {
           type: "string",
           description:
-            "Color theme: 'dark' (default), 'light', 'purple', 'blue', or 'green'",
+            "Color theme: 'rasputin' (default, cyan/blue glassmorphism), 'dark', 'light', 'purple', 'blue', or 'green'",
           required: false,
         },
         badge: {
