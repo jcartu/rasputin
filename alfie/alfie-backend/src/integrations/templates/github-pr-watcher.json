@@ -1,0 +1,21 @@
+{
+  "id": "github-pr-watcher",
+  "name": "GitHub PR Watcher",
+  "integrationId": "github",
+  "description": "Monitor pull request activity and surface updates to your team.",
+  "category": "version-control",
+  "config": {
+    "repository": "owner/repo",
+    "branch": "main",
+    "pollIntervalMinutes": 10,
+    "events": [
+      "pull_request.opened",
+      "pull_request.review_requested",
+      "pull_request.merged",
+      "pull_request.closed"
+    ],
+    "notifyOnDraft": false
+  },
+  "createdAt": "2026-02-06T00:00:00.000Z",
+  "updatedAt": "2026-02-06T00:00:00.000Z"
+}

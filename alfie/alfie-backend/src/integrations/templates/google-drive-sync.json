@@ -1,0 +1,16 @@
+{
+  "id": "google-drive-sync",
+  "name": "Google Drive Sync",
+  "integrationId": "google-drive",
+  "description": "Sync files from a Google Drive folder into the workspace.",
+  "category": "storage",
+  "config": {
+    "folderId": "drive-folder-id",
+    "syncMode": "two-way",
+    "includeSharedDrives": true,
+    "fileTypes": ["docx", "pdf", "md"],
+    "syncIntervalMinutes": 30
+  },
+  "createdAt": "2026-02-06T00:00:00.000Z",
+  "updatedAt": "2026-02-06T00:00:00.000Z"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "linear-issue-tracker",
+  "name": "Linear Issue Tracker",
+  "integrationId": "linear",
+  "description": "Sync issues and status updates between Linear and your workflows.",
+  "category": "project-management",
+  "config": {
+    "teamKey": "ENG",
+    "syncIntervalMinutes": 15,
+    "includeArchived": false,
+    "labels": ["backend", "priority-high"],
+    "statusMapping": {
+      "todo": "To Do",
+      "in_progress": "In Progress",
+      "done": "Done"
+    }
+  },
+  "createdAt": "2026-02-06T00:00:00.000Z",
+  "updatedAt": "2026-02-06T00:00:00.000Z"
+}

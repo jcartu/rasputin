@@ -1,0 +1,8 @@
+node_modules/
+dist/
+reports/
+test-results/
+data/
+.auth-state.json
+*.log
+.DS_Store

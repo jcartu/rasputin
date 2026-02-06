@@ -1,0 +1,16 @@
+{
+  "id": "notion-knowledge-base",
+  "name": "Notion Knowledge Base",
+  "integrationId": "notion",
+  "description": "Keep documentation synchronized with a Notion database.",
+  "category": "project-management",
+  "config": {
+    "databaseId": "notion-database-id",
+    "syncDirection": "pull",
+    "includeArchived": false,
+    "tagFilter": ["docs", "runbook"],
+    "pageTitleField": "Name"
+  },
+  "createdAt": "2026-02-06T00:00:00.000Z",
+  "updatedAt": "2026-02-06T00:00:00.000Z"
+}

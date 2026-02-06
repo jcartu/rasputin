@@ -1,0 +1,184 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Webhook configuration
+model Webhook {
+  id          String   @id @default(uuid())
+  name        String
+  url         String
+  secret      String   // For signature verification
+  enabled     Boolean  @default(true)
+  
+  // Event subscriptions (stored as JSON array of event types)
+  events      String[] @default([])
+  
+  // Payload customization
+  headers     Json?    // Custom headers to send with webhook
+  template    Json?    // Payload template for customization
+  
+  // Retry configuration
+  retryCount  Int      @default(3)
+  retryDelay  Int      @default(1000) // milliseconds
+  timeout     Int      @default(30000) // milliseconds
+  
+  // Metadata
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastTriggered DateTime?
+  
+  // Relations
+  logs        WebhookLog[]
+  
+  @@index([enabled])
+}
+
+// Webhook delivery logs
+model WebhookLog {
+  id          String   @id @default(uuid())
+  webhookId   String
+  webhook     Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  
+  // Event information
+  eventType   String
+  eventId     String   // Unique event identifier
+  payload     Json     // The payload that was sent
+  
+  // Delivery status
+  status      String   // 'pending', 'success', 'failed', 'retrying'
+  statusCode  Int?     // HTTP response status code
+  response    String?  // Response body (truncated)
+  error       String?  // Error message if failed
+  
+  // Timing
+  attempts    Int      @default(0)
+  createdAt   DateTime @default(now())
+  deliveredAt DateTime?
+  nextRetryAt DateTime?
+  
+  @@index([webhookId])
+  @@index([eventType])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Meeting {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  startTime   DateTime
+  endTime     DateTime?
+  durationMs  Int      @default(0)
+  status      String   @default("scheduled")
+  tags        String[] @default([])
+  isFavorite  Boolean  @default(false)
+  audioUrl    String?
+  videoUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  speakers    Speaker[]
+  transcript  TranscriptSegment[]
+  summary     MeetingSummary?
+  integration MeetingIntegration?
+
+  @@index([status])
+  @@index([startTime])
+  @@index([isFavorite])
+}
+
+model Speaker {
+  id              String   @id @default(uuid())
+  name            String
+  color           String
+  voiceSignature  String?
+  meetingId       String
+  meeting         Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  segments        TranscriptSegment[]
+
+  @@index([meetingId])
+}
+
+model TranscriptSegment {
+  id          String   @id @default(uuid())
+  text        String
+  startTimeMs Int
+  endTimeMs   Int
+  confidence  Float    @default(0.9)
+  isEdited    Boolean  @default(false)
+  meetingId   String
+  meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  speakerId   String?
+  speaker     Speaker? @relation(fields: [speakerId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([meetingId])
+  @@index([speakerId])
+}
+
+model MeetingSummary {
+  id           String   @id @default(uuid())
+  overview     String
+  decisions    String[] @default([])
+  nextSteps    String[] @default([])
+  participants String[] @default([])
+  durationMs   Int
+  generatedAt  DateTime @default(now())
+  meetingId    String   @unique
+  meeting      Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  keyPoints    KeyPoint[]
+  actionItems  ActionItem[]
+}
+
+model KeyPoint {
+  id         String          @id @default(uuid())
+  text       String
+  category   String          @default("other")
+  timestamp  Int             @default(0)
+  summaryId  String
+  summary    MeetingSummary  @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+
+  @@index([summaryId])
+}
+
+model ActionItem {
+  id         String          @id @default(uuid())
+  text       String
+  assignee   String?
+  dueDate    DateTime?
+  priority   String          @default("medium")
+  status     String          @default("pending")
+  createdAt  DateTime        @default(now())
+  summaryId  String
+  summary    MeetingSummary  @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+
+  @@index([summaryId])
+  @@index([status])
+  @@index([priority])
+}
+
+model MeetingIntegration {
+  id             String    @id @default(uuid())
+  type           String
+  meetingId      String    @unique
+  meeting        Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  externalId     String?
+  joinUrl        String?
+  hostEmail      String?
+  scheduledStart DateTime?
+  scheduledEnd   DateTime?
+}
