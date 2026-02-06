@@ -50,6 +50,27 @@ import {
   InsertAgentMessage,
   InsertAgentToolCall,
   InsertAgentFile,
+  prompts,
+  promptVersions,
+  promptChains,
+  promptRuns,
+  promptMarketplace,
+  promptForks,
+  promptFavorites,
+  Prompt,
+  PromptVersion,
+  PromptChain,
+  PromptRun,
+  PromptMarketplaceEntry,
+  PromptFork,
+  PromptFavorite,
+  InsertPrompt,
+  InsertPromptVersion,
+  InsertPromptChain,
+  InsertPromptRun,
+  InsertPromptMarketplaceEntry,
+  InsertPromptFork,
+  InsertPromptFavorite,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { QueryMode, SpeedTier } from "../shared/rasputin";
@@ -1439,4 +1460,537 @@ export async function getEmptyChatCount(userId: number): Promise<number> {
     .where(and(eq(chats.userId, userId), eq(chats.messageCount, 0)));
 
   return result[0]?.count || 0;
+}
+
+// ============================================================================
+// Prompt Engineering Toolkit Functions
+// ============================================================================
+
+// ============================================================================
+// Prompt CRUD Functions
+// ============================================================================
+
+export async function createPrompt(data: InsertPrompt): Promise<Prompt> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(prompts).values(data);
+  const insertId = result[0].insertId;
+
+  const [prompt] = await db
+    .select()
+    .from(prompts)
+    .where(eq(prompts.id, insertId));
+  return prompt;
+}
+
+export async function getPrompt(promptId: number): Promise<Prompt | null> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const [prompt] = await db
+    .select()
+    .from(prompts)
+    .where(eq(prompts.id, promptId));
+
+  return prompt || null;
+}
+
+export async function getUserPrompts(
+  userId: number,
+  limit: number = 50
+): Promise<Prompt[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db
+    .select()
+    .from(prompts)
+    .where(eq(prompts.userId, userId))
+    .orderBy(desc(prompts.updatedAt))
+    .limit(limit);
+}
+
+export async function getPublicPrompts(limit: number = 50): Promise<Prompt[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db
+    .select()
+    .from(prompts)
+    .where(eq(prompts.isPublic, 1))
+    .orderBy(desc(prompts.usageCount))
+    .limit(limit);
+}
+
+export async function updatePrompt(
+  promptId: number,
+  updates: Partial<
+    Pick<
+      Prompt,
+      | "title"
+      | "description"
+      | "content"
+      | "isTemplate"
+      | "category"
+      | "tags"
+      | "isPublic"
+      | "variables"
+    >
+  >
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(prompts).set(updates).where(eq(prompts.id, promptId));
+}
+
+export async function deletePrompt(
+  promptId: number,
+  userId: number
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Delete related records first
+  await db.delete(promptVersions).where(eq(promptVersions.promptId, promptId));
+  await db.delete(promptRuns).where(eq(promptRuns.promptId, promptId));
+  await db
+    .delete(promptMarketplace)
+    .where(eq(promptMarketplace.promptId, promptId));
+  await db
+    .delete(promptForks)
+    .where(eq(promptForks.originalPromptId, promptId));
+  await db
+    .delete(promptFavorites)
+    .where(eq(promptFavorites.promptId, promptId));
+
+  // Delete the prompt itself
+  await db
+    .delete(prompts)
+    .where(and(eq(prompts.id, promptId), eq(prompts.userId, userId)));
+}
+
+export async function searchPrompts(
+  searchTerm: string,
+  limit: number = 20
+): Promise<Prompt[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db
+    .select()
+    .from(prompts)
+    .where(
+      and(
+        eq(prompts.isPublic, 1),
+        sql`${prompts.title} LIKE ${`%${searchTerm}%`} OR ${prompts.description} LIKE ${`%${searchTerm}%`}`
+      )
+    )
+    .orderBy(desc(prompts.usageCount))
+    .limit(limit);
+}
+
+export async function incrementPromptUsage(promptId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .update(prompts)
+    .set({ usageCount: sql`${prompts.usageCount} + 1` })
+    .where(eq(prompts.id, promptId));
+}
+
+// ============================================================================
+// Prompt Version Functions
+// ============================================================================
+
+export async function createPromptVersion(
+  data: InsertPromptVersion
+): Promise<PromptVersion> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(promptVersions).values(data);
+  const insertId = result[0].insertId;
+
+  const [version] = await db
+    .select()
+    .from(promptVersions)
+    .where(eq(promptVersions.id, insertId));
+  return version;
+}
+
+export async function getPromptVersions(
+  promptId: number,
+  limit: number = 50
+): Promise<PromptVersion[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db
+    .select()
+    .from(promptVersions)
+    .where(eq(promptVersions.promptId, promptId))
+    .orderBy(desc(promptVersions.version))
+    .limit(limit);
+}
+
+export async function getPromptVersion(
+  promptId: number,
+  version: number
+): Promise<PromptVersion | null> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const [versionRecord] = await db
+    .select()
+    .from(promptVersions)
+    .where(
+      and(
+        eq(promptVersions.promptId, promptId),
+        eq(promptVersions.version, version)
+      )
+    );
+
+  return versionRecord || null;
+}
+
+// ============================================================================
+// Prompt Chain Functions
+// ============================================================================
+
+export async function createPromptChain(
+  data: InsertPromptChain
+): Promise<PromptChain> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(promptChains).values(data);
+  const insertId = result[0].insertId;
+
+  const [chain] = await db
+    .select()
+    .from(promptChains)
+    .where(eq(promptChains.id, insertId));
+  return chain;
+}
+
+export async function getPromptChain(chainId: number): Promise<PromptChain | null> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const [chain] = await db
+    .select()
+    .from(promptChains)
+    .where(eq(promptChains.id, chainId));
+
+  return chain || null;
+}
+
+export async function getUserPromptChains(
+  userId: number,
+  limit: number = 50
+): Promise<PromptChain[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db
+    .select()
+    .from(promptChains)
+    .where(eq(promptChains.userId, userId))
+    .orderBy(desc(promptChains.updatedAt))
+    .limit(limit);
+}
+
+export async function updatePromptChain(
+  chainId: number,
+  updates: Partial<Pick<PromptChain, "name" | "description" | "steps">>
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(promptChains).set(updates).where(eq(promptChains.id, chainId));
+}
+
+export async function deletePromptChain(
+  chainId: number,
+  userId: number
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .delete(promptChains)
+    .where(
+      and(eq(promptChains.id, chainId), eq(promptChains.userId, userId))
+    );
+}
+
+// ============================================================================
+// Prompt Run Functions
+// ============================================================================
+
+export async function createPromptRun(
+  data: InsertPromptRun
+): Promise<PromptRun> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(promptRuns).values(data);
+  const insertId = result[0].insertId;
+
+  const [run] = await db
+    .select()
+    .from(promptRuns)
+    .where(eq(promptRuns.id, insertId));
+  return run;
+}
+
+export async function getPromptRuns(
+  promptId: number,
+  limit: number = 50
+): Promise<PromptRun[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db
+    .select()
+    .from(promptRuns)
+    .where(eq(promptRuns.promptId, promptId))
+    .orderBy(desc(promptRuns.createdAt))
+    .limit(limit);
+}
+
+export async function getPromptAnalytics(promptId: number): Promise<{
+  totalRuns: number;
+  successfulRuns: number;
+  failedRuns: number;
+  avgLatencyMs: number;
+  avgCost: number;
+  totalTokens: number;
+}> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db
+    .select({
+      totalRuns: sql<number>`COUNT(*)`.as("totalRuns"),
+      successfulRuns: sql<number>`SUM(CASE WHEN ${promptRuns.success} = 1 THEN 1 ELSE 0 END)`.as(
+        "successfulRuns"
+      ),
+      failedRuns: sql<number>`SUM(CASE WHEN ${promptRuns.success} = 0 THEN 1 ELSE 0 END)`.as(
+        "failedRuns"
+      ),
+      avgLatencyMs: sql<number>`AVG(${promptRuns.latencyMs})`.as("avgLatencyMs"),
+      avgCost: sql<number>`AVG(${promptRuns.cost})`.as("avgCost"),
+      totalTokens: sql<number>`SUM(${promptRuns.inputTokens} + ${promptRuns.outputTokens})`.as(
+        "totalTokens"
+      ),
+    })
+    .from(promptRuns)
+    .where(eq(promptRuns.promptId, promptId));
+
+  return result[0] || {
+    totalRuns: 0,
+    successfulRuns: 0,
+    failedRuns: 0,
+    avgLatencyMs: 0,
+    avgCost: 0,
+    totalTokens: 0,
+  };
+}
+
+// ============================================================================
+// Prompt Marketplace Functions
+// ============================================================================
+
+export async function publishPrompt(
+  promptId: number,
+  data: Omit<InsertPromptMarketplaceEntry, "promptId">
+): Promise<PromptMarketplaceEntry> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db
+    .insert(promptMarketplace)
+    .values({ ...data, promptId });
+  const insertId = result[0].insertId;
+
+  const [entry] = await db
+    .select()
+    .from(promptMarketplace)
+    .where(eq(promptMarketplace.id, insertId));
+  return entry;
+}
+
+export async function getMarketplacePrompts(
+  limit: number = 50
+): Promise<(PromptMarketplaceEntry & { prompt: Prompt })[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const entries = await db
+    .select()
+    .from(promptMarketplace)
+    .where(eq(promptMarketplace.isApproved, 1))
+    .orderBy(desc(promptMarketplace.downloadCount))
+    .limit(limit);
+
+  const results = [];
+  for (const entry of entries) {
+    const prompt = await getPrompt(entry.promptId);
+    if (prompt) {
+      results.push({ ...entry, prompt });
+    }
+  }
+  return results;
+}
+
+export async function ratePrompt(
+  marketplaceId: number,
+  rating: number
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Get current rating and download count
+  const [current] = await db
+    .select()
+    .from(promptMarketplace)
+    .where(eq(promptMarketplace.id, marketplaceId));
+
+  if (!current) return;
+
+  // Calculate new average rating (simple average)
+  const newRating = (parseFloat(current.rating?.toString() || "0") + rating) / 2;
+
+  await db
+    .update(promptMarketplace)
+    .set({ rating: newRating.toString() })
+    .where(eq(promptMarketplace.id, marketplaceId));
+}
+
+export async function downloadPrompt(marketplaceId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .update(promptMarketplace)
+    .set({
+      downloadCount: sql`${promptMarketplace.downloadCount} + 1`,
+    })
+    .where(eq(promptMarketplace.id, marketplaceId));
+}
+
+// ============================================================================
+// Prompt Fork Functions
+// ============================================================================
+
+export async function forkPrompt(
+  originalPromptId: number,
+  forkedPromptId: number,
+  userId: number
+): Promise<PromptFork> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(promptForks).values({
+    originalPromptId,
+    forkedPromptId,
+    forkedBy: userId,
+  });
+  const insertId = result[0].insertId;
+
+  // Increment fork count on original prompt
+  await db
+    .update(prompts)
+    .set({ forkCount: sql`${prompts.forkCount} + 1` })
+    .where(eq(prompts.id, originalPromptId));
+
+  const [fork] = await db
+    .select()
+    .from(promptForks)
+    .where(eq(promptForks.id, insertId));
+  return fork;
+}
+
+export async function getPromptForks(
+  originalPromptId: number,
+  limit: number = 50
+): Promise<PromptFork[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db
+    .select()
+    .from(promptForks)
+    .where(eq(promptForks.originalPromptId, originalPromptId))
+    .orderBy(desc(promptForks.createdAt))
+    .limit(limit);
+}
+
+// ============================================================================
+// Prompt Favorite Functions
+// ============================================================================
+
+export async function addFavorite(
+  userId: number,
+  promptId: number
+): Promise<PromptFavorite> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(promptFavorites).values({
+    userId,
+    promptId,
+  });
+  const insertId = result[0].insertId;
+
+  const [favorite] = await db
+    .select()
+    .from(promptFavorites)
+    .where(eq(promptFavorites.id, insertId));
+  return favorite;
+}
+
+export async function removeFavorite(
+  userId: number,
+  promptId: number
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .delete(promptFavorites)
+    .where(
+      and(
+        eq(promptFavorites.userId, userId),
+        eq(promptFavorites.promptId, promptId)
+      )
+    );
+}
+
+export async function getUserFavorites(
+  userId: number,
+  limit: number = 50
+): Promise<(PromptFavorite & { prompt: Prompt })[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const favorites = await db
+    .select()
+    .from(promptFavorites)
+    .where(eq(promptFavorites.userId, userId))
+    .orderBy(desc(promptFavorites.createdAt))
+    .limit(limit);
+
+  const results = [];
+  for (const favorite of favorites) {
+    const prompt = await getPrompt(favorite.promptId);
+    if (prompt) {
+      results.push({ ...favorite, prompt });
+    }
+  }
+  return results;
 }

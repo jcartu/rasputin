@@ -17,6 +17,8 @@ import Hosts from "./pages/Hosts";
 import Events from "./pages/Events";
 import Codebase from "./pages/Codebase";
 import MemoryPage from "./pages/Memory";
+import Manus from "./pages/Manus";
+import PromptLibrary from "./pages/PromptLibrary";
 
 // Documentation/demo pages (moved to /docs/*)
 import DocsHome from "./pages/jarvis/Home";
@@ -36,7 +38,7 @@ function Router() {
   return (
     <Switch>
       {/* Main functional routes - connected to real backends */}
-      <Route path="/" component={DocsHome} />
+      <Route path="/" component={Chat} />
       <Route path="/chat" component={Chat} />
       <Route path="/chat/:id" component={Chat} />
       <Route path="/agent" component={Agent} />
@@ -47,6 +49,8 @@ function Router() {
       <Route path="/events" component={Events} />
       <Route path="/codebase" component={Codebase} />
       <Route path="/memory" component={MemoryPage} />
+      <Route path="/manus" component={Manus} />
+      <Route path="/prompts" component={PromptLibrary} />
 
       {/* Documentation/demo routes */}
       <Route path="/docs" component={DocsHome} />

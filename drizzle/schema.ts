@@ -2915,3 +2915,256 @@ export const consensusVoteLog = mysqlTable("consensusVoteLog", {
 
 export type ConsensusVoteLog = typeof consensusVoteLog.$inferSelect;
 export type InsertConsensusVoteLog = typeof consensusVoteLog.$inferInsert;
+
+// ============================================================================
+// PROMPT ENGINEERING TOOLKIT
+// ============================================================================
+
+/**
+ * Prompts - Main prompt storage with versioning and analytics
+ * Stores reusable prompts with metadata, templates, and usage tracking
+ */
+export const prompts = mysqlTable("prompts", {
+  id: int("id").autoincrement().primaryKey(),
+
+  /** User who owns this prompt */
+  userId: int("userId").notNull(),
+
+  /** Prompt title */
+  title: varchar("title", { length: 255 }).notNull(),
+
+  /** Prompt description */
+  description: text("description"),
+
+  /** The actual prompt content */
+  content: mediumtext("content").notNull(),
+
+  /** Whether this is a template for others to use */
+  isTemplate: int("isTemplate").notNull().default(0),
+
+  /** Category for organization */
+  category: varchar("category", { length: 64 }),
+
+  /** Tags for searching and filtering (JSON array) */
+  tags: json("tags").$type<string[]>(),
+
+  /** Whether this prompt is publicly visible */
+  isPublic: int("isPublic").notNull().default(0),
+
+  /** Number of times this prompt has been forked */
+  forkCount: int("forkCount").notNull().default(0),
+
+  /** Number of times this prompt has been used */
+  usageCount: int("usageCount").notNull().default(0),
+
+  /** Average success rate (0-100) */
+  avgSuccessRate: decimal("avgSuccessRate", { precision: 5, scale: 2 }).default("0"),
+
+  /** Average cost per execution in USD */
+  avgCost: decimal("avgCost", { precision: 10, scale: 6 }).default("0"),
+
+  /** Variables in this prompt (JSON array of {name, description, defaultValue, type}) */
+  variables: json("variables").$type<
+    Array<{
+      name: string;
+      description?: string;
+      defaultValue?: string;
+      type?: "string" | "number" | "boolean" | "json";
+    }>
+  >(),
+
+  /** Timestamps */
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Prompt = typeof prompts.$inferSelect;
+export type InsertPrompt = typeof prompts.$inferInsert;
+
+/**
+ * Prompt Versions - Version history for prompts
+ * Tracks changes to prompts over time for rollback and comparison
+ */
+export const promptVersions = mysqlTable("promptVersions", {
+  id: int("id").autoincrement().primaryKey(),
+
+  /** Parent prompt */
+  promptId: int("promptId").notNull(),
+
+  /** Version number */
+  version: int("version").notNull(),
+
+  /** Prompt content at this version */
+  content: mediumtext("content").notNull(),
+
+  /** Notes about what changed */
+  changeNotes: text("changeNotes"),
+
+  /** User who created this version */
+  createdBy: int("createdBy").notNull(),
+
+  /** Timestamp */
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PromptVersion = typeof promptVersions.$inferSelect;
+export type InsertPromptVersion = typeof promptVersions.$inferInsert;
+
+/**
+ * Prompt Chains - Chaining multiple prompts together
+ * Allows creating workflows where output of one prompt feeds into another
+ */
+export const promptChains = mysqlTable("promptChains", {
+  id: int("id").autoincrement().primaryKey(),
+
+  /** User who owns this chain */
+  userId: int("userId").notNull(),
+
+  /** Chain name */
+  name: varchar("name", { length: 255 }).notNull(),
+
+  /** Chain description */
+  description: text("description"),
+
+  /** Steps in the chain (JSON array of {promptId, order, inputMapping, outputMapping}) */
+  steps: json("steps").$type<
+    Array<{
+      promptId: number;
+      order: number;
+      inputMapping?: Record<string, string>;
+      outputMapping?: Record<string, string>;
+    }>
+  >(),
+
+  /** Timestamps */
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PromptChain = typeof promptChains.$inferSelect;
+export type InsertPromptChain = typeof promptChains.$inferInsert;
+
+/**
+ * Prompt Runs - Execution history and analytics
+ * Tracks every execution of a prompt for analytics and debugging
+ */
+export const promptRuns = mysqlTable("promptRuns", {
+  id: int("id").autoincrement().primaryKey(),
+
+  /** Parent prompt */
+  promptId: int("promptId").notNull(),
+
+  /** User who ran this prompt */
+  userId: int("userId").notNull(),
+
+  /** Prompt version used */
+  versionId: int("versionId"),
+
+  /** Input variables used (JSON) */
+  inputVariables: json("inputVariables").$type<Record<string, unknown>>(),
+
+  /** Output from the prompt execution */
+  output: mediumtext("output"),
+
+  /** Model ID used for execution */
+  modelId: varchar("modelId", { length: 128 }),
+
+  /** Whether execution was successful (1 = success, 0 = failure) */
+  success: int("success").notNull().default(1),
+
+  /** Latency in milliseconds */
+  latencyMs: int("latencyMs"),
+
+  /** Input tokens used */
+  inputTokens: int("inputTokens"),
+
+  /** Output tokens used */
+  outputTokens: int("outputTokens"),
+
+  /** Cost in USD */
+  cost: decimal("cost", { precision: 10, scale: 6 }),
+
+  /** Error message if execution failed */
+  errorMessage: text("errorMessage"),
+
+  /** Timestamp */
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PromptRun = typeof promptRuns.$inferSelect;
+export type InsertPromptRun = typeof promptRuns.$inferInsert;
+
+/**
+ * Prompt Marketplace - Sharing and discovery
+ * Tracks published prompts available for download/purchase
+ */
+export const promptMarketplace = mysqlTable("promptMarketplace", {
+  id: int("id").autoincrement().primaryKey(),
+
+  /** Parent prompt */
+  promptId: int("promptId").notNull(),
+
+  /** When this prompt was published */
+  publishedAt: timestamp("publishedAt").defaultNow().notNull(),
+
+  /** Average rating (0-5) */
+  rating: decimal("rating", { precision: 3, scale: 2 }).default("0"),
+
+  /** Number of downloads */
+  downloadCount: int("downloadCount").notNull().default(0),
+
+  /** Price in USD (0 = free) */
+  price: decimal("price", { precision: 10, scale: 2 }).default("0"),
+
+  /** Whether this prompt has been approved for marketplace */
+  isApproved: int("isApproved").notNull().default(0),
+
+  /** Tags for marketplace discovery (JSON array) */
+  tags: json("tags").$type<string[]>(),
+});
+
+export type PromptMarketplaceEntry = typeof promptMarketplace.$inferSelect;
+export type InsertPromptMarketplaceEntry = typeof promptMarketplace.$inferInsert;
+
+/**
+ * Prompt Forks - Track prompt derivations
+ * Records when a user forks/copies a prompt to create their own version
+ */
+export const promptForks = mysqlTable("promptForks", {
+  id: int("id").autoincrement().primaryKey(),
+
+  /** Original prompt that was forked */
+  originalPromptId: int("originalPromptId").notNull(),
+
+  /** New prompt created from the fork */
+  forkedPromptId: int("forkedPromptId").notNull(),
+
+  /** User who created the fork */
+  forkedBy: int("forkedBy").notNull(),
+
+  /** Timestamp */
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PromptFork = typeof promptForks.$inferSelect;
+export type InsertPromptFork = typeof promptForks.$inferInsert;
+
+/**
+ * Prompt Favorites - User favorites/bookmarks
+ * Allows users to bookmark prompts they like
+ */
+export const promptFavorites = mysqlTable("promptFavorites", {
+  id: int("id").autoincrement().primaryKey(),
+
+  /** User who favorited this prompt */
+  userId: int("userId").notNull(),
+
+  /** Favorited prompt */
+  promptId: int("promptId").notNull(),
+
+  /** Timestamp */
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PromptFavorite = typeof promptFavorites.$inferSelect;
+export type InsertPromptFavorite = typeof promptFavorites.$inferInsert;

@@ -46,6 +46,7 @@ import {
   listDesktopTools,
   disconnectDaemon,
 } from "./services/desktop/remoteClient";
+import { promptsRouter } from "./promptsRouter";
 
 // ============================================================================
 // Utilities
@@ -102,6 +103,7 @@ const QuerySchema = z.object({
 
 export const appRouter = router({
   system: systemRouter,
+  prompts: promptsRouter,
 
   // Debug endpoint to check API keys
   debug: router({
