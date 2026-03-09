@@ -106,6 +106,21 @@ temp/
 *.sqlite
 *.sqlite3
 
+# AI agent directories
+.claude/
+.manus/
+.sisyphus/
+.hive/
+
 # Generated test outputs
 public/generated/
 .vercel
+.env
+*.env
+*.db
+.claude/
+.manus/
+.sisyphus/
+.hive/
+.opencode/
+.vercel/
