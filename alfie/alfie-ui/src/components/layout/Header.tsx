@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
 import { 
@@ -12,14 +13,17 @@ import {
   Menu,
   Sparkles,
   Keyboard,
-  Palette
+  Palette,
+  Share2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+import ShareDialog from '@/components/share/ShareDialog';
 import { SearchPanel } from '@/components/search/SearchPanel';
 import { ThemeSelector, QuickThemeToggle } from '@/components/theme';
-import { TutorialTrigger } from '@/components/tutorial';
+import { ModelSelector } from '@/components/chat/ModelSelector';
+
 import { MediaToolbar, ScreenRecorder, ScreenshotCapture, RecordingControls } from '@/components/media';
 import { useUIStore, useSystemStore, useChatStore } from '@/lib/store';
 import { useMobileContext } from '@/components/shared/MobileProvider';
@@ -29,9 +33,10 @@ export function Header() {
   const t = useTranslations('header');
   const tCommon = useTranslations('common');
   const { isMobile, isTablet } = useMobileContext();
+  const [shareOpen, setShareOpen] = useState(false);
   const { rightPanelOpen, toggleRightPanel, setMobileMenuOpen, setMobilePanelOpen, setShortcutsHelpOpen } = useUIStore();
   const { connectionStatus } = useSystemStore();
-  const { currentPhase, isStreaming } = useChatStore();
+  const { currentPhase, isStreaming, activeSessionId } = useChatStore();
 
   const connectionIcons = {
     connected: Wifi,
@@ -135,7 +140,8 @@ export function Header() {
 
         <div className="flex items-center gap-1 md:gap-2">
           {!isMobile && <SearchPanel />}
-          {!isMobile && <TutorialTrigger />}
+          {!isMobile && <ModelSelector />}
+
           {isMobile && (
             <div className={cn(
               'flex items-center gap-1 px-2 py-1 rounded-lg bg-muted/50',
@@ -162,6 +168,24 @@ export function Header() {
               </TooltipContent>
             </Tooltip>
           )}
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShareOpen(true)}
+                className="rounded-xl min-w-touch min-h-touch"
+                disabled={!activeSessionId}
+                aria-label="Share conversation"
+              >
+                <Share2 className="w-5 h-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              Share conversation
+            </TooltipContent>
+          </Tooltip>
 
           {!isMobile && <MediaToolbar />}
           {isMobile && <MediaToolbar compact />}
@@ -213,6 +237,7 @@ export function Header() {
       <ScreenRecorder />
       <ScreenshotCapture />
       <RecordingControls />
+      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} sessionId={activeSessionId || undefined} />
     </TooltipProvider>
   );
 }

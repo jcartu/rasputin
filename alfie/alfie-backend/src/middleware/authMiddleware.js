@@ -2,7 +2,7 @@ import config from '../config.js';
 import * as jwtService from '../services/jwtService.js';
 import * as apiKeyService from '../services/apiKeyService.js';
 import * as rbacService from '../services/rbacService.js';
-import * as User from '../models/User.js';
+import * as User from '../services/userService.js';
 
 function extractBearerToken(req) {
   const authHeader = req.headers.authorization;
@@ -62,7 +62,7 @@ export function authenticate(options = {}) {
           });
         }
 
-        const user = User.findById(validation.userId);
+        const user = await User.findById(validation.userId);
         if (!user || !user.isActive) {
           return res.status(403).json({
             error: 'Access denied',
@@ -91,7 +91,7 @@ export function authenticate(options = {}) {
       const verification = jwtService.verifyAccessToken(token);
       
       if (verification.valid) {
-        const user = User.findById(verification.payload.sub);
+        const user = await User.findById(verification.payload.sub);
         
         if (!user) {
           return res.status(401).json({
@@ -246,7 +246,7 @@ export function requireOwnerOrPermission(getUserId, permission) {
   };
 }
 
-export function authenticateWs(token) {
+export async function authenticateWs(token) {
   if (!token) return { authenticated: false, error: 'No token provided' };
 
   if (token.startsWith('alfie_')) {
@@ -263,7 +263,7 @@ export function authenticateWs(token) {
     };
   }
 
-  const user = User.findById(verification.payload.sub);
+  const user = await User.findById(verification.payload.sub);
   if (!user || !user.isActive) {
     return { authenticated: false, error: 'User not found or disabled' };
   }

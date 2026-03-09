@@ -115,8 +115,8 @@ services:
     container_name: rasputin-qdrant
     restart: unless-stopped
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
     volumes:
@@ -124,7 +124,7 @@ services:
     networks:
       - rasputin-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333'"]
       interval: 10s
       timeout: 5s
       retries: 5

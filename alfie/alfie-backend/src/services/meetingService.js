@@ -147,7 +147,7 @@ Be concise but comprehensive. Focus on actionable insights.`;
         'HTTP-Referer': 'http://localhost:3001',
       },
       body: JSON.stringify({
-        model: 'anthropic/claude-3-haiku',
+        model: 'anthropic/claude-haiku-4-5',
         messages: [
           { role: 'user', content: prompt }
         ],

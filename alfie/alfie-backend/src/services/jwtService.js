@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import config from '../config.js';
-import * as User from '../models/User.js';
+import * as User from '../services/userService.js';
 
 /**
  * JWT Service for token generation, verification, and refresh
@@ -33,7 +33,7 @@ export function generateAccessToken(user) {
 /**
  * Generate refresh token
  */
-export function generateRefreshToken(user, metadata = {}) {
+export async function generateRefreshToken(user, metadata = {}) {
   const tokenId = crypto.randomBytes(32).toString('hex');
   const expiresIn = config.jwt.refreshExpiresIn;
   
@@ -62,7 +62,7 @@ export function generateRefreshToken(user, metadata = {}) {
   });
   
   // Store refresh token for validation
-  User.storeRefreshToken(tokenId, user.id, expiresAt.toISOString(), metadata);
+  await User.storeRefreshToken(tokenId, user.id, expiresAt.toISOString(), metadata);
   
   return { token, expiresAt: expiresAt.toISOString() };
 }
@@ -70,9 +70,9 @@ export function generateRefreshToken(user, metadata = {}) {
 /**
  * Generate token pair (access + refresh)
  */
-export function generateTokenPair(user, metadata = {}) {
+export async function generateTokenPair(user, metadata = {}) {
   const accessToken = generateAccessToken(user);
-  const { token: refreshToken, expiresAt: refreshExpiresAt } = generateRefreshToken(user, metadata);
+  const { token: refreshToken, expiresAt: refreshExpiresAt } = await generateRefreshToken(user, metadata);
   
   // Decode access token to get expiration
   const decoded = jwt.decode(accessToken);
@@ -120,7 +120,7 @@ export function verifyAccessToken(token) {
 /**
  * Verify refresh token
  */
-export function verifyRefreshToken(token) {
+export async function verifyRefreshToken(token) {
   try {
     const decoded = jwt.verify(token, config.jwt.refreshSecret, {
       issuer: config.jwt.issuer,
@@ -132,7 +132,7 @@ export function verifyRefreshToken(token) {
     }
     
     // Check if refresh token is stored and valid
-    const storedToken = User.getRefreshToken(decoded.jti);
+    const storedToken = await User.getRefreshToken(decoded.jti);
     if (!storedToken) {
       return { valid: false, error: 'Refresh token not found or expired' };
     }
@@ -157,13 +157,13 @@ export function verifyRefreshToken(token) {
  * Refresh tokens using refresh token
  */
 export async function refreshTokens(refreshToken, metadata = {}) {
-  const verification = verifyRefreshToken(refreshToken);
+  const verification = await verifyRefreshToken(refreshToken);
   
   if (!verification.valid) {
     throw new Error(verification.error);
   }
   
-  const user = User.findByIdInternal(verification.payload.sub);
+  const user = await User.findByIdInternal(verification.payload.sub);
   if (!user) {
     throw new Error('User not found');
   }
@@ -173,7 +173,7 @@ export async function refreshTokens(refreshToken, metadata = {}) {
   }
   
   // Revoke old refresh token (token rotation)
-  User.revokeRefreshToken(verification.tokenId);
+  await User.revokeRefreshToken(verification.tokenId);
   
   // Generate new token pair
   return generateTokenPair(user, metadata);
@@ -208,7 +208,7 @@ export function blacklistToken(token) {
 /**
  * Revoke all tokens for user
  */
-export function revokeAllUserTokens(userId) {
+export async function revokeAllUserTokens(userId) {
   return User.revokeAllUserTokens(userId);
 }
 

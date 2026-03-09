@@ -144,7 +144,13 @@
   
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1, "cv01" 1, "cv02" 1, "ss01" 1;
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    letter-spacing: -0.011em;
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
   }
@@ -156,6 +162,17 @@
     --sar: env(safe-area-inset-right);
     --mobile-header-height: 56px;
     --mobile-input-height: 80px;
+  }
+
+  code, kbd, pre, samp {
+    font-family: var(--font-geist-mono), ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
+    font-feature-settings: "liga" 1, "calt" 1, "dlig" 1;
+    font-variant-ligatures: common-ligatures contextual;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.02em;
+    font-feature-settings: "rlig" 1, "calt" 1, "cv01" 1, "ss01" 1;
   }
 
   ::-webkit-scrollbar {

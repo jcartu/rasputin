@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { apiFetch } from './apiClient';
 
 export interface Integration {
   id: string;
@@ -62,8 +63,6 @@ interface IntegrationState {
   clearError: () => void;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
 export const useIntegrationStore = create<IntegrationState>((set, get) => ({
   availableIntegrations: [],
   connectedIntegrations: [],
@@ -75,7 +74,7 @@ export const useIntegrationStore = create<IntegrationState>((set, get) => ({
   fetchIntegrations: async () => {
     set({ loading: true, error: null });
     try {
-      const res = await fetch(`${API_BASE}/api/integrations`);
+      const res = await apiFetch('/api/integrations');
       if (!res.ok) throw new Error('Failed to fetch integrations');
       const data = await res.json();
       set({ availableIntegrations: data.integrations || data, loading: false });
@@ -87,7 +86,7 @@ export const useIntegrationStore = create<IntegrationState>((set, get) => ({
   fetchConnectedIntegrations: async () => {
     set({ loading: true, error: null });
     try {
-      const res = await fetch(`${API_BASE}/api/integrations/connected`);
+      const res = await apiFetch('/api/integrations/connected');
       if (!res.ok) throw new Error('Failed to fetch connected integrations');
       const data = await res.json();
       set({ connectedIntegrations: data.integrations || data, loading: false });
@@ -99,7 +98,7 @@ export const useIntegrationStore = create<IntegrationState>((set, get) => ({
   connectIntegration: async (id: string) => {
     set({ loading: true, error: null });
     try {
-      const res = await fetch(`${API_BASE}/api/integrations/${id}/auth`);
+      const res = await apiFetch(`/api/integrations/${id}/auth`);
       if (!res.ok) throw new Error('Failed to get auth URL');
       const data = await res.json();
       set({ loading: false });
@@ -113,7 +112,7 @@ export const useIntegrationStore = create<IntegrationState>((set, get) => ({
   disconnectIntegration: async (id: string) => {
     set({ loading: true, error: null });
     try {
-      const res = await fetch(`${API_BASE}/api/integrations/${id}/disconnect`, {
+      const res = await apiFetch(`/api/integrations/${id}/disconnect`, {
         method: 'POST',
       });
       if (!res.ok) throw new Error('Failed to disconnect');
@@ -127,9 +126,8 @@ export const useIntegrationStore = create<IntegrationState>((set, get) => ({
   updateIntegrationSettings: async (id: string, settings: Record<string, unknown>) => {
     set({ loading: true, error: null });
     try {
-      const res = await fetch(`${API_BASE}/api/integrations/connected/${id}/settings`, {
+      const res = await apiFetch(`/api/integrations/connected/${id}/settings`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
       });
       if (!res.ok) throw new Error('Failed to update settings');
@@ -143,9 +141,8 @@ export const useIntegrationStore = create<IntegrationState>((set, get) => ({
   createCustomIntegration: async (config) => {
     set({ loading: true, error: null });
     try {
-      const res = await fetch(`${API_BASE}/api/integrations/custom`, {
+      const res = await apiFetch('/api/integrations/custom', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
       });
       if (!res.ok) throw new Error('Failed to create custom integration');
@@ -162,9 +159,8 @@ export const useIntegrationStore = create<IntegrationState>((set, get) => ({
   updateCustomIntegration: async (id: string, config) => {
     set({ loading: true, error: null });
     try {
-      const res = await fetch(`${API_BASE}/api/integrations/custom/${id}`, {
+      const res = await apiFetch(`/api/integrations/custom/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
       });
       if (!res.ok) throw new Error('Failed to update custom integration');
@@ -181,7 +177,7 @@ export const useIntegrationStore = create<IntegrationState>((set, get) => ({
   deleteCustomIntegration: async (id: string) => {
     set({ loading: true, error: null });
     try {
-      const res = await fetch(`${API_BASE}/api/integrations/custom/${id}`, {
+      const res = await apiFetch(`/api/integrations/custom/${id}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('Failed to delete custom integration');

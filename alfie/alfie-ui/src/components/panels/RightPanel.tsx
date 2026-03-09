@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback } from 'react';
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
-import { Wrench, FolderTree, Activity, X, GripHorizontal, Volume2, History, LayoutTemplate, Camera, Mail, BookOpen } from 'lucide-react';
+import { Wrench, FolderTree, Activity, X, GripHorizontal, Volume2, History, LayoutTemplate, Camera, Mail, BookOpen, Code2, GitBranch, Users2 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -15,6 +15,9 @@ import { TemplatePanel, TemplateMarketplace } from '@/components/templates';
 import { MediaGallery } from '@/components/media';
 import { EmailClient } from '@/components/email';
 import { NotebookPanel } from '@/components/notebook';
+import { ArtifactPanel } from './ArtifactPanel';
+import { WorkflowListPanel } from './WorkflowListPanel';
+import { CollabPanel } from './CollabPanel';
 import { useUIStore, useChatStore } from '@/lib/store';
 import { useVersionControl } from '@/lib/version-control';
 import { useMobileContext } from '@/components/shared/MobileProvider';
@@ -22,7 +25,7 @@ import { cn } from '@/lib/utils';
 
 const SWIPE_THRESHOLD = 100;
 
-type TabType = 'tools' | 'files' | 'stats' | 'voice' | 'history' | 'templates' | 'media';
+type TabType = 'artifacts' | 'tools' | 'files' | 'stats' | 'voice' | 'history' | 'templates' | 'media' | 'email' | 'notebook' | 'workflow' | 'collab';
 
 export function RightPanel() {
   const { isMobile, isTouchDevice } = useMobileContext();
@@ -76,104 +79,137 @@ export function RightPanel() {
       className="flex flex-col h-full"
     >
       <TabsList className={cn(
-        'w-full rounded-none border-b border-border bg-transparent p-1 h-auto',
+        'w-full rounded-none border-b border-border bg-transparent p-1 h-auto overflow-x-auto',
         isMobile && 'pt-0'
       )}>
         <TabsTrigger
+          value="artifacts"
+          className={cn(
+            'gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs px-1.5',
+            isMobile && 'min-h-[44px]'
+          )}
+        >
+          <Code2 className="w-3.5 h-3.5" />
+          <span className="hidden">Artifacts</span>
+        </TabsTrigger>
+        <TabsTrigger
           value="tools"
           className={cn(
-            'flex-1 gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs',
+            'gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs px-1.5',
             isMobile && 'min-h-[44px]'
           )}
           data-tutorial="tools-tab"
         >
           <Wrench className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Tools</span>
+          <span className="hidden">Tools</span>
         </TabsTrigger>
         <TabsTrigger
           value="files"
           className={cn(
-            'flex-1 gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs',
+            'gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs px-1.5',
             isMobile && 'min-h-[44px]'
           )}
         >
           <FolderTree className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Files</span>
+          <span className="hidden">Files</span>
         </TabsTrigger>
         <TabsTrigger
           value="history"
           className={cn(
-            'flex-1 gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs',
+            'gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs px-1.5',
             isMobile && 'min-h-[44px]'
           )}
         >
           <History className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">History</span>
+          <span className="hidden">History</span>
         </TabsTrigger>
         <TabsTrigger
           value="stats"
           className={cn(
-            'flex-1 gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs',
+            'gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs px-1.5',
             isMobile && 'min-h-[44px]'
           )}
         >
           <Activity className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Stats</span>
+          <span className="hidden">Stats</span>
         </TabsTrigger>
         <TabsTrigger
           value="voice"
           className={cn(
-            'flex-1 gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs',
+            'gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs px-1.5',
             isMobile && 'min-h-[44px]'
           )}
         >
           <Volume2 className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Voice</span>
+          <span className="hidden">Voice</span>
         </TabsTrigger>
         <TabsTrigger
           value="templates"
           className={cn(
-            'flex-1 gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs',
+            'gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs px-1.5',
             isMobile && 'min-h-[44px]'
           )}
         >
           <LayoutTemplate className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Templates</span>
+          <span className="hidden">Templates</span>
         </TabsTrigger>
         <TabsTrigger
           value="media"
           className={cn(
-            'flex-1 gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs',
+            'gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs px-1.5',
             isMobile && 'min-h-[44px]'
           )}
         >
           <Camera className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Media</span>
+          <span className="hidden">Media</span>
         </TabsTrigger>
         <TabsTrigger
           value="email"
           className={cn(
-            'flex-1 gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs',
+            'gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs px-1.5',
             isMobile && 'min-h-[44px]'
           )}
         >
           <Mail className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Email</span>
+          <span className="hidden">Email</span>
         </TabsTrigger>
-        <TabsTrigger
-          value="notebook"
-          className={cn(
-            'flex-1 gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs',
-            isMobile && 'min-h-[44px]'
-          )}
-        >
-          <BookOpen className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Notebook</span>
-        </TabsTrigger>
-      </TabsList>
+         <TabsTrigger
+           value="notebook"
+           className={cn(
+             'gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs px-1.5',
+             isMobile && 'min-h-[44px]'
+           )}
+         >
+           <BookOpen className="w-3.5 h-3.5" />
+           <span className="hidden">Notebook</span>
+         </TabsTrigger>
+          <TabsTrigger
+            value="workflow"
+            className={cn(
+              'gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs px-1.5',
+              isMobile && 'min-h-[44px]'
+            )}
+          >
+            <GitBranch className="w-3.5 h-3.5" />
+             <span className="hidden">Workflows</span>
+            </TabsTrigger>
+           <TabsTrigger
+             value="collab"
+             className={cn(
+               'gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg text-xs px-1.5',
+               isMobile && 'min-h-[44px]'
+             )}
+           >
+             <Users2 className="w-3.5 h-3.5" />
+             <span className="hidden">Collab</span>
+           </TabsTrigger>
+         </TabsList>
 
       <TabsContent value="tools" className="flex-1 m-0 overflow-hidden">
         <ToolPanel />
+      </TabsContent>
+      <TabsContent value="artifacts" className="flex-1 m-0 overflow-hidden">
+        <ArtifactPanel />
       </TabsContent>
       <TabsContent value="files" className="flex-1 m-0 overflow-hidden">
         <FilePanel />
@@ -214,10 +250,22 @@ export function RightPanel() {
       <TabsContent value="email" className="flex-1 m-0 overflow-hidden">
         <EmailClient />
       </TabsContent>
-      <TabsContent value="notebook" className="flex-1 m-0 overflow-hidden">
-        <NotebookPanel />
-      </TabsContent>
-    </Tabs>
+       <TabsContent value="notebook" className="flex-1 m-0 overflow-hidden">
+         <NotebookPanel />
+       </TabsContent>
+         <TabsContent value="workflow" className="flex-1 m-0 overflow-hidden">
+           <ScrollArea className="h-full">
+             <div className="p-4 space-y-4">
+               <h3 className="font-semibold text-sm">Workflows</h3>
+               <p className="text-xs text-muted-foreground">Create and manage automated workflows</p>
+               <WorkflowListPanel />
+             </div>
+           </ScrollArea>
+          </TabsContent>
+          <TabsContent value="collab" className="flex-1 m-0 overflow-hidden">
+            <CollabPanel />
+          </TabsContent>
+       </Tabs>
   );
 
   if (isMobile) {
@@ -279,7 +327,7 @@ export function RightPanel() {
           animate={{ width: 340, opacity: 1 }}
           exit={{ width: 0, opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="flex flex-col h-full border-l border-border bg-card/50 backdrop-blur-xl overflow-hidden"
+          className="flex flex-col h-full border-l border-border bg-card/50 backdrop-blur-xl overflow-hidden relative z-10 flex-shrink-0"
           data-tutorial="right-panel"
         >
           {panelContent}

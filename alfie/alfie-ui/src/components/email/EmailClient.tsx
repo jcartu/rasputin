@@ -14,16 +14,10 @@ import {
   Plus,
   RefreshCw,
   Settings,
-  ChevronLeft,
   Loader2,
-  Sparkles,
-  MessageSquare,
-  ExternalLink
 } from 'lucide-react';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
@@ -33,7 +27,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { useEmailStore, type Email, type EmailDraft } from '@/lib/emailStore';
+import { useEmailStore, type Email } from '@/lib/emailStore';
 import { emailApi } from '@/lib/emailApi';
 import { EmailList } from './EmailList';
 import { EmailView } from './EmailView';
@@ -73,7 +67,6 @@ export function EmailClient() {
     setLoading,
     setError,
     openCompose,
-    closeCompose,
     getSelectedEmail,
     getUnreadCount,
   } = useEmailStore();
@@ -188,6 +181,46 @@ export function EmailClient() {
   const unreadCount = getUnreadCount();
 
   if (accounts.length === 0 && !isLoading) {
+    if (drafts.length > 0) {
+      return (
+        <div className="h-full flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b border-border">
+            <div className="flex items-center gap-3">
+              <Mail className="w-5 h-5 text-primary" />
+              <h2 className="font-semibold">Email Drafts</h2>
+              <Badge variant="secondary">{drafts.length}</Badge>
+            </div>
+            <Button onClick={() => setShowAccountSetup(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Email Account
+            </Button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <EmailList
+              emails={[]}
+              drafts={drafts}
+              selectedId={selectedEmailId}
+              onSelect={() => undefined}
+              onDraftSelect={(draft) => openCompose(draft)}
+              compact
+            />
+          </div>
+
+          <AnimatePresence>
+            {showAccountSetup && (
+              <EmailAccountSetup
+                onClose={() => setShowAccountSetup(false)}
+                onSuccess={() => {
+                  setShowAccountSetup(false);
+                  loadAccounts();
+                }}
+              />
+            )}
+          </AnimatePresence>
+        </div>
+      );
+    }
+
     return (
       <div className="h-full flex flex-col items-center justify-center p-8">
         <Mail className="w-16 h-16 text-muted-foreground mb-4" />

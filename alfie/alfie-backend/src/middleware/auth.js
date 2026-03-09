@@ -1,4 +1,5 @@
 import config from '../config.js';
+import * as jwtService from '../services/jwtService.js';
 
 export function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -21,7 +22,10 @@ export function authenticate(req, res, next) {
 }
 
 export function authenticateWs(token) {
-  return token === config.apiToken;
+  if (!token) return false;
+  if (token === config.apiToken) return true;
+  const verification = jwtService.verifyAccessToken(token);
+  return verification.valid;
 }
 
 export default { authenticate, authenticateWs };

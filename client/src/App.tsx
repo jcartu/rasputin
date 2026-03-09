@@ -18,6 +18,7 @@ import Events from "./pages/Events";
 import Codebase from "./pages/Codebase";
 import MemoryPage from "./pages/Memory";
 import Manus from "./pages/Manus";
+import Workspace from "./pages/Workspace";
 import PromptLibrary from "./pages/PromptLibrary";
 
 // Documentation/demo pages (moved to /docs/*)
@@ -50,6 +51,7 @@ function Router() {
       <Route path="/codebase" component={Codebase} />
       <Route path="/memory" component={MemoryPage} />
       <Route path="/manus" component={Manus} />
+      <Route path="/workspace" component={Workspace} />
       <Route path="/prompts" component={PromptLibrary} />
 
       {/* Documentation/demo routes */}

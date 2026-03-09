@@ -26,7 +26,7 @@ const DISALLOWED_ACTIONS = new Set([
 ]);
 
 function getUserId(req) {
-  return req.user?.id || req.headers['x-user-id'] || req.query.userId || req.body?.userId || DEFAULT_USER_ID;
+  return req.auth?.user?.id || req.headers['x-user-id'] || req.query.userId || req.body?.userId || DEFAULT_USER_ID;
 }
 
 function normalizeTokens(payload = {}) {

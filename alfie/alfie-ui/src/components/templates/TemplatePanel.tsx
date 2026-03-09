@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search, Store, ArrowRight, X } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -10,9 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { TemplateCard } from './TemplateCard';
 import { TemplateVariableInput } from './TemplateVariableInput';
-import { useTemplateStore, useChatStore, type SessionTemplate } from '@/lib/store';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { useTemplateStore, useChatStore, useUIStore, type SessionTemplate } from '@/lib/store';
+import { TEMPLATE_TEMPLATES, TEMPLATE_CATEGORIES } from '@/lib/templateData';
 
 export function TemplatePanel() {
   const {
@@ -25,7 +24,6 @@ export function TemplatePanel() {
     variableValues,
     setTemplates,
     setCategories,
-    setSelectedTemplate,
     setSelectedCategory,
     setSearchQuery,
     setIsLoading,
@@ -35,65 +33,47 @@ export function TemplatePanel() {
   } = useTemplateStore();
   
   const { createSession, addMessage } = useChatStore();
-
-  const fetchTemplates = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (searchQuery) params.set('search', searchQuery);
-      if (selectedCategory) params.set('category', selectedCategory);
-      
-      const res = await fetch(`${API_BASE}/api/templates?${params}`);
-      const data = await res.json();
-      setTemplates(data.templates || []);
-    } catch (err) {
-      console.error('Failed to fetch templates:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [searchQuery, selectedCategory, setTemplates, setIsLoading]);
-
-  const fetchCategories = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/templates/categories`);
-      const data = await res.json();
-      setCategories(data.categories || []);
-    } catch (err) {
-      console.error('Failed to fetch categories:', err);
-    }
-  }, [setCategories]);
+  const setPendingInput = useUIStore((state) => state.setPendingInput);
 
   useEffect(() => {
-    fetchTemplates();
-    fetchCategories();
-  }, [fetchTemplates, fetchCategories]);
+    setIsLoading(true);
+    setTemplates(TEMPLATE_TEMPLATES);
+    setCategories(TEMPLATE_CATEGORIES);
+    setIsLoading(false);
+  }, [setTemplates, setCategories, setIsLoading]);
 
-  const handleUseTemplate = async (template: SessionTemplate) => {
-    try {
-      const res = await fetch(`${API_BASE}/api/templates/${template.id}/use`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ variables: variableValues }),
+  const applyVariables = useMemo(
+    () => (template: SessionTemplate) => {
+      let filledMessage = template.initialMessage;
+      template.variables.forEach((variable) => {
+        const placeholder = `{${variable.name}}`;
+        const value = variableValues[variable.name] || variable.default || placeholder;
+        filledMessage = filledMessage.split(placeholder).join(value);
       });
-      const data = await res.json();
-      
-      const sessionId = createSession(template.name);
-      
-      if (data.sessionConfig.initialMessage) {
-        addMessage({
-          role: 'system',
-          content: data.sessionConfig.systemPrompt,
-        });
-        addMessage({
-          role: 'user',
-          content: data.sessionConfig.initialMessage,
-        });
-      }
-      
-      clearSelection();
-    } catch (err) {
-      console.error('Failed to use template:', err);
+      return filledMessage;
+    },
+    [variableValues]
+  );
+
+  const handleInsertTemplate = (template: SessionTemplate) => {
+    const filledMessage = applyVariables(template);
+    setPendingInput(filledMessage);
+  };
+
+  const handleStartSession = (template: SessionTemplate) => {
+    const filledMessage = applyVariables(template);
+    createSession(template.name);
+    if (template.systemPrompt) {
+      addMessage({
+        role: 'system',
+        content: template.systemPrompt,
+      });
     }
+    addMessage({
+      role: 'user',
+      content: filledMessage,
+    });
+    clearSelection();
   };
 
   const filteredTemplates = templates.filter(t => {
@@ -209,7 +189,7 @@ export function TemplatePanel() {
             <div className="p-3 border-t">
               <Button 
                 className="w-full" 
-                onClick={() => handleUseTemplate(selectedTemplate)}
+                onClick={() => handleStartSession(selectedTemplate)}
               >
                 Start Session
                 <ArrowRight className="w-4 h-4 ml-2" />
@@ -235,14 +215,45 @@ export function TemplatePanel() {
                     No templates found
                   </div>
                 ) : (
-                  filteredTemplates.map((template) => (
-                    <TemplateCard
-                      key={template.id}
-                      template={template}
-                      variant="compact"
-                      onClick={() => setSelectedTemplate(template)}
-                    />
-                  ))
+                  (searchQuery || selectedCategory)
+                    ? filteredTemplates.map((template) => (
+                        <TemplateCard
+                          key={template.id}
+                          template={template}
+                          variant="compact"
+                          onClick={() => handleInsertTemplate(template)}
+                          onUse={() => handleStartSession(template)}
+                        />
+                      ))
+                    : categories.map((category) => {
+                        const templatesInCategory = filteredTemplates.filter(
+                          (template) => template.category === category.id
+                        );
+                        if (templatesInCategory.length === 0) return null;
+                        return (
+                          <div key={category.id} className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                {category.name}
+                              </span>
+                              <Badge variant="secondary" className="text-[10px]">
+                                {templatesInCategory.length}
+                              </Badge>
+                            </div>
+                            <div className="space-y-2">
+                              {templatesInCategory.map((template) => (
+                                <TemplateCard
+                                  key={template.id}
+                                  template={template}
+                                  variant="compact"
+                                  onClick={() => handleInsertTemplate(template)}
+                                  onUse={() => handleStartSession(template)}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })
                 )}
               </div>
             </ScrollArea>

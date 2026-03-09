@@ -34,6 +34,11 @@ import {
   Database,
   Timer,
   Accessibility,
+  User,
+  LogOut,
+  KeyRound,
+  Mail,
+  BadgeCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -54,8 +59,10 @@ import {
 import { useLocaleStore } from '@/lib/i18n';
 import { locales, localeNames, localeFlags, type Locale } from '@/i18n/config';
 import { AccessibilityPanel } from './AccessibilityPanel';
+import { useAuthStore } from '@/lib/authStore';
+import { apiFetch } from '@/lib/apiClient';
 
-type SettingsTab = 'general' | 'chat' | 'voice' | 'notifications' | 'privacy' | 'accessibility' | 'advanced';
+type SettingsTab = 'profile' | 'general' | 'chat' | 'voice' | 'notifications' | 'privacy' | 'accessibility' | 'advanced';
 
 const localeOptions = locales.map((locale) => ({
   value: locale,
@@ -64,9 +71,10 @@ const localeOptions = locales.map((locale) => ({
 
 export function SettingsPanel() {
   const t = useTranslations('settings');
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
 
   const tabs: { id: SettingsTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { id: 'profile', label: 'Profile', icon: User },
     { id: 'general', label: t('tabs.general'), icon: Settings },
     { id: 'chat', label: t('tabs.chat'), icon: MessageSquare },
     { id: 'voice', label: t('tabs.voice'), icon: Mic },
@@ -129,6 +137,7 @@ export function SettingsPanel() {
                 exit={{ opacity: 0, x: -10 }}
                 transition={{ duration: 0.2 }}
               >
+                {activeTab === 'profile' && <ProfileSettings />}
                 {activeTab === 'general' && <GeneralSettings />}
                 {activeTab === 'chat' && <ChatSettings />}
                 {activeTab === 'voice' && <VoiceSettings />}
@@ -142,6 +151,214 @@ export function SettingsPanel() {
         </ScrollArea>
       </div>
     </div>
+  );
+}
+
+function ProfileSettings() {
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+
+  const [newUsername, setNewUsername] = useState(user?.username || '');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState('');
+  const [updateError, setUpdateError] = useState('');
+
+  const handleUpdateUsername = async () => {
+    if (!newUsername.trim() || newUsername === user?.username) return;
+    setIsUpdating(true);
+    setUpdateMessage('');
+    setUpdateError('');
+    try {
+      const res = await apiFetch('/api/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: newUsername.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to update username');
+      }
+      setUpdateMessage('Username updated successfully');
+      const stored = localStorage.getItem('alfie_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        parsed.username = newUsername.trim();
+        localStorage.setItem('alfie_user', JSON.stringify(parsed));
+      }
+    } catch (e) {
+      setUpdateError(e instanceof Error ? e.message : 'Update failed');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword) return;
+    if (newPassword !== confirmPassword) {
+      setUpdateError('Passwords do not match');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setUpdateError('Password must be at least 6 characters');
+      return;
+    }
+    setIsUpdating(true);
+    setUpdateMessage('');
+    setUpdateError('');
+    try {
+      const res = await apiFetch('/api/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to change password');
+      }
+      setUpdateMessage('Password changed successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (e) {
+      setUpdateError(e instanceof Error ? e.message : 'Update failed');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  return (
+    <>
+      <SettingSection title="Account" description="Your account information">
+        <div className="p-4 rounded-xl border border-border bg-card/50 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+              <User className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex-1">
+              <p className="font-medium text-lg">{user?.username || 'Unknown'}</p>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Mail className="w-3.5 h-3.5" />
+                {user?.email || 'No email'}
+              </div>
+            </div>
+            {user?.isVerified && (
+              <div className="flex items-center gap-1.5 text-xs text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full">
+                <BadgeCheck className="w-3.5 h-3.5" />
+                Verified
+              </div>
+            )}
+          </div>
+          <Separator />
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="text-muted-foreground">Roles</span>
+              <p className="font-medium mt-0.5">{user?.roles?.join(', ') || 'user'}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Status</span>
+              <p className="font-medium mt-0.5">{user?.isActive ? 'Active' : 'Inactive'}</p>
+            </div>
+          </div>
+        </div>
+      </SettingSection>
+
+      <SettingSection title="Update Username">
+        <div className="p-4 rounded-xl border border-border bg-card/50 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center">
+              <User className="w-4 h-4 text-muted-foreground" />
+            </div>
+            <div className="flex-1">
+              <Label className="text-sm font-medium">Username</Label>
+              <p className="text-xs text-muted-foreground">Change your display name</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <Input
+              value={newUsername}
+              onChange={(e) => setNewUsername(e.target.value)}
+              placeholder="New username"
+              className="flex-1"
+            />
+            <Button
+              onClick={handleUpdateUsername}
+              disabled={isUpdating || !newUsername.trim() || newUsername === user?.username}
+              className="px-6"
+            >
+              {isUpdating ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        </div>
+      </SettingSection>
+
+      <SettingSection title="Change Password">
+        <div className="p-4 rounded-xl border border-border bg-card/50 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center">
+              <KeyRound className="w-4 h-4 text-muted-foreground" />
+            </div>
+            <div className="flex-1">
+              <Label className="text-sm font-medium">Password</Label>
+              <p className="text-xs text-muted-foreground">Update your account password</p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <Input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Current password"
+            />
+            <Input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="New password"
+            />
+            <Input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Confirm new password"
+            />
+            <Button
+              onClick={handleChangePassword}
+              disabled={isUpdating || !currentPassword || !newPassword || !confirmPassword}
+              className="w-full"
+            >
+              {isUpdating ? 'Changing...' : 'Change Password'}
+            </Button>
+          </div>
+        </div>
+      </SettingSection>
+
+      {(updateMessage || updateError) && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={cn(
+            'p-3 rounded-lg text-sm mb-4',
+            updateMessage ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-destructive/10 text-destructive border border-destructive/20'
+          )}
+        >
+          {updateMessage || updateError}
+        </motion.div>
+      )}
+
+      <SettingSection title="Sign Out">
+        <Button
+          variant="outline"
+          onClick={logout}
+          className="flex items-center gap-2 text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+        >
+          <LogOut className="w-4 h-4" />
+          Sign out of ALFIE
+        </Button>
+      </SettingSection>
+    </>
   );
 }
 

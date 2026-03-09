@@ -42,12 +42,25 @@ export interface Message {
   phase?: 'think' | 'act' | 'observe';
 }
 
+export interface ToolCitation {
+  url: string;
+  title?: string;
+  snippet?: string;
+}
+
+export interface ToolResult {
+  content?: string;
+  citations?: ToolCitation[];
+  error?: string;
+}
+
 export interface ToolCall {
   id: string;
   name: string;
   arguments: Record<string, unknown>;
+  input?: Record<string, unknown>;
   status: 'pending' | 'running' | 'completed' | 'error';
-  result?: string;
+  result?: string | ToolResult;
   startTime?: Date;
   endTime?: Date;
 }
@@ -59,6 +72,14 @@ export interface Session {
   createdAt: Date;
   updatedAt: Date;
   isActive: boolean;
+}
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  description?: string;
+  maxTokens?: number;
 }
 
 export interface FileNode {
@@ -102,7 +123,19 @@ interface ChatState {
   setPhase: (phase: 'idle' | 'think' | 'act' | 'observe') => void;
   setCurrentToolCall: (toolCall: ToolCall | null) => void;
   clearSession: (id: string) => void;
+  loadConversations: () => Promise<void>;
+  loadConversationMessages: (sessionId: string) => Promise<void>;
+  renameSession: (id: string, name: string) => void;
+  mapSessionToThread: (sessionId: string, threadId: string) => void;
+  getThreadId: (sessionId: string) => string | null;
+  selectedModel: string | null;
+  setSelectedModel: (model: string) => void;
+  availableModels: ModelInfo[];
+  loadModels: () => Promise<void>;
 }
+
+// Maps local session IDs to DB threadIds (and vice versa for DB-loaded sessions)
+const _threadIdMap = new Map<string, string>();
 
 export const useChatStore = create<ChatState>()(
   persist(
@@ -113,6 +146,8 @@ export const useChatStore = create<ChatState>()(
       isStreaming: false,
       currentPhase: 'idle',
       currentToolCall: null,
+      selectedModel: null,
+      availableModels: [],
 
       createSession: (name) => {
         const id = crypto.randomUUID();
@@ -132,6 +167,12 @@ export const useChatStore = create<ChatState>()(
       },
 
       deleteSession: (id) => {
+        // Fire API call to delete from DB (fire-and-forget)
+        const threadId = _threadIdMap.get(id) || id;
+        import('./apiClient').then(({ apiFetch }) => {
+          apiFetch(`/api/conversations/${threadId}`, { method: 'DELETE' }).catch(() => {});
+        });
+        _threadIdMap.delete(id);
         set((state) => {
           const newSessions = state.sessions.filter((s) => s.id !== id);
           const newActiveId = state.activeSessionId === id
@@ -143,6 +184,11 @@ export const useChatStore = create<ChatState>()(
 
       setActiveSession: (id) => {
         set({ activeSessionId: id });
+        // Auto-load messages if session has none (was loaded from DB sidebar)
+        const session = get().sessions.find((s) => s.id === id);
+        if (session && session.messages.length === 0) {
+          get().loadConversationMessages(id);
+        }
       },
 
       addMessage: (message) => {
@@ -196,6 +242,126 @@ export const useChatStore = create<ChatState>()(
               : session
           ),
         }));
+      },
+
+      setSelectedModel: (model) => set({ selectedModel: model }),
+
+      loadModels: async () => {
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        const token = typeof window !== 'undefined' ? localStorage.getItem('alfie_access_token') : null;
+        if (!token) return;
+        try {
+          const res = await fetch(`${API_BASE}/api/models`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) return;
+          const data = await res.json();
+          const models: ModelInfo[] = (data.models || []).map((m: Record<string, unknown>) => ({
+            id: m.id as string,
+            name: m.name as string,
+            provider: m.provider as string,
+            description: (m.description as string) || '',
+            maxTokens: (m.maxTokens as number) || 4096,
+          }));
+          set({ availableModels: models });
+        } catch (e) {
+          console.error('Failed to load models:', e);
+        }
+      },
+
+      loadConversations: async () => {
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        const token = typeof window !== 'undefined' ? localStorage.getItem('alfie_access_token') : null;
+        if (!token) return;
+        try {
+          const res = await fetch(`${API_BASE}/api/conversations?limit=100`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) return;
+          const data = await res.json();
+          const conversations: Array<{ id: string; threadId: string; title: string; createdAt: string; updatedAt: string }> = Array.isArray(data) ? data : data.conversations || [];
+          if (conversations.length === 0) return;
+
+          const threadIds = new Set(conversations.map((c) => c.threadId || c.id));
+          const dbRowIds = new Set(conversations.map((c) => String(c.id)));
+
+          set((state) => {
+            const cleaned = state.sessions.filter((s) => {
+              if (dbRowIds.has(String(s.id)) && !threadIds.has(String(s.id))) return false;
+              return true;
+            });
+            const existingIds = new Set(cleaned.map((s) => s.id));
+            const newSessions: Session[] = conversations
+              .filter((c) => !existingIds.has(c.threadId || c.id))
+              .map((c) => {
+                const sessionId = c.threadId || c.id;
+                _threadIdMap.set(sessionId, c.threadId || c.id);
+                return {
+                  id: sessionId,
+                  name: c.title || 'Conversation',
+                  messages: [],
+                  createdAt: new Date(c.createdAt),
+                  updatedAt: new Date(c.updatedAt || c.createdAt),
+                  isActive: true,
+                };
+              });
+            return { sessions: [...cleaned, ...newSessions] };
+          });
+        } catch (e) {
+          console.error('Failed to load conversations:', e);
+        }
+      },
+
+      loadConversationMessages: async (sessionId: string) => {
+        const { apiFetch } = await import('./apiClient');
+        const threadId = _threadIdMap.get(sessionId) || sessionId;
+        try {
+          const res = await apiFetch(`/api/conversations/${threadId}/messages?limit=200`);
+          if (!res.ok) return;
+          const data = await res.json();
+          const msgs: Array<{ id: string; role: string; content: string; createdAt: string }> = data.messages || [];
+          if (msgs.length === 0) return;
+          set((state) => ({
+            sessions: state.sessions.map((session) =>
+              session.id === sessionId
+                ? {
+                    ...session,
+                    messages: msgs.map((m) => ({
+                      id: m.id || crypto.randomUUID(),
+                      role: m.role as 'user' | 'assistant' | 'system',
+                      content: m.content,
+                      timestamp: new Date(m.createdAt),
+                    })),
+                  }
+                : session
+            ),
+          }));
+        } catch (e) {
+          console.error('Failed to load messages:', e);
+        }
+      },
+
+      renameSession: (id, name) => {
+        const threadId = _threadIdMap.get(id) || id;
+        import('./apiClient').then(({ apiFetch }) => {
+          apiFetch(`/api/conversations/${threadId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ title: name }),
+          }).catch(() => {});
+        });
+        set((state) => ({
+          sessions: state.sessions.map((session) =>
+            session.id === id ? { ...session, name } : session
+          ),
+        }));
+      },
+
+      mapSessionToThread: (sessionId, threadId) => {
+        _threadIdMap.set(sessionId, threadId);
+      },
+
+      getThreadId: (sessionId) => {
+        return _threadIdMap.get(sessionId) || null;
       },
     }),
     {

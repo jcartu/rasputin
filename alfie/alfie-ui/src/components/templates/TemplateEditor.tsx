@@ -23,17 +23,28 @@ import { useTemplateStore, type TemplateVariable } from '@/lib/store';
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 const CATEGORIES = [
-  { id: 'development', name: 'Development' },
-  { id: 'research', name: 'Research' },
+  { id: 'code', name: 'Code' },
   { id: 'writing', name: 'Writing' },
-  { id: 'creativity', name: 'Creativity' },
-  { id: 'learning', name: 'Learning' },
+  { id: 'analysis', name: 'Analysis' },
+  { id: 'creative', name: 'Creative' },
+  { id: 'research', name: 'Research' },
+  { id: 'productivity', name: 'Productivity' },
   { id: 'custom', name: 'Custom' },
 ];
 
 const ICONS = [
-  'code', 'search', 'pen-tool', 'lightbulb', 'bug', 
-  'layout', 'graduation-cap', 'server', 'file-text'
+  'code-2',
+  'search',
+  'pen-tool',
+  'bar-chart-3',
+  'palette',
+  'zap',
+  'lightbulb',
+  'bug',
+  'layout',
+  'graduation-cap',
+  'server',
+  'file-text',
 ];
 
 interface TemplateEditorProps {

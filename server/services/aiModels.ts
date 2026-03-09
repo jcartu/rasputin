@@ -54,6 +54,9 @@ console.log("[AI Models] API Keys loaded:", {
 // ============================================================================
 
 const ANTHROPIC_MODEL_MAP: Record<string, string> = {
+  "claude-sonnet-5": "claude-sonnet-5-20260203",
+  "claude-opus-4.6": "claude-opus-4-6",
+  // Legacy fallbacks
   "claude-sonnet-4.5": "claude-sonnet-4-5-20250929",
   "claude-opus-4.5": "claude-opus-4-5-20251101",
 };
@@ -196,6 +199,9 @@ async function queryAnthropicDirect(
 }
 
 const OPENAI_MODEL_MAP: Record<string, string> = {
+  "gpt-4.5-turbo": "gpt-4.5-turbo",
+  "o1": "o1",
+  // Legacy
   "gpt-5": "gpt-5",
   "gpt-5.2-pro": "gpt-5.2-pro",
 };

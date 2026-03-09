@@ -12,10 +12,11 @@ interface TemplateVariableInputProps {
 }
 
 export function TemplateVariableInput({ variable, value, onChange }: TemplateVariableInputProps) {
+  const inputId = variable.name.replace(/[^a-zA-Z0-9_-]/g, '_');
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <Label htmlFor={variable.name} className="text-sm font-medium">
+        <Label htmlFor={inputId} className="text-sm font-medium">
           {variable.name.replace(/_/g, ' ')}
         </Label>
         {variable.required && (
@@ -23,7 +24,7 @@ export function TemplateVariableInput({ variable, value, onChange }: TemplateVar
         )}
       </div>
       <Input
-        id={variable.name}
+        id={inputId}
         placeholder={variable.default || variable.description}
         value={value}
         onChange={(e) => onChange(e.target.value)}

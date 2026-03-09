@@ -479,6 +479,27 @@ export const RSS_SOURCES_BY_COUNTRY: Partial<Record<CountryCode, RssSource[]>> =
         category: "economy",
         country: "CN",
       },
+      {
+        name: "新华网财经",
+        url: "http://www.news.cn/rss/fortune.xml",
+        language: "zh",
+        category: "economy",
+        country: "CN",
+      },
+      {
+        name: "人民网国际",
+        url: "http://www.people.com.cn/rss/world.xml",
+        language: "zh",
+        category: "general",
+        country: "CN",
+      },
+      {
+        name: "中国经济网",
+        url: "http://www.ce.cn/file/rss.xml",
+        language: "zh",
+        category: "economy",
+        country: "CN",
+      },
     ],
     RU: [
       {
@@ -496,10 +517,31 @@ export const RSS_SOURCES_BY_COUNTRY: Partial<Record<CountryCode, RssSource[]>> =
         country: "RU",
       },
       {
-        name: "Interfax Russia",
+        name: "Интерфакс",
         url: "https://www.interfax.ru/rss.asp",
         language: "ru",
         category: "business",
+        country: "RU",
+      },
+      {
+        name: "ТАСС Экономика",
+        url: "https://tass.ru/rss/v2.xml?sections=EKONOMIKAiBIZNES",
+        language: "ru",
+        category: "economy",
+        country: "RU",
+      },
+      {
+        name: "РБК",
+        url: "https://rssexport.rbc.ru/rbcnews/news/30/full.rss",
+        language: "ru",
+        category: "business",
+        country: "RU",
+      },
+      {
+        name: "Ведомости",
+        url: "https://www.vedomosti.ru/rss/news",
+        language: "ru",
+        category: "economy",
         country: "RU",
       },
     ],
@@ -662,12 +704,11 @@ export const CHINA_RUSSIA_PRESET: Partial<PortalScaffoldConfig> = {
   countryPair: {
     countryA: "CN",
     countryB: "RU",
-    locales: ["en", "zh", "ru"],
-    defaultLocale: "en",
+    locales: ["zh", "ru"],
+    defaultLocale: "zh",
     targetingRules: [
       { locale: "ru", targetCountry: "CN", homeCountry: "RU" },
       { locale: "zh", targetCountry: "RU", homeCountry: "CN" },
-      { locale: "en", targetCountry: "CN", homeCountry: "RU" },
     ],
   },
   geoDataSources: [

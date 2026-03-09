@@ -1,30 +1,50 @@
 'use client';
 
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo, useCallback, useState, type DragEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useTranslations } from 'next-intl';
-import { MessageSquare, Sparkles } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { TypingIndicator } from './TypingIndicator';
 import { VoiceListeningIndicator, GlobalVoiceIndicator } from '@/components/voice';
+import { ActivityMonitor } from '@/components/activity';
+import { AgentProgress } from '@/components/agent/AgentProgress';
+import { AgentThinking } from '@/components/agent/AgentThinking';
+import { AgentToolCall } from '@/components/agent/AgentToolCall';
+import { WelcomeScreen } from '@/components/shared/WelcomeScreen';
+import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { useChatStore } from '@/lib/store';
 import { useWebSocket } from '@/lib/websocket';
+import { useArtifactStore, extractArtifacts } from '@/lib/artifactStore';
+import { useAgentStore, type AgentStep } from '@/lib/agentStore';
+import { useAuthStore } from '@/lib/authStore';
 import { useMobileContext } from '@/components/shared/MobileProvider';
 import { cn } from '@/lib/utils';
 
 export function ChatArea() {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const { sessions, activeSessionId, isLoading, isStreaming, createSession, addMessage } = useChatStore();
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLElement | null>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [userScrolledUp, setUserScrolledUp] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
+
+  const sessions = useChatStore((s) => s.sessions);
+  const activeSessionId = useChatStore((s) => s.activeSessionId);
+  const isLoading = useChatStore((s) => s.isLoading);
+  const isStreaming = useChatStore((s) => s.isStreaming);
+  const createSession = useChatStore((s) => s.createSession);
+  const addMessage = useChatStore((s) => s.addMessage);
   const { sendMessage } = useWebSocket();
   const { isMobile } = useMobileContext();
 
+  const user = useAuthStore((s) => s.user);
+  const addArtifact = useArtifactStore((s) => s.addArtifact);
+  const activeTask = useAgentStore((s) => s.activeTask);
+
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   const messages = activeSession?.messages || [];
-  const messageCount = messages.length;
-  const lastMessageId = messages[messages.length - 1]?.id;
-  
+
   const lastAssistantMessageIndex = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === 'assistant') return i;
@@ -32,167 +52,270 @@ export function ChatArea() {
     return -1;
   }, [messages]);
 
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messageCount, lastMessageId, isStreaming]);
+  const lastMessageContent = messages.length > 0 ? messages[messages.length - 1]?.content : '';
 
-  const handleSend = (content: string) => {
+  useEffect(() => {
+    const el = scrollAreaRef.current;
+    if (!el) return;
+    const viewport = el.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+    if (viewport) {
+      scrollContainerRef.current = viewport;
+    }
+  }, []);
+
+  const prevSessionRef = useRef(activeSessionId);
+  if (prevSessionRef.current !== activeSessionId) {
+    prevSessionRef.current = activeSessionId;
+    setUserScrolledUp(false);
+  }
+
+  const rafRef = useRef<number>(0);
+  const isAnimatingRef = useRef(false);
+  const isProgrammaticScrollRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
+  const LERP_FACTOR = 0.14;
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    if (userScrolledUp || !isStreaming) {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+      isAnimatingRef.current = false;
+
+      if (!isStreaming && !userScrolledUp) {
+        const target = container.scrollHeight - container.clientHeight;
+        if (target - container.scrollTop > 1) {
+          isProgrammaticScrollRef.current = true;
+          container.scrollTop = target;
+        }
+      }
+      return;
+    }
+
+    if (isAnimatingRef.current) return;
+    isAnimatingRef.current = true;
+
+    const animate = () => {
+      if (!isAnimatingRef.current) return;
+      const c = scrollContainerRef.current;
+      if (!c) { isAnimatingRef.current = false; return; }
+
+      const target = c.scrollHeight - c.clientHeight;
+      const diff = target - c.scrollTop;
+      if (Math.abs(diff) > 0.5) {
+        isProgrammaticScrollRef.current = true;
+        c.scrollTop += diff * LERP_FACTOR;
+      }
+      rafRef.current = requestAnimationFrame(animate);
+    };
+    rafRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+      isAnimatingRef.current = false;
+    };
+  }, [isStreaming, userScrolledUp]);
+
+  const prevContentLenRef = useRef(0);
+  const prevSessionForScrollRef = useRef(activeSessionId);
+  const currentContentLen = lastMessageContent?.length ?? 0;
+  const contentChanged = prevContentLenRef.current !== currentContentLen;
+  const sessionChanged = prevSessionForScrollRef.current !== activeSessionId;
+  prevContentLenRef.current = currentContentLen;
+  prevSessionForScrollRef.current = activeSessionId;
+
+  useEffect(() => {
+    if (!contentChanged && !sessionChanged) return;
+    if (userScrolledUp || isStreaming) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    isProgrammaticScrollRef.current = true;
+    container.scrollTop = container.scrollHeight - container.clientHeight;
+  }, [contentChanged, sessionChanged, userScrolledUp, isStreaming]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      if (isProgrammaticScrollRef.current) {
+        isProgrammaticScrollRef.current = false;
+        lastScrollTopRef.current = container.scrollTop;
+        return;
+      }
+
+      const scrolledUp = container.scrollTop < lastScrollTopRef.current - 5;
+      lastScrollTopRef.current = container.scrollTop;
+
+      if (scrolledUp) {
+        setUserScrolledUp(true);
+        return;
+      }
+
+      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      if (distanceFromBottom < 30) {
+        setUserScrolledUp(false);
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const handleSend = useCallback((content: string, files?: { id?: string; name: string }[]) => {
     if (!activeSessionId) {
       createSession();
     }
+    const fileIds = files?.map(f => f.id).filter((id): id is string => Boolean(id)) ?? [];
+    const displayContent = fileIds.length > 0
+      ? `${content}\n\n📎 ${files!.map(f => f.name).join(', ')}`
+      : content;
+    addMessage({ role: 'user', content: displayContent });
+    sendMessage(content, fileIds.length > 0 ? fileIds : undefined);
+    setUserScrolledUp(false);
+  }, [activeSessionId, createSession, addMessage, sendMessage]);
+
+  const handleRegenerate = useCallback(() => {
+    if (!activeSession) return;
+    const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
+    if (lastUserMsg) {
+      sendMessage(lastUserMsg.content);
+    }
+  }, [activeSession, messages, sendMessage]);
+
+  const handleEditResubmit = useCallback((content: string) => {
     addMessage({ role: 'user', content });
     sendMessage(content);
-  };
+    setUserScrolledUp(false);
+  }, [addMessage, sendMessage]);
+
+  useEffect(() => {
+    if (!activeSessionId) return;
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg?.role === 'assistant' && lastMsg.content && !isStreaming) {
+      const artifacts = extractArtifacts(lastMsg.content, lastMsg.id, activeSessionId);
+      for (const a of artifacts) {
+        addArtifact(a);
+      }
+    }
+  }, [isStreaming, messages, activeSessionId, addArtifact]);
+
+  const handleDragOver = useCallback((e: DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      setDroppedFiles(files);
+    }
+  }, []);
 
   if (!activeSession) {
     return (
       <div className="flex-1 flex flex-col">
         <div className="flex-1 flex items-center justify-center px-4">
-          <EmptyState onNewChat={() => createSession()} isMobile={isMobile} />
+          <WelcomeScreen
+            onPromptSelect={handleSend}
+            username={user?.username}
+          />
         </div>
-        <ChatInput onSend={handleSend} isLoading={isLoading} />
+        <ChatInput onSend={handleSend} isLoading={isLoading} incomingFiles={droppedFiles} onIncomingFilesHandled={() => setDroppedFiles([])} />
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden" data-tutorial="chat-area">
-      <ScrollArea className="flex-1" ref={scrollRef}>
+    <section
+      className={cn(
+        'flex-1 flex flex-col overflow-hidden',
+        isDragging && 'ring-2 ring-primary/50 ring-inset bg-primary/5'
+      )}
+      aria-label="Chat area"
+      data-tutorial="chat-area"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <ScrollArea className="flex-1" ref={scrollAreaRef}>
         <div className={cn(
           'mx-auto py-4 md:py-6 px-3 md:px-4',
           isMobile ? 'max-w-full' : 'max-w-4xl'
         )}>
           {messages.length === 0 ? (
-            <EmptyState onNewChat={() => {}} showButton={false} isMobile={isMobile} />
+            <WelcomeScreen
+              onPromptSelect={handleSend}
+              username={user?.username}
+            />
           ) : (
             <AnimatePresence mode="popLayout">
-              {messages.map((message, index) => (
-                <MessageBubble
-                  key={message.id}
-                  message={message}
-                  isStreaming={isStreaming && index === messages.length - 1 && message.role === 'assistant'}
-                  isLatestAssistantMessage={index === lastAssistantMessageIndex}
-                />
-              ))}
+              {messages.map((message, index) => {
+                const isLastAssistant = index === lastAssistantMessageIndex;
+                return (
+                  <div key={message.id}>
+                    <MessageBubble
+                      message={message}
+                      isStreaming={isStreaming && index === messages.length - 1 && message.role === 'assistant'}
+                      isLatestAssistantMessage={isLastAssistant}
+                      onRegenerate={isLastAssistant ? handleRegenerate : undefined}
+                      onEditResubmit={message.role === 'user' ? handleEditResubmit : undefined}
+                    />
+                    {message.role === 'assistant' && activeTask && activeTask.steps.length > 0 && isLastAssistant && (
+                      <div className="ml-13 space-y-2 mb-4">
+                        {activeTask.steps.map((step: AgentStep) => {
+                          const stepKey = `${step.type}-${step.iteration}-${step.tool || 'none'}`;
+                          if (step.type === 'thinking') {
+                            return (
+                              <AgentThinking
+                                key={stepKey}
+                                content={step.thinking || ''}
+                                iteration={step.iteration}
+                                isActive={false}
+                              />
+                            );
+                          }
+                          if (step.type === 'tool_call' || step.type === 'tool_result') {
+                            return (
+                              <AgentToolCall
+                                key={stepKey}
+                                tool={step.tool || ''}
+                                input={step.input}
+                                output={step.output}
+                                success={step.success}
+                                isRunning={step.type === 'tool_call'}
+                              />
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </AnimatePresence>
           )}
           {isLoading && !isStreaming && <TypingIndicator />}
+          <ActivityMonitor />
+          {activeTask && <AgentProgress />}
+          <div ref={bottomRef} className="h-1" />
         </div>
       </ScrollArea>
       <VoiceListeningIndicator />
-      <ChatInput onSend={handleSend} isLoading={isLoading} />
+      <ChatInput onSend={handleSend} isLoading={isLoading} incomingFiles={droppedFiles} onIncomingFilesHandled={() => setDroppedFiles([])} />
       <GlobalVoiceIndicator />
-    </div>
-  );
-}
-
-interface EmptyStateProps {
-  onNewChat: () => void;
-  showButton?: boolean;
-  isMobile?: boolean;
-}
-
-function EmptyState({ onNewChat, showButton = true, isMobile = false }: EmptyStateProps) {
-  const t = useTranslations('chat');
-  const tSuggestions = useTranslations('suggestions');
-
-  const suggestions = [
-    {
-      icon: MessageSquare,
-      title: tSuggestions('codeGeneration'),
-      description: tSuggestions('codeGenerationDesc'),
-    },
-    {
-      icon: Sparkles,
-      title: tSuggestions('problemSolving'),
-      description: tSuggestions('problemSolvingDesc'),
-    },
-    {
-      icon: MessageSquare,
-      title: tSuggestions('fileOperations'),
-      description: tSuggestions('fileOperationsDesc'),
-    },
-  ];
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.5 }}
-      className={cn(
-        'text-center space-y-4 md:space-y-6 py-8 md:py-12',
-        isMobile && 'px-4'
-      )}
-    >
-      <motion.div
-        animate={{
-          boxShadow: [
-            '0 0 20px hsl(262 83% 58% / 0.2)',
-            '0 0 40px hsl(262 83% 58% / 0.4)',
-            '0 0 20px hsl(262 83% 58% / 0.2)',
-          ],
-        }}
-        transition={{ duration: 2, repeat: Infinity }}
-        className={cn(
-          'mx-auto rounded-3xl bg-gradient-to-br from-primary via-accent to-primary flex items-center justify-center',
-          isMobile ? 'w-16 h-16' : 'w-24 h-24'
-        )}
-      >
-        <Sparkles className={cn(isMobile ? 'w-8 h-8' : 'w-12 h-12', 'text-white')} />
-      </motion.div>
-
-      <div className="space-y-2">
-        <h2 className={cn(
-          'font-bold gradient-text',
-          isMobile ? 'text-2xl' : 'text-3xl'
-        )}>{t('welcomeTitle')}</h2>
-        <p className={cn(
-          'text-muted-foreground mx-auto',
-          isMobile ? 'text-sm max-w-xs' : 'max-w-md'
-        )}>
-          {isMobile ? t('welcomeDescription') : t('welcomeDescriptionFull')}
-        </p>
-      </div>
-
-      <div className={cn(
-        'grid gap-3 md:gap-4 mx-auto mt-6 md:mt-8',
-        isMobile ? 'grid-cols-1 max-w-xs' : 'grid-cols-1 md:grid-cols-3 max-w-2xl'
-      )}>
-        {suggestions.map((suggestion, idx) => (
-          <motion.button
-            key={suggestion.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 + idx * 0.1 }}
-            whileHover={!isMobile ? { scale: 1.02, y: -3 } : undefined}
-            whileTap={{ scale: 0.98 }}
-            onClick={onNewChat}
-            className={cn(
-              'p-3 md:p-4 rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm hover:bg-card/90 hover:border-primary/40 hover:shadow-[0_4px_20px_hsl(var(--primary)/0.1)] transition-all duration-200 text-left group',
-              isMobile && 'min-h-[44px] active:bg-card/80'
-            )}
-          >
-            <suggestion.icon className="w-5 h-5 md:w-6 md:h-6 text-primary mb-1 md:mb-2 group-hover:scale-110 transition-transform" />
-            <h3 className="font-medium text-sm">{suggestion.title}</h3>
-            <p className="text-xs text-muted-foreground mt-0.5 md:mt-1">{suggestion.description}</p>
-          </motion.button>
-        ))}
-      </div>
-
-      {showButton && !isMobile && (
-        <motion.button
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          onClick={onNewChat}
-          className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-primary to-accent text-white font-medium hover:opacity-90 transition-opacity glow-primary"
-        >
-          <MessageSquare className="w-5 h-5" />
-          {t('startNewChat')}
-        </motion.button>
-      )}
-    </motion.div>
+    </section>
   );
 }

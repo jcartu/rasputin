@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import * as User from '../models/User.js';
+import * as User from '../services/userService.js';
 import * as jwtService from '../services/jwtService.js';
 import * as oauthService from '../services/oauthService.js';
 import { authenticate, requirePermission } from '../middleware/authMiddleware.js';
@@ -83,7 +83,7 @@ router.post('/register', authRateLimit, async (req, res) => {
       }
     });
 
-    const tokens = jwtService.generateTokenPair(user, {
+    const tokens = await jwtService.generateTokenPair(user, {
       ip: req.ip,
       userAgent: req.headers['user-agent']
     });
@@ -118,7 +118,7 @@ router.post('/login', authRateLimit, async (req, res) => {
       });
     }
 
-    const user = User.findByEmailInternal(email);
+    const user = await User.findByEmailInternal(email);
     if (!user) {
       return res.status(401).json({
         error: 'Authentication failed',
@@ -141,16 +141,17 @@ router.post('/login', authRateLimit, async (req, res) => {
       });
     }
 
-    User.updateLastLogin(user.id);
+    await User.updateLastLogin(user.id);
 
-    const tokens = jwtService.generateTokenPair(user, {
+    const tokens = await jwtService.generateTokenPair(user, {
       ip: req.ip,
       userAgent: req.headers['user-agent']
     });
 
+    const publicUser = await User.findById(user.id);
     res.json({
       message: 'Login successful',
-      user: User.findById(user.id),
+      user: publicUser,
       ...tokens
     });
   } catch (error) {
@@ -205,9 +206,9 @@ router.post('/logout', authenticate({ required: true }), (req, res) => {
   }
 });
 
-router.post('/logout/all', authenticate({ required: true }), (req, res) => {
+router.post('/logout/all', authenticate({ required: true }), async (req, res) => {
   try {
-    const count = jwtService.revokeAllUserTokens(req.auth.user.id);
+    const count = await jwtService.revokeAllUserTokens(req.auth.user.id);
     
     const token = req.headers.authorization?.split(' ')[1];
     if (token) {
@@ -257,7 +258,7 @@ router.patch('/me', authenticate({ required: true }), async (req, res) => {
         });
       }
 
-      const user = User.findByIdInternal(req.auth.user.id);
+      const user = await User.findByIdInternal(req.auth.user.id);
       const passwordValid = await User.verifyPassword(user, currentPassword);
       if (!passwordValid) {
         return res.status(401).json({
@@ -314,7 +315,7 @@ router.post('/password/reset-request', strictRateLimit, async (req, res) => {
       });
     }
 
-    const user = User.findByEmail(email);
+    const user = await User.findByEmail(email);
     
     if (user) {
       const resetToken = jwtService.generatePasswordResetToken(user.id);
@@ -360,7 +361,7 @@ router.post('/password/reset', strictRateLimit, async (req, res) => {
     }
 
     await User.updateUser(verification.userId, { password: newPassword });
-    jwtService.revokeAllUserTokens(verification.userId);
+    await jwtService.revokeAllUserTokens(verification.userId);
 
     res.json({ message: 'Password reset successful' });
   } catch (error) {

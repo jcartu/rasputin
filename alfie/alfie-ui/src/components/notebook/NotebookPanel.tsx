@@ -1,6 +1,8 @@
 'use client';
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 import {
   Plus,
   Play,
@@ -67,10 +69,10 @@ export const NotebookPanel = memo(function NotebookPanel() {
   const { sessions, activeSessionId } = useChatStore();
   const activeNotebook = activeNotebookId ? notebooks[activeNotebookId] : null;
 
-  const fetchNotebookList = useCallback(async () => {
-    setIsLoadingList(true);
-    try {
-      const response = await fetch('/api/notebooks');
+   const fetchNotebookList = useCallback(async () => {
+     setIsLoadingList(true);
+     try {
+       const response = await fetch(`${API_BASE}/api/notebooks`);
       if (response.ok) {
         const data = await response.json();
         setNotebookList(data);
@@ -90,9 +92,9 @@ export const NotebookPanel = memo(function NotebookPanel() {
     createNotebook();
   }, [createNotebook]);
 
-  const handleOpenNotebook = useCallback(async (item: NotebookListItem) => {
-    try {
-      const response = await fetch(`/api/notebooks/${item.name}`);
+   const handleOpenNotebook = useCallback(async (item: NotebookListItem) => {
+     try {
+       const response = await fetch(`${API_BASE}/api/notebooks/${item.name}`);
       if (response.ok) {
         const document = await response.json();
         const id = crypto.randomUUID();
@@ -109,12 +111,12 @@ export const NotebookPanel = memo(function NotebookPanel() {
     const document = saveNotebook(activeNotebook.id);
     if (!document) return;
 
-    try {
-      await fetch(`/api/notebooks/${activeNotebook.name}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: document }),
-      });
+     try {
+       await fetch(`${API_BASE}/api/notebooks/${activeNotebook.name}`, {
+         method: 'PUT',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ content: document }),
+       });
     } catch (err) {
       console.error('Failed to save notebook:', err);
     }
@@ -147,11 +149,11 @@ export const NotebookPanel = memo(function NotebookPanel() {
       const content = await file.text();
       const name = file.name.replace('.ipynb', '');
       
-      const response = await fetch('/api/notebooks/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, name }),
-      });
+       const response = await fetch(`${API_BASE}/api/notebooks/import`, {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ content, name }),
+       });
 
       if (response.ok) {
         const data = await response.json();
@@ -171,19 +173,19 @@ export const NotebookPanel = memo(function NotebookPanel() {
     const session = sessions.find(s => s.id === activeSessionId);
     if (!session) return;
 
-    try {
-      const response = await fetch('/api/notebooks/from-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: session.messages.map(m => ({
-            role: m.role,
-            content: m.content,
-          })),
-          sessionName: session.name,
-          sessionId: session.id,
-        }),
-      });
+     try {
+       const response = await fetch(`${API_BASE}/api/notebooks/from-session`, {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           messages: session.messages.map(m => ({
+             role: m.role,
+             content: m.content,
+           })),
+           sessionName: session.name,
+           sessionId: session.id,
+         }),
+       });
 
       if (response.ok) {
         const data = await response.json();
@@ -217,12 +219,12 @@ export const NotebookPanel = memo(function NotebookPanel() {
   const handleStartKernel = useCallback(async (specName: string) => {
     if (!activeNotebook) return;
 
-    try {
-      const response = await fetch('/api/notebooks/kernels', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: specName }),
-      });
+     try {
+       const response = await fetch(`${API_BASE}/api/notebooks/kernels`, {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ name: specName }),
+       });
 
       if (response.ok) {
         const kernel = await response.json();
@@ -237,10 +239,10 @@ export const NotebookPanel = memo(function NotebookPanel() {
   const handleStopKernel = useCallback(async () => {
     if (!activeNotebook?.kernelId) return;
 
-    try {
-      await fetch(`/api/notebooks/kernels/${activeNotebook.kernelId}`, {
-        method: 'DELETE',
-      });
+     try {
+       await fetch(`${API_BASE}/api/notebooks/kernels/${activeNotebook.kernelId}`, {
+         method: 'DELETE',
+       });
       setNotebookKernel(activeNotebook.id, null);
       setKernelStatus(activeNotebook.id, 'unknown');
     } catch (err) {
@@ -251,11 +253,11 @@ export const NotebookPanel = memo(function NotebookPanel() {
   const handleRestartKernel = useCallback(async () => {
     if (!activeNotebook?.kernelId) return;
 
-    setKernelStatus(activeNotebook.id, 'restarting');
-    try {
-      const response = await fetch(`/api/notebooks/kernels/${activeNotebook.kernelId}/restart`, {
-        method: 'POST',
-      });
+     setKernelStatus(activeNotebook.id, 'restarting');
+     try {
+       const response = await fetch(`${API_BASE}/api/notebooks/kernels/${activeNotebook.kernelId}/restart`, {
+         method: 'POST',
+       });
 
       if (response.ok) {
         const kernel = await response.json();
@@ -270,10 +272,10 @@ export const NotebookPanel = memo(function NotebookPanel() {
   const handleInterruptKernel = useCallback(async () => {
     if (!activeNotebook?.kernelId) return;
 
-    try {
-      await fetch(`/api/notebooks/kernels/${activeNotebook.kernelId}/interrupt`, {
-        method: 'POST',
-      });
+     try {
+       await fetch(`${API_BASE}/api/notebooks/kernels/${activeNotebook.kernelId}/interrupt`, {
+         method: 'POST',
+       });
       cancelExecution(activeNotebook.id);
     } catch (err) {
       console.error('Failed to interrupt kernel:', err);
@@ -293,12 +295,12 @@ export const NotebookPanel = memo(function NotebookPanel() {
     setCellOutputs(activeNotebook.id, cellId, []);
     setKernelStatus(activeNotebook.id, 'busy');
 
-    try {
-      const response = await fetch(`/api/notebooks/kernels/${activeNotebook.kernelId}/execute`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: cell.source, cellId }),
-      });
+     try {
+       const response = await fetch(`${API_BASE}/api/notebooks/kernels/${activeNotebook.kernelId}/execute`, {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ code: cell.source, cellId }),
+       });
 
       if (response.ok) {
         const result = await response.json();

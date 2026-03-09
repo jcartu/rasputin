@@ -16,11 +16,17 @@ interface VoiceOutputProps {
 
 export function VoiceOutput({ text, messageId, autoPlay: autoPlayProp, className }: VoiceOutputProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const isLoadingRef = useRef(false);
+  const retryCountRef = useRef(0);
+  const hasAutoPlayAttempted = useRef(false);
+  const playRef = useRef<() => Promise<void>>(async () => {});
+  
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLocalPlaying, setIsLocalPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [hasPlayed, setHasPlayed] = useState(false);
+  const [hasFailed, setHasFailed] = useState(false);
   
   const { 
     selectedVoiceId, 
@@ -34,13 +40,24 @@ export function VoiceOutput({ text, messageId, autoPlay: autoPlayProp, className
   const shouldAutoPlay = autoPlayProp ?? globalAutoPlay;
 
   const generateSpeech = useCallback(async () => {
-    if (!voiceEnabled || !text || isLoading) return null;
+    if (!voiceEnabled || !text || isLoadingRef.current) return null;
 
+    const MAX_RETRIES = 2;
+    if (retryCountRef.current >= MAX_RETRIES) {
+      setHasFailed(true);
+      return null;
+    }
+
+    isLoadingRef.current = true;
     setIsLoading(true);
     try {
-      const response = await fetch('/api/tts', {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const token = typeof window !== 'undefined' ? localStorage.getItem('alfie_access_token') : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const response = await fetch(`${apiBase}/api/tts`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           text: text.slice(0, 5000),
           voiceId: selectedVoiceId,
@@ -48,19 +65,27 @@ export function VoiceOutput({ text, messageId, autoPlay: autoPlayProp, className
         }),
       });
 
-      if (!response.ok) throw new Error('TTS request failed');
+      if (!response.ok) {
+        retryCountRef.current += 1;
+        throw new Error('TTS request failed');
+      }
 
+      retryCountRef.current = 0;
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       setAudioUrl(url);
       return url;
     } catch (error) {
       console.error('Failed to generate speech:', error);
+      if (retryCountRef.current >= MAX_RETRIES) {
+        setHasFailed(true);
+      }
       return null;
     } finally {
+      isLoadingRef.current = false;
       setIsLoading(false);
     }
-  }, [text, selectedVoiceId, speed, voiceEnabled, isLoading]);
+  }, [text, selectedVoiceId, speed, voiceEnabled]);
 
   const play = useCallback(async () => {
     if (!audioRef.current) return;
@@ -83,6 +108,11 @@ export function VoiceOutput({ text, messageId, autoPlay: autoPlayProp, className
       console.error('Failed to play audio:', error);
     }
   }, [audioUrl, generateSpeech, speed, setGlobalIsPlaying]);
+
+  // Keep playRef in sync with play function
+  useEffect(() => {
+    playRef.current = play;
+  }, [play]);
 
   const pause = useCallback(() => {
     if (audioRef.current) {
@@ -108,11 +138,12 @@ export function VoiceOutput({ text, messageId, autoPlay: autoPlayProp, className
   }, [isLocalPlaying, play, pause]);
 
   useEffect(() => {
-    if (shouldAutoPlay && voiceEnabled && !hasPlayed && text) {
-      const timer = setTimeout(() => play(), 500);
+    if (shouldAutoPlay && voiceEnabled && !hasAutoPlayAttempted.current && !hasFailed && text) {
+      hasAutoPlayAttempted.current = true;
+      const timer = setTimeout(() => playRef.current(), 500);
       return () => clearTimeout(timer);
     }
-  }, [shouldAutoPlay, voiceEnabled, hasPlayed, text, play]);
+  }, [shouldAutoPlay, voiceEnabled, hasFailed, text]);
 
   useEffect(() => {
     const audio = audioRef.current;

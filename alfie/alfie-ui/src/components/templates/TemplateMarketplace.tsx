@@ -1,10 +1,19 @@
 'use client';
 
-import { useEffect, useCallback, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Search, Plus, X, Star, TrendingUp, Clock, Filter,
-  Code, Palette, BookOpen, Sparkles
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Search,
+  Plus,
+  Star,
+  TrendingUp,
+  Clock,
+  Filter,
+  Code2,
+  Palette,
+  PenTool,
+  BarChart3,
+  Search as SearchIcon,
+  Zap,
 } from 'lucide-react';
 import {
   Dialog,
@@ -17,32 +26,32 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Separator } from '@/components/ui/separator';
 import { TemplateCard } from './TemplateCard';
 import { TemplateEditor } from './TemplateEditor';
 import { useTemplateStore, type SessionTemplate } from '@/lib/store';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { TEMPLATE_TEMPLATES, TEMPLATE_CATEGORIES } from '@/lib/templateData';
 
 const CATEGORY_ICONS: Record<string, React.ElementType> = {
-  'development': Code,
-  'research': BookOpen,
-  'writing': Palette,
-  'creativity': Sparkles,
+  code: Code2,
+  writing: PenTool,
+  analysis: BarChart3,
+  creative: Palette,
+  research: SearchIcon,
+  productivity: Zap,
 };
 
 export function TemplateMarketplace() {
   const {
     templates,
     categories,
-    selectedTemplate,
     searchQuery,
+    selectedCategory,
     isMarketplaceOpen,
-    isEditorOpen,
     setTemplates,
     setCategories,
     setSelectedTemplate,
     setSearchQuery,
+    setSelectedCategory,
     setIsMarketplaceOpen,
     setIsEditorOpen,
     setEditingTemplate,
@@ -51,43 +60,28 @@ export function TemplateMarketplace() {
   const [activeTab, setActiveTab] = useState('featured');
   const [featuredTemplates, setFeaturedTemplates] = useState<SessionTemplate[]>([]);
 
-  const fetchAll = useCallback(async () => {
-    try {
-      const [templatesRes, categoriesRes, featuredRes] = await Promise.all([
-        fetch(`${API_BASE}/api/templates`),
-        fetch(`${API_BASE}/api/templates/categories`),
-        fetch(`${API_BASE}/api/templates?featured=true&limit=6`),
-      ]);
-      
-      const [templatesData, categoriesData, featuredData] = await Promise.all([
-        templatesRes.json(),
-        categoriesRes.json(),
-        featuredRes.json(),
-      ]);
-      
-      setTemplates(templatesData.templates || []);
-      setCategories(categoriesData.categories || []);
-      setFeaturedTemplates(featuredData.templates || []);
-    } catch (err) {
-      console.error('Failed to fetch marketplace data:', err);
-    }
-  }, [setTemplates, setCategories]);
-
   useEffect(() => {
     if (isMarketplaceOpen) {
-      fetchAll();
+      setTemplates(TEMPLATE_TEMPLATES);
+      setCategories(TEMPLATE_CATEGORIES);
+      setFeaturedTemplates(TEMPLATE_TEMPLATES.slice(0, 6));
     }
-  }, [isMarketplaceOpen, fetchAll]);
+  }, [isMarketplaceOpen, setTemplates, setCategories]);
 
-  const filteredTemplates = templates.filter(t => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      t.name.toLowerCase().includes(q) ||
-      t.description.toLowerCase().includes(q) ||
-      t.tags.some(tag => tag.toLowerCase().includes(q))
-    );
-  });
+  const filteredTemplates = useMemo(() => {
+    return templates.filter((template) => {
+      if (selectedCategory && template.category !== selectedCategory) {
+        return false;
+      }
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        template.name.toLowerCase().includes(q) ||
+        template.description.toLowerCase().includes(q) ||
+        template.tags.some(tag => tag.toLowerCase().includes(q))
+      );
+    });
+  }, [templates, selectedCategory, searchQuery]);
 
   const templatesByCategory = categories.reduce((acc, cat) => {
     acc[cat.id] = filteredTemplates.filter(t => t.category === cat.id);
@@ -104,17 +98,10 @@ export function TemplateMarketplace() {
     setIsEditorOpen(true);
   };
 
-  const handleDuplicateTemplate = async (template: SessionTemplate) => {
-    try {
-      await fetch(`${API_BASE}/api/templates/${template.id}/duplicate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: `${template.name} (Copy)` }),
-      });
-      fetchAll();
-    } catch (err) {
-      console.error('Failed to duplicate template:', err);
-    }
+  const refreshTemplates = () => {
+    setTemplates(TEMPLATE_TEMPLATES);
+    setCategories(TEMPLATE_CATEGORIES);
+    setFeaturedTemplates(TEMPLATE_TEMPLATES.slice(0, 6));
   };
 
   return (
@@ -179,6 +166,7 @@ export function TemplateMarketplace() {
                           key={template.id}
                           template={template}
                           onClick={() => handleSelectTemplate(template)}
+                          onUse={() => handleSelectTemplate(template)}
                         />
                       ))}
                     </div>
@@ -187,7 +175,7 @@ export function TemplateMarketplace() {
                   {categories.map((category) => {
                     const catTemplates = templatesByCategory[category.id] || [];
                     if (catTemplates.length === 0) return null;
-                    const IconComponent = CATEGORY_ICONS[category.id] || Code;
+                    const IconComponent = CATEGORY_ICONS[category.id] || Code2;
                     
                     return (
                       <div key={category.id}>
@@ -201,6 +189,7 @@ export function TemplateMarketplace() {
                               key={template.id}
                               template={template}
                               onClick={() => handleSelectTemplate(template)}
+                              onUse={() => handleSelectTemplate(template)}
                             />
                           ))}
                         </div>
@@ -212,11 +201,19 @@ export function TemplateMarketplace() {
 
               <TabsContent value="all" className="m-0 p-4">
                 <div className="flex gap-2 mb-4 flex-wrap">
+                  <Badge
+                    variant={selectedCategory === null ? 'default' : 'outline'}
+                    className="cursor-pointer hover:bg-accent"
+                    onClick={() => setSelectedCategory(null)}
+                  >
+                    All
+                  </Badge>
                   {categories.map((cat) => (
                     <Badge
                       key={cat.id}
-                      variant="outline"
+                      variant={selectedCategory === cat.id ? 'default' : 'outline'}
                       className="cursor-pointer hover:bg-accent"
+                      onClick={() => setSelectedCategory(cat.id)}
                     >
                       {cat.name} ({cat.count})
                     </Badge>
@@ -229,6 +226,7 @@ export function TemplateMarketplace() {
                       key={template.id}
                       template={template}
                       onClick={() => handleSelectTemplate(template)}
+                      onUse={() => handleSelectTemplate(template)}
                     />
                   ))}
                 </div>
@@ -250,6 +248,7 @@ export function TemplateMarketplace() {
                         key={template.id}
                         template={template}
                         onClick={() => handleSelectTemplate(template)}
+                        onUse={() => handleSelectTemplate(template)}
                       />
                     ))}
                 </div>
@@ -259,7 +258,7 @@ export function TemplateMarketplace() {
         </DialogContent>
       </Dialog>
 
-      <TemplateEditor onSave={fetchAll} />
+      <TemplateEditor onSave={refreshTemplates} />
     </>
   );
 }

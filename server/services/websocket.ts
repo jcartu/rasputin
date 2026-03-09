@@ -15,7 +15,16 @@ import {
   type ToolResult,
   MAX_TOOL_DURATION_MS,
 } from "./jarvis/orchestrator";
-import { executeTool, synthesisProgressEmitter, type SynthesisProgressEvent } from "./jarvis/tools";
+import {
+  executeTool,
+  synthesisProgressEmitter,
+  type SynthesisProgressEvent,
+} from "./jarvis/tools";
+import {
+  runManusOrchestrator,
+  type ManusToolCall,
+  type ManusToolResult,
+} from "./manus/orchestrator";
 
 function withTimeout<T>(
   promise: Promise<T>,
@@ -104,12 +113,21 @@ interface JarvisRequest {
   maxIterations?: number;
 }
 
+interface ManusRequest {
+  task: string;
+  sessionId: string;
+  userId: number;
+  maxIterations?: number;
+}
+
 interface ClientToServerEvents {
   "query:start": (data: QueryRequest) => void;
   "query:cancel": (data: { chatId: number }) => void;
   "jarvis:start": (data: JarvisRequest) => void;
   "jarvis:cancel": (data: { taskId?: number }) => void;
   "jarvis:rejoin": (data: { userId: number }) => void;
+  "manus:start": (data: ManusRequest) => void;
+  "manus:cancel": (data: { sessionId: string }) => void;
 }
 
 interface ServerToClientEvents {
@@ -356,6 +374,60 @@ interface ServerToClientEvents {
     message: string;
     timestamp: number;
   }) => void;
+  "manus:thinking": (data: {
+    sessionId: string;
+    content: string;
+    timestamp: number;
+  }) => void;
+  "manus:tool_start": (data: {
+    sessionId: string;
+    toolName: string;
+    input: Record<string, unknown>;
+    timestamp: number;
+  }) => void;
+  "manus:tool_end": (data: {
+    sessionId: string;
+    toolName: string;
+    output: string;
+    isError: boolean;
+    timestamp: number;
+  }) => void;
+  "manus:screenshot": (data: {
+    sessionId: string;
+    screenshot: string;
+    url: string;
+    timestamp: number;
+  }) => void;
+  "manus:terminal": (data: {
+    sessionId: string;
+    output: string;
+    isError: boolean;
+    timestamp: number;
+  }) => void;
+  "manus:file": (data: {
+    sessionId: string;
+    operation: string;
+    path: string;
+    content?: string;
+    timestamp: number;
+  }) => void;
+  "manus:iteration": (data: {
+    sessionId: string;
+    iteration: number;
+    maxIterations: number;
+    timestamp: number;
+  }) => void;
+  "manus:complete": (data: {
+    sessionId: string;
+    summary: string;
+    success: boolean;
+    timestamp: number;
+  }) => void;
+  "manus:error": (data: {
+    sessionId: string;
+    error: string;
+    timestamp: number;
+  }) => void;
   error: (data: { message: string; code?: string }) => void;
 }
 
@@ -535,6 +607,32 @@ export function initializeWebSocket(httpServer: HttpServer): Server {
             startedAt: activeState.startedAt,
           });
         }
+      });
+
+      socket.on("manus:start", async (data: ManusRequest) => {
+        const queryKey = `manus-${socket.id}-${data.sessionId}`;
+        activeQueries.set(queryKey, { cancelled: false });
+
+        try {
+          await handleManusTask(socket, data, queryKey);
+        } catch (error) {
+          console.error("[WebSocket] Manus error:", error);
+          socket.emit("manus:error", {
+            sessionId: data.sessionId,
+            error: error instanceof Error ? error.message : "Unknown error",
+            timestamp: Date.now(),
+          });
+        } finally {
+          activeQueries.delete(queryKey);
+        }
+      });
+
+      socket.on("manus:cancel", (data: { sessionId: string }) => {
+        activeQueries.forEach((query, key) => {
+          if (key.includes(data.sessionId)) {
+            query.cancelled = true;
+          }
+        });
       });
 
       socket.on("disconnect", () => {
@@ -1199,6 +1297,126 @@ async function handleJarvisTask(
       source: "jarvis",
       taskId,
       priority: "high",
+    });
+  }
+}
+
+async function handleManusTask(
+  socket: Socket<ClientToServerEvents, ServerToClientEvents>,
+  data: ManusRequest,
+  queryKey: string
+): Promise<void> {
+  const { task, sessionId, userId } = data;
+
+  console.log(`[Manus WS] Starting task for session ${sessionId}`);
+
+  try {
+    await runManusOrchestrator(
+      task,
+      {
+        onThinking: (content: string) => {
+          if (activeQueries.get(queryKey)?.cancelled) return;
+          socket.emit("manus:thinking", {
+            sessionId,
+            content,
+            timestamp: Date.now(),
+          });
+        },
+        onThinkingChunk: (chunk: string) => {
+          if (activeQueries.get(queryKey)?.cancelled) return;
+          socket.emit("manus:thinking", {
+            sessionId,
+            content: chunk,
+            timestamp: Date.now(),
+          });
+        },
+        onToolCall: (toolCall: ManusToolCall) => {
+          if (activeQueries.get(queryKey)?.cancelled) return;
+          socket.emit("manus:tool_start", {
+            sessionId,
+            toolName: toolCall.name,
+            input: toolCall.input,
+            timestamp: Date.now(),
+          });
+        },
+        onToolResult: (result: ManusToolResult) => {
+          if (activeQueries.get(queryKey)?.cancelled) return;
+          socket.emit("manus:tool_end", {
+            sessionId,
+            toolName: "",
+            output: result.output,
+            isError: result.isError,
+            timestamp: Date.now(),
+          });
+        },
+        onScreenshot: (base64: string, url: string) => {
+          if (activeQueries.get(queryKey)?.cancelled) return;
+          socket.emit("manus:screenshot", {
+            sessionId,
+            screenshot: base64,
+            url,
+            timestamp: Date.now(),
+          });
+        },
+        onTerminalOutput: (output: string, isError: boolean) => {
+          if (activeQueries.get(queryKey)?.cancelled) return;
+          socket.emit("manus:terminal", {
+            sessionId,
+            output,
+            isError,
+            timestamp: Date.now(),
+          });
+        },
+        onFileOperation: (
+          operation: string,
+          path: string,
+          content?: string
+        ) => {
+          if (activeQueries.get(queryKey)?.cancelled) return;
+          socket.emit("manus:file", {
+            sessionId,
+            operation,
+            path,
+            content,
+            timestamp: Date.now(),
+          });
+        },
+        onComplete: (summary: string) => {
+          socket.emit("manus:complete", {
+            sessionId,
+            summary,
+            success: true,
+            timestamp: Date.now(),
+          });
+        },
+        onError: (error: string) => {
+          socket.emit("manus:error", {
+            sessionId,
+            error,
+            timestamp: Date.now(),
+          });
+        },
+        onIteration: (iteration: number, maxIterations: number) => {
+          if (activeQueries.get(queryKey)?.cancelled) return;
+          socket.emit("manus:iteration", {
+            sessionId,
+            iteration,
+            maxIterations,
+            timestamp: Date.now(),
+          });
+        },
+      },
+      {
+        maxIterations: data.maxIterations,
+      }
+    );
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error("[Manus WS] Error:", errorMsg);
+    socket.emit("manus:error", {
+      sessionId,
+      error: errorMsg,
+      timestamp: Date.now(),
     });
   }
 }

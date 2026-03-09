@@ -138,24 +138,7 @@ export function streamToOpenClaw(message) {
 }
 
 export async function checkConnection() {
-  return new Promise((resolve) => {
-    const client = new net.Socket();
-    const timeout = setTimeout(() => {
-      client.destroy();
-      resolve({ connected: false, error: 'Connection timeout' });
-    }, 5000);
-
-    client.connect(OPENCLAW_PORT, OPENCLAW_HOST, () => {
-      clearTimeout(timeout);
-      client.destroy();
-      resolve({ connected: true, host: OPENCLAW_HOST, port: OPENCLAW_PORT });
-    });
-
-    client.on('error', (err) => {
-      clearTimeout(timeout);
-      resolve({ connected: false, error: err.message });
-    });
-  });
+  return { connected: false, error: 'TCP bridge disabled — using vLLM directly' };
 }
 
 export default { 

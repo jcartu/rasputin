@@ -4,6 +4,8 @@ export { ShortcutsHelp } from './ShortcutsHelp';
 export { KeyboardShortcutsProvider } from './KeyboardShortcutsProvider';
 export { MarkdownRenderer } from './MarkdownRenderer';
 export { MarkdownEditor } from './MarkdownEditor';
+export { BrowserFrame } from './BrowserFrame';
 export { MobileProvider, useMobileContext } from './MobileProvider';
 export { I18nProvider } from './I18nProvider';
 export { AccessibilityProvider } from './AccessibilityProvider';
+export { SlideViewer } from './SlideViewer';

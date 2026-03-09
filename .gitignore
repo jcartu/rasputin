@@ -108,3 +108,4 @@ temp/
 
 # Generated test outputs
 public/generated/
+.vercel

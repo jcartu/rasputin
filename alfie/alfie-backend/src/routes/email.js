@@ -26,7 +26,7 @@ router.get('/api/email/providers', (req, res) => {
 router.post('/api/email/oauth/authorize', (req, res) => {
   try {
     const { provider, redirectUri } = req.body;
-    const userId = req.user?.id || req.body.userId || 'default';
+    const userId = req.auth?.user?.id || req.body.userId || 'default';
 
     if (!provider || !redirectUri) {
       return res.status(400).json({ error: 'provider and redirectUri required' });
@@ -64,7 +64,7 @@ router.post('/api/email/oauth/callback', async (req, res) => {
  */
 router.post('/api/email/imap/connect', async (req, res) => {
   try {
-    const userId = req.user?.id || req.body.userId || 'default';
+    const userId = req.auth?.user?.id || req.body.userId || 'default';
     const { email, password, imapHost, imapPort, smtpHost, smtpPort, useTls } = req.body;
 
     if (!email || !password || !imapHost) {
@@ -86,7 +86,7 @@ router.post('/api/email/imap/connect', async (req, res) => {
  */
 router.get('/api/email/accounts', (req, res) => {
   try {
-    const userId = req.user?.id || req.query.userId || 'default';
+    const userId = req.auth?.user?.id || req.query.userId || 'default';
     const accounts = emailService.getAccounts(userId);
     res.json({ accounts });
   } catch (error) {

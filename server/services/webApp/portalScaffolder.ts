@@ -1132,10 +1132,11 @@ export function getHomeCountry(locale: Locale): CountryCode {
 }
 
 export function getCountryName(code: CountryCode, locale: Locale): string {
-  const info = COUNTRY_INFO[code];
-  if (!info) return code;
-  if (locale !== "en" && info.nativeName) return info.nativeName;
-  return info.name;
+  const names: Record<string, Record<string, string>> = {
+    CN: { zh: '中国', ru: 'Китай', en: 'China' },
+    RU: { zh: '俄罗斯', ru: 'Россия', en: 'Russia' },
+  };
+  return names[code]?.[locale] || names[code]?.en || code;
 }
 `;
 }
@@ -1356,169 +1357,175 @@ function generateMessages(
         "Clean Energy & Environment": "Чистая энергетика и экология",
         "Aerospace & Satellite": "Аэрокосмическая отрасль",
         "Tourism & Entertainment": "Туризм и развлечения",
-        "Infrastructure": "Инфраструктура",
+        Infrastructure: "Инфраструктура",
         "International Trade": "Международная торговля",
         "Export Trade": "Экспортная торговля",
-        "Technology": "Технологии",
-        "Finance": "Финансы",
-        "Manufacturing": "Производство",
-        "Automotive": "Автомобилестроение",
-        "Electronics": "Электроника",
-        "Semiconductors": "Полупроводники",
+        Technology: "Технологии",
+        Finance: "Финансы",
+        Manufacturing: "Производство",
+        Automotive: "Автомобилестроение",
+        Electronics: "Электроника",
+        Semiconductors: "Полупроводники",
         "Real Estate": "Недвижимость",
-        "Tourism": "Туризм",
-        "Retail": "Розничная торговля",
-        "Healthcare": "Здравоохранение",
-        "Energy": "Энергетика",
-        "Mining": "Горнодобыча",
-        "Agriculture": "Сельское хозяйство",
-        "Logistics": "Логистика",
-        "Fintech": "Финтех",
+        Tourism: "Туризм",
+        Retail: "Розничная торговля",
+        Healthcare: "Здравоохранение",
+        Energy: "Энергетика",
+        Mining: "Горнодобыча",
+        Agriculture: "Сельское хозяйство",
+        Logistics: "Логистика",
+        Fintech: "Финтех",
         "VR/AR": "Виртуальная/дополненная реальность",
-        "Materials": "Материалы",
-        "Petrochemicals": "Нефтехимия",
-        "Aviation": "Авиация",
-        "Shipbuilding": "Судостроение",
-        "Food": "Пищевая промышленность",
-        "Textiles": "Текстиль",
-        "Chemicals": "Химическая промышленность",
-        "Steel": "Сталелитейная промышленность",
-        "Trade": "Торговля",
-        "Sports": "Спорт",
-        "Education": "Образование",
-        "Tech": "Технологии",
-        "Cloud": "Облачные технологии",
-        "Port": "Портовая деятельность",
-        "Hydrogen": "Водородная энергетика",
-        "VR": "Виртуальная реальность",
+        Materials: "Материалы",
+        Petrochemicals: "Нефтехимия",
+        Aviation: "Авиация",
+        Shipbuilding: "Судостроение",
+        Food: "Пищевая промышленность",
+        Textiles: "Текстиль",
+        Chemicals: "Химическая промышленность",
+        Steel: "Сталелитейная промышленность",
+        Trade: "Торговля",
+        Sports: "Спорт",
+        Education: "Образование",
+        Tech: "Технологии",
+        Cloud: "Облачные технологии",
+        Port: "Портовая деятельность",
+        Hydrogen: "Водородная энергетика",
+        VR: "Виртуальная реальность",
         "E-commerce": "Электронная коммерция",
-        "AI": "ИИ",
-        "Biotech": "Биотехнологии",
-        "Battery": "Батареи",
-        "Software": "Программное обеспечение",
-        "Gaming": "Игры",
+        AI: "ИИ",
+        Biotech: "Биотехнологии",
+        Battery: "Батареи",
+        Software: "Программное обеспечение",
+        Gaming: "Игры",
         "Rail Transport": "Железнодорожный транспорт",
-        "Rail": "Железные дороги",
-        "Transport": "Транспорт",
-        "Machinery": "Машиностроение",
-        "Entertainment": "Развлечения",
+        Rail: "Железные дороги",
+        Transport: "Транспорт",
+        Machinery: "Машиностроение",
+        "Heavy Machinery": "Тяжёлое машиностроение",
+        "Steel Processing": "Переработка стали",
+        Metallurgy: "Металлургия",
+        Entertainment: "Развлечения",
         "Cold Chain": "Холодовая цепь",
-        "AgTech": "Агротехнологии",
-        "Optoelectronics": "Оптоэлектроника",
-        "EV": "Электромобили",
+        AgTech: "Агротехнологии",
+        Optoelectronics: "Оптоэлектроника",
+        EV: "Электромобили",
         "Oil & Gas": "Нефть и газ",
-        "IT": "ИТ",
-        "Fishing": "Рыболовство",
-        "LNG": "СПГ",
-        "Space": "Космос",
-        "Diamonds": "Алмазы",
-        "Timber": "Древесина",
-        "Gold": "Золото",
+        IT: "ИТ",
+        Fishing: "Рыболовство",
+        LNG: "СПГ",
+        Space: "Космос",
+        Diamonds: "Алмазы",
+        Timber: "Древесина",
+        Gold: "Золото",
       },
       industries: {
         "Artificial Intelligence": "Искусственный интеллект",
-        "Fintech": "Финтех",
+        Fintech: "Финтех",
         "Biotech & Pharmaceuticals": "Биотехнологии и фармацевтика",
         "New Energy Vehicles": "Электротранспорт",
         "Digital Economy": "Цифровая экономика",
-        "Technology": "Технологии",
-        "Finance": "Финансы",
+        Technology: "Технологии",
+        Finance: "Финансы",
         "Government Services": "Государственные услуги",
-        "Healthcare": "Здравоохранение",
+        Healthcare: "Здравоохранение",
         "International Trade": "Международная торговля",
-        "Manufacturing": "Производство",
-        "Electronics": "Электроника",
+        Manufacturing: "Производство",
+        Electronics: "Электроника",
         "Export Trade": "Экспортная торговля",
-        "Textiles": "Текстиль",
-        "Chemicals": "Химическая промышленность",
-        "Petrochemicals": "Нефтехимия",
-        "Agriculture": "Сельское хозяйство",
+        Textiles: "Текстиль",
+        Chemicals: "Химическая промышленность",
+        Petrochemicals: "Нефтехимия",
+        Agriculture: "Сельское хозяйство",
         "Heavy Industry": "Тяжёлая промышленность",
         "E-commerce": "Электронная коммерция",
         "Food Processing": "Пищевая промышленность",
-        "Logistics": "Логистика",
-        "Aerospace": "Аэрокосмическая отрасль",
-        "Automotive": "Автомобилестроение",
-        "Steel": "Сталь",
-        "Optoelectronics": "Оптоэлектроника",
+        Logistics: "Логистика",
+        Aerospace: "Аэрокосмическая отрасль",
+        Automotive: "Автомобилестроение",
+        Steel: "Сталь",
+        Optoelectronics: "Оптоэлектроника",
         "Construction Equipment": "Строительная техника",
-        "Machinery": "Машиностроение",
+        Machinery: "Машиностроение",
+        "Heavy Machinery": "Тяжёлое машиностроение",
+        "Steel Processing": "Переработка стали",
+        Metallurgy: "Металлургия",
         "New Materials": "Новые материалы",
-        "Aviation": "Авиация",
+        Aviation: "Авиация",
         "Rare Earths": "Редкоземельные элементы",
-        "Pharmaceuticals": "Фармацевтика",
-        "Tourism": "Туризм",
-        "Mining": "Горнодобыча",
-        "Hydropower": "Гидроэнергетика",
+        Pharmaceuticals: "Фармацевтика",
+        Tourism: "Туризм",
+        Mining: "Горнодобыча",
+        Hydropower: "Гидроэнергетика",
         "Sugar Processing": "Сахарная промышленность",
         "Nonferrous Metals": "Цветные металлы",
         "ASEAN Trade": "Торговля с АСЕАН",
         "Coal Mining": "Угольная добыча",
         "New Energy": "Новая энергетика",
-        "Energy": "Энергетика",
+        Energy: "Энергетика",
         "Dairy & Agriculture": "Молочная и сельскохозяйственная отрасль",
         "Border Trade": "Приграничная торговля",
         "Big Data": "Большие данные",
-        "Liquor": "Алкогольная промышленность",
+        Liquor: "Алкогольная промышленность",
         "Oil & Gas": "Нефть и газ",
-        "Cotton": "Хлопок",
-        "Shipping": "Судоходство",
-        "Forestry": "Лесная промышленность",
+        Cotton: "Хлопок",
+        Shipping: "Судоходство",
+        Forestry: "Лесная промышленность",
         "Free Trade Port": "Свободный порт",
         "Marine Industry": "Морская промышленность",
         "Tropical Agriculture": "Тропическое сельское хозяйство",
         "Coal Chemicals": "Углехимия",
-        "Wine": "Виноделие",
+        Wine: "Виноделие",
         "Halal Food": "Халяльная еда",
         "Salt Lake Resources": "Ресурсы солёных озёр",
         "Traditional Crafts": "Традиционные ремёсла",
         "Professional Services": "Профессиональные услуги",
-        "Gaming": "Игорный бизнес",
-        "Services": "Услуги",
-        "Trade": "Торговля",
-        "IT": "ИТ",
-        "Shipbuilding": "Судостроение",
-        "Fishing": "Рыболовство",
-        "Export": "Экспорт",
-        "Government": "Государственное управление",
-        "Defense": "Оборонная промышленность",
+        Gaming: "Игорный бизнес",
+        Services: "Услуги",
+        Trade: "Торговля",
+        IT: "ИТ",
+        Shipbuilding: "Судостроение",
+        Fishing: "Рыболовство",
+        Export: "Экспорт",
+        Government: "Государственное управление",
+        Defense: "Оборонная промышленность",
         "Construction Machinery": "Строительная техника",
         "Culture Media": "СМИ и культура",
         "Maritime Trade": "Морская торговля",
         "Home Appliances": "Бытовая техника",
-        "AI": "ИИ",
+        AI: "ИИ",
         "Equipment Manufacturing": "Производство оборудования",
-        "Media": "Медиа",
-        "LNG": "СПГ",
+        Media: "Медиа",
+        LNG: "СПГ",
         "Reindeer Herding": "Оленеводство",
-        "Construction": "Строительство",
+        Construction: "Строительство",
         "Gold Mining": "Золотодобыча",
-        "Gold": "Золото",
-        "Coal": "Уголь",
-        "Nuclear": "Атомная промышленность",
-        "Space": "Космическая отрасль",
-        "Rail": "Железнодорожная отрасль",
-        "Biotechnology": "Биотехнологии",
+        Gold: "Золото",
+        Coal: "Уголь",
+        Nuclear: "Атомная промышленность",
+        Space: "Космическая отрасль",
+        Rail: "Железнодорожная отрасль",
+        Biotechnology: "Биотехнологии",
         "Arms Manufacturing": "Производство вооружений",
         "Electrical Equipment": "Электрооборудование",
-        "Cables": "Кабельная продукция",
-        "Lighting": "Светотехника",
-        "Amber": "Янтарь",
-        "Paper": "Целлюлозно-бумажная",
-        "Glass": "Стекольная промышленность",
-        "Printing": "Полиграфия",
-        "Tires": "Шинное производство",
+        Cables: "Кабельная продукция",
+        Lighting: "Светотехника",
+        Amber: "Янтарь",
+        Paper: "Целлюлозно-бумажная",
+        Glass: "Стекольная промышленность",
+        Printing: "Полиграфия",
+        Tires: "Шинное производство",
         "Rail Equipment": "Железнодорожное оборудование",
-        "Dairy": "Молочная отрасль",
-        "Diamonds": "Алмазы",
-        "Jewelry": "Ювелирное дело",
-        "Aluminum": "Алюминий",
-        "Geothermal": "Геотермальная энергия",
+        Dairy: "Молочная отрасль",
+        Diamonds: "Алмазы",
+        Jewelry: "Ювелирное дело",
+        Aluminum: "Алюминий",
+        Geothermal: "Геотермальная энергия",
         "Oil Refining": "Нефтепереработка",
-        "Science": "Наука",
-        "Education": "Образование",
-        "Pharma": "Фармацевтика",
-        "Biomedicine": "Биомедицина",
+        Science: "Наука",
+        Education: "Образование",
+        Pharma: "Фармацевтика",
+        Biomedicine: "Биомедицина",
         "Cross-border Trade": "Трансграничная торговля",
         "Fashion & Textiles": "Мода и текстиль",
         "Smart Manufacturing": "Умное производство",
@@ -1528,12 +1535,12 @@ function generateMessages(
         "Steel & Materials": "Сталь и материалы",
         "Rail Transport": "Железнодорожный транспорт",
         "Media & Entertainment": "Медиа и развлечения",
-        "Biomass": "Биомасса",
+        Biomass: "Биомасса",
         "IT Services": "ИТ-услуги",
         "Real Estate": "Недвижимость",
         "Consumer Goods": "Потребительские товары",
         "Venture Capital": "Венчурный капитал",
-        "Software": "Программное обеспечение",
+        Software: "Программное обеспечение",
         "Government & Business": "Государственное управление и бизнес",
         "Natural Gas": "Природный газ",
       },
@@ -1551,27 +1558,27 @@ function generateMessages(
         "EV & Technology": "Электромобили и технологии",
         "Social Media": "Социальные сети",
         "E-commerce & Cloud": "Электронная коммерция и облачные услуги",
-        "Automotive": "Автомобилестроение",
-        "Technology": "Технологии",
+        Automotive: "Автомобилестроение",
+        Technology: "Технологии",
         "E-commerce": "Электронная коммерция",
-        "Finance": "Финансы",
-        "Retail": "Розничная торговля",
-        "Manufacturing": "Производство",
-        "Entertainment": "Развлечения",
-        "Mining": "Горнодобыча",
-        "Steel": "Сталь",
+        Finance: "Финансы",
+        Retail: "Розничная торговля",
+        Manufacturing: "Производство",
+        Entertainment: "Развлечения",
+        Mining: "Горнодобыча",
+        Steel: "Сталь",
         "Oil & Gas": "Нефть и газ",
-        "Chemicals": "Химическая промышленность",
+        Chemicals: "Химическая промышленность",
         "Food & Beverage": "Продукты питания и напитки",
-        "Agriculture": "Сельское хозяйство",
-        "Electronics": "Электроника",
+        Agriculture: "Сельское хозяйство",
+        Electronics: "Электроника",
         "Mining & Metals": "Горнодобыча и металлургия",
         "Natural Gas": "Природный газ",
         "Venture Capital": "Венчурный капитал",
-        "Software": "Программное обеспечение",
+        Software: "Программное обеспечение",
         "Government & Business": "Государственное управление и бизнес",
-        "Petrochemicals": "Нефтехимия",
-        "Energy": "Энергетика",
+        Petrochemicals: "Нефтехимия",
+        Energy: "Энергетика",
       },
     },
     zh: {
@@ -1752,169 +1759,175 @@ function generateMessages(
         "Clean Energy & Environment": "清洁能源与环保",
         "Aerospace & Satellite": "航空航天与卫星",
         "Tourism & Entertainment": "旅游与娱乐",
-        "Infrastructure": "基础设施",
+        Infrastructure: "基础设施",
         "International Trade": "国际贸易",
         "Export Trade": "出口贸易",
-        "Technology": "科技",
-        "Finance": "金融",
-        "Manufacturing": "制造业",
-        "Automotive": "汽车",
-        "Electronics": "电子",
-        "Semiconductors": "半导体",
+        Technology: "科技",
+        Finance: "金融",
+        Manufacturing: "制造业",
+        Automotive: "汽车",
+        Electronics: "电子",
+        Semiconductors: "半导体",
         "Real Estate": "房地产",
-        "Tourism": "旅游",
-        "Retail": "零售",
-        "Healthcare": "医疗健康",
-        "Energy": "能源",
-        "Mining": "采矿",
-        "Agriculture": "农业",
-        "Logistics": "物流",
-        "Fintech": "金融科技",
+        Tourism: "旅游",
+        Retail: "零售",
+        Healthcare: "医疗健康",
+        Energy: "能源",
+        Mining: "采矿",
+        Agriculture: "农业",
+        Logistics: "物流",
+        Fintech: "金融科技",
         "VR/AR": "虚拟现实/增强现实",
-        "Materials": "材料",
-        "Petrochemicals": "石化",
-        "Aviation": "航空",
-        "Shipbuilding": "造船",
-        "Food": "食品",
-        "Textiles": "纺织",
-        "Chemicals": "化工",
-        "Steel": "钢铁",
-        "Trade": "贸易",
-        "Sports": "体育",
-        "Education": "教育",
-        "Tech": "科技",
-        "Cloud": "云计算",
-        "Port": "港口",
-        "Hydrogen": "氢能",
-        "VR": "虚拟现实",
+        Materials: "材料",
+        Petrochemicals: "石化",
+        Aviation: "航空",
+        Shipbuilding: "造船",
+        Food: "食品",
+        Textiles: "纺织",
+        Chemicals: "化工",
+        Steel: "钢铁",
+        Trade: "贸易",
+        Sports: "体育",
+        Education: "教育",
+        Tech: "科技",
+        Cloud: "云计算",
+        Port: "港口",
+        Hydrogen: "氢能",
+        VR: "虚拟现实",
         "E-commerce": "电子商务",
-        "AI": "人工智能",
-        "Biotech": "生物技术",
-        "Battery": "电池",
-        "Software": "软件",
-        "Gaming": "游戏",
+        AI: "人工智能",
+        Biotech: "生物技术",
+        Battery: "电池",
+        Software: "软件",
+        Gaming: "游戏",
         "Rail Transport": "铁路运输",
-        "Rail": "铁路",
-        "Transport": "运输",
-        "Machinery": "机械",
-        "Entertainment": "娱乐",
+        Rail: "铁路",
+        Transport: "运输",
+        Machinery: "机械",
+        "Heavy Machinery": "重型机械",
+        "Steel Processing": "钢铁加工",
+        Metallurgy: "冶金",
+        Entertainment: "娱乐",
         "Cold Chain": "冷链",
-        "AgTech": "农业科技",
-        "Optoelectronics": "光电子",
-        "EV": "电动汽车",
+        AgTech: "农业科技",
+        Optoelectronics: "光电子",
+        EV: "电动汽车",
         "Oil & Gas": "油气",
-        "IT": "信息技术",
-        "Fishing": "渔业",
-        "LNG": "液化天然气",
-        "Space": "航天",
-        "Diamonds": "钻石",
-        "Timber": "木材",
-        "Gold": "黄金",
+        IT: "信息技术",
+        Fishing: "渔业",
+        LNG: "液化天然气",
+        Space: "航天",
+        Diamonds: "钻石",
+        Timber: "木材",
+        Gold: "黄金",
       },
       industries: {
         "Artificial Intelligence": "人工智能",
-        "Fintech": "金融科技",
+        Fintech: "金融科技",
         "Biotech & Pharmaceuticals": "生物技术与医药",
         "New Energy Vehicles": "新能源汽车",
         "Digital Economy": "数字经济",
-        "Technology": "科技",
-        "Finance": "金融",
+        Technology: "科技",
+        Finance: "金融",
         "Government Services": "政府服务",
-        "Healthcare": "医疗",
+        Healthcare: "医疗",
         "International Trade": "国际贸易",
-        "Manufacturing": "制造业",
-        "Electronics": "电子",
+        Manufacturing: "制造业",
+        Electronics: "电子",
         "Export Trade": "出口贸易",
-        "Textiles": "纺织",
-        "Chemicals": "化工",
-        "Petrochemicals": "石化",
-        "Agriculture": "农业",
+        Textiles: "纺织",
+        Chemicals: "化工",
+        Petrochemicals: "石化",
+        Agriculture: "农业",
         "Heavy Industry": "重工业",
         "E-commerce": "电子商务",
         "Food Processing": "食品加工",
-        "Logistics": "物流",
-        "Aerospace": "航空航天",
-        "Automotive": "汽车",
-        "Steel": "钢铁",
-        "Optoelectronics": "光电子",
+        Logistics: "物流",
+        Aerospace: "航空航天",
+        Automotive: "汽车",
+        Steel: "钢铁",
+        Optoelectronics: "光电子",
         "Construction Equipment": "工程机械",
-        "Machinery": "机械",
+        Machinery: "机械",
+        "Heavy Machinery": "重型机械",
+        "Steel Processing": "钢铁加工",
+        Metallurgy: "冶金",
         "New Materials": "新材料",
-        "Aviation": "航空",
+        Aviation: "航空",
         "Rare Earths": "稀土",
-        "Pharmaceuticals": "医药",
-        "Tourism": "旅游",
-        "Mining": "采矿",
-        "Hydropower": "水电",
+        Pharmaceuticals: "医药",
+        Tourism: "旅游",
+        Mining: "采矿",
+        Hydropower: "水电",
         "Sugar Processing": "制糖",
         "Nonferrous Metals": "有色金属",
         "ASEAN Trade": "东盟贸易",
         "Coal Mining": "煤炭开采",
         "New Energy": "新能源",
-        "Energy": "能源",
+        Energy: "能源",
         "Dairy & Agriculture": "乳业与农业",
         "Border Trade": "边境贸易",
         "Big Data": "大数据",
-        "Liquor": "白酒",
+        Liquor: "白酒",
         "Oil & Gas": "油气",
-        "Cotton": "棉花",
-        "Shipping": "航运",
-        "Forestry": "林业",
+        Cotton: "棉花",
+        Shipping: "航运",
+        Forestry: "林业",
         "Free Trade Port": "自由贸易港",
         "Marine Industry": "海洋产业",
         "Tropical Agriculture": "热带农业",
         "Coal Chemicals": "煤化工",
-        "Wine": "葡萄酒",
+        Wine: "葡萄酒",
         "Halal Food": "清真食品",
         "Salt Lake Resources": "盐湖资源",
         "Traditional Crafts": "传统工艺",
         "Professional Services": "专业服务",
-        "Gaming": "博彩",
-        "Services": "服务业",
-        "Trade": "贸易",
-        "IT": "信息技术",
-        "Shipbuilding": "造船",
-        "Fishing": "渔业",
-        "Export": "出口",
-        "Government": "政府",
-        "Defense": "国防工业",
+        Gaming: "博彩",
+        Services: "服务业",
+        Trade: "贸易",
+        IT: "信息技术",
+        Shipbuilding: "造船",
+        Fishing: "渔业",
+        Export: "出口",
+        Government: "政府",
+        Defense: "国防工业",
         "Construction Machinery": "工程机械",
         "Culture Media": "文化传媒",
         "Maritime Trade": "海上贸易",
         "Home Appliances": "家电",
-        "AI": "人工智能",
+        AI: "人工智能",
         "Equipment Manufacturing": "设备制造",
-        "Media": "媒体",
-        "LNG": "液化天然气",
+        Media: "媒体",
+        LNG: "液化天然气",
         "Reindeer Herding": "驯鹿养殖",
-        "Construction": "建筑",
+        Construction: "建筑",
         "Gold Mining": "金矿开采",
-        "Gold": "黄金",
-        "Coal": "煤炭",
-        "Nuclear": "核工业",
-        "Space": "航天",
-        "Rail": "铁路",
-        "Biotechnology": "生物技术",
+        Gold: "黄金",
+        Coal: "煤炭",
+        Nuclear: "核工业",
+        Space: "航天",
+        Rail: "铁路",
+        Biotechnology: "生物技术",
         "Arms Manufacturing": "武器制造",
         "Electrical Equipment": "电气设备",
-        "Cables": "电缆",
-        "Lighting": "照明",
-        "Amber": "琥珀",
-        "Paper": "造纸",
-        "Glass": "玻璃",
-        "Printing": "印刷",
-        "Tires": "轮胎",
+        Cables: "电缆",
+        Lighting: "照明",
+        Amber: "琥珀",
+        Paper: "造纸",
+        Glass: "玻璃",
+        Printing: "印刷",
+        Tires: "轮胎",
         "Rail Equipment": "铁路设备",
-        "Dairy": "乳业",
-        "Diamonds": "钻石",
-        "Jewelry": "珠宝",
-        "Aluminum": "铝",
-        "Geothermal": "地热",
+        Dairy: "乳业",
+        Diamonds: "钻石",
+        Jewelry: "珠宝",
+        Aluminum: "铝",
+        Geothermal: "地热",
         "Oil Refining": "石油精炼",
-        "Science": "科学",
-        "Education": "教育",
-        "Pharma": "制药",
-        "Biomedicine": "生物医药",
+        Science: "科学",
+        Education: "教育",
+        Pharma: "制药",
+        Biomedicine: "生物医药",
         "Cross-border Trade": "跨境贸易",
         "Fashion & Textiles": "时尚与纺织",
         "Smart Manufacturing": "智能制造",
@@ -1924,13 +1937,13 @@ function generateMessages(
         "Steel & Materials": "钢铁与材料",
         "Rail Transport": "铁路运输",
         "Media & Entertainment": "传媒与娱乐",
-        "Biomass": "生物质能",
-        "Food": "食品",
+        Biomass: "生物质能",
+        Food: "食品",
         "IT Services": "信息技术服务",
         "Real Estate": "房地产",
         "Consumer Goods": "消费品",
         "Venture Capital": "风险投资",
-        "Software": "软件",
+        Software: "软件",
         "Government & Business": "政府与商业",
         "Natural Gas": "天然气",
       },
@@ -1948,27 +1961,27 @@ function generateMessages(
         "EV & Technology": "电动汽车与科技",
         "Social Media": "社交媒体",
         "E-commerce & Cloud": "电子商务与云服务",
-        "Automotive": "汽车",
-        "Technology": "科技",
+        Automotive: "汽车",
+        Technology: "科技",
         "E-commerce": "电子商务",
-        "Finance": "金融",
-        "Retail": "零售",
-        "Manufacturing": "制造业",
-        "Entertainment": "娱乐",
-        "Mining": "采矿",
-        "Steel": "钢铁",
+        Finance: "金融",
+        Retail: "零售",
+        Manufacturing: "制造业",
+        Entertainment: "娱乐",
+        Mining: "采矿",
+        Steel: "钢铁",
         "Oil & Gas": "油气",
-        "Chemicals": "化工",
+        Chemicals: "化工",
         "Food & Beverage": "食品饮料",
-        "Agriculture": "农业",
-        "Electronics": "电子",
+        Agriculture: "农业",
+        Electronics: "电子",
         "Mining & Metals": "采矿与金属",
         "Natural Gas": "天然气",
         "Venture Capital": "风险投资",
-        "Software": "软件",
+        Software: "软件",
         "Government & Business": "政府与商业",
-        "Petrochemicals": "石化",
-        "Energy": "能源",
+        Petrochemicals: "石化",
+        Energy: "能源",
       },
     },
     en: {
@@ -2659,7 +2672,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslations } from 'next-intl';
-import { getTargetCountry, COUNTRY_INFO } from '@/lib/i18n/config';
+import { getTargetCountry, getCountryName, COUNTRY_INFO } from '@/lib/i18n/config';
 import type { Locale } from '@/lib/i18n/config';
 
 interface GlobeProps {
@@ -3016,7 +3029,7 @@ export function Globe3D({ onRegionClick }: GlobeProps) {
             className="text-3xl font-bold text-white mb-1"
             style={{ textShadow: '0 2px 20px rgba(0,0,0,0.5)' }}
           >
-            {COUNTRY_INFO[targetCountry]?.flag || '🌍'} {COUNTRY_INFO[targetCountry]?.name || targetCountry}
+            {COUNTRY_INFO[targetCountry]?.flag || '🌍'} {getCountryName(targetCountry, locale)}
           </h2>
           <p className="text-slate-400">{t('mapSelectRegion')}</p>
         </motion.div>
@@ -3067,7 +3080,6 @@ const Globe3D = dynamic(() => import('./Globe3D').then(m => m.Globe3D), {
     <div className="w-full h-full flex items-center justify-center bg-gradient-to-b from-slate-900 to-slate-800 rounded-xl">
       <div className="flex flex-col items-center gap-4">
         <div className="animate-spin w-12 h-12 border-4 border-primary border-t-transparent rounded-full" />
-        <p className="text-slate-400 text-sm">Loading interactive map...</p>
       </div>
     </div>
   ),
@@ -3358,7 +3370,7 @@ function generateLawsContent(countryPair: CountryPair): string {
   return `"use client";
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Scale, FileText, Stamp, Building, ExternalLink, ChevronDown, ChevronUp, Calendar, Shield, Briefcase } from 'lucide-react';
 
@@ -3379,7 +3391,9 @@ const sections = [
 
 export function LawsContent() {
   const t = useTranslations('laws');
+  const tGuide = useTranslations('lawsGuide');
   const tc = useTranslations('common');
+  const locale = useLocale();
   const [expandedSection, setExpandedSection] = useState<string | null>('agreements');
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
@@ -3402,10 +3416,10 @@ export function LawsContent() {
         <div className="inline-flex p-4 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 mb-6">
           <Scale className="w-8 h-8 text-white" />
         </div>
-        <h1 className="text-4xl font-bold text-white mb-4">{t('title')}</h1>
-        <p className="text-slate-400 max-w-2xl mx-auto">
-          Comprehensive guide to bilateral agreements, visa requirements, and business entity formation for ${countryAName}-${countryBName} trade.
-        </p>
+         <h1 className="text-4xl font-bold text-white mb-4">{t('title')}</h1>
+         <p className="text-slate-400 max-w-2xl mx-auto">
+           {tGuide('comprehensiveGuide')}
+         </p>
       </motion.div>
 
       <div className="space-y-6">
@@ -3427,7 +3441,7 @@ export function LawsContent() {
                 </div>
                 <div className="text-left">
                   <h3 className="text-xl font-semibold text-white">{t(section.key)}</h3>
-                  <p className="text-slate-400 text-sm">{section.data.length} items</p>
+                  <p className="text-slate-400 text-sm">{section.data.length} {locale === 'ru' ? 'элементов' : '项'}</p>
                 </div>
               </div>
               {expandedSection === section.key ? (
@@ -3461,14 +3475,16 @@ export function LawsContent() {
                         >
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1">
-                              <h4 className="text-lg font-medium text-white">{item.title}</h4>
-                              {'titleLocal' in item && item.titleLocal && (
-                                <p className="text-slate-500 text-sm">{item.titleLocal}</p>
+                              <h4 className="text-lg font-medium text-white">
+                                {'titleLocal' in item && item.titleLocal ? item.titleLocal : item.title}
+                              </h4>
+                              {'titleLocal' in item && item.titleLocal && item.titleLocal !== item.title && (
+                                <p className="text-slate-500 text-sm">{item.title}</p>
                               )}
                               {'date' in item && (
                                 <div className="flex items-center gap-2 text-slate-400 text-sm mt-1">
                                   <Calendar className="w-4 h-4" />
-                                  {new Date(item.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                  {new Date(item.date).toLocaleDateString(locale === 'ru' ? 'ru-RU' : 'zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
                                 </div>
                               )}
                             </div>
@@ -3494,7 +3510,7 @@ export function LawsContent() {
                                 {'requirements' in item && item.requirements && (
                                   <div>
                                     <h5 className="text-sm font-medium text-white mb-2 flex items-center gap-2">
-                                      <Shield className="w-4 h-4" /> Requirements
+                                      <Shield className="w-4 h-4" /> {locale === 'ru' ? 'Требования' : '要求'}
                                     </h5>
                                     <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                       {item.requirements.map((req, i) => (
@@ -3624,7 +3640,7 @@ function generateEventList(countryPair: CountryPair): string {
   return `"use client";
 
 import { useState, useEffect } from 'react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { motion } from 'framer-motion';
 import { Calendar, MapPin, ExternalLink, Clock, CheckCircle } from 'lucide-react';
 import { EventCard } from './EventCard';
@@ -3633,6 +3649,7 @@ const allEvents = ${eventsJson};
 
 export function EventList() {
   const t = useTranslations('calendar');
+  const locale = useLocale();
   const [today, setToday] = useState(new Date());
   
   useEffect(() => {
@@ -3666,7 +3683,7 @@ export function EventList() {
         </div>
         <h1 className="text-4xl font-bold text-white mb-4">{t('title')}</h1>
         <p className="text-slate-400">
-          {today.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          {today.toLocaleDateString(locale === 'ru' ? 'ru-RU' : 'zh-CN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </p>
       </motion.div>
 
@@ -3710,7 +3727,7 @@ function generateEventCard(): string {
 
 import { motion } from 'framer-motion';
 import { Calendar, MapPin, ExternalLink, Clock } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { useParams } from 'next/navigation';
 
 interface Event {
@@ -3780,8 +3797,7 @@ function getRelativeTime(eventDate: Date, endDate: Date | null, today: Date, isP
 
 export function EventCard({ event, index, today, isPast }: EventCardProps) {
   const t = useTranslations('calendarRelative');
-  const params = useParams();
-  const locale = (params.locale as Locale) || 'en';
+  const locale = useLocale() as Locale;
   const countryFlag = event.country === 'CN' ? '🇨🇳' : '🇷🇺';
   const eventDate = new Date(event.date);
   const endDate = event.endDate ? new Date(event.endDate) : null;
@@ -3792,9 +3808,10 @@ export function EventCard({ event, index, today, isPast }: EventCardProps) {
   const location = getLocalizedField(event as unknown as Record<string, unknown>, 'location', locale);
   
   const formatDateRange = () => {
-    const start = eventDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const localeCode = locale === 'ru' ? 'ru-RU' : 'zh-CN';
+    const start = eventDate.toLocaleDateString(localeCode, { month: 'short', day: 'numeric' });
     if (endDate) {
-      const end = endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      const end = endDate.toLocaleDateString(localeCode, { month: 'short', day: 'numeric', year: 'numeric' });
       return \`\${start} - \${end}\`;
     }
     return \`\${start}, \${eventDate.getFullYear()}\`;
@@ -3941,9 +3958,6 @@ export function OrgDirectory() {
                       <h3 className="font-semibold text-white group-hover:text-purple-400 transition-colors">
                         {getLocalizedOrgField(org, 'name', locale as OrgLocale)}
                       </h3>
-                      {org.nameLocal && locale === 'en' && (
-                        <p className="text-sm text-slate-500 mt-1">{org.nameLocal}</p>
-                      )}
                       <p className="text-slate-400 text-sm mt-2">{getLocalizedOrgField(org, 'description', locale as OrgLocale)}</p>
                     </div>
                     <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-purple-400 flex-shrink-0" />
@@ -3982,7 +3996,7 @@ export default function NewsPage() {
 function generateNewsFeed(): string {
   return `"use client";
 
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { motion } from 'framer-motion';
 import { Newspaper, ExternalLink, Clock } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -3998,18 +4012,19 @@ interface NewsItem {
 
 export function NewsFeed() {
   const t = useTranslations('news');
+  const locale = useLocale();
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/rss')
+    fetch(\`/api/rss?locale=\${locale}\`)
       .then(res => res.json())
       .then(data => {
         setNews(data.items || []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [locale]);
 
   return (
     <div>
@@ -4055,7 +4070,7 @@ export function NewsFeed() {
                   <div className="flex items-center gap-4 text-xs text-slate-500">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      {new Date(item.pubDate).toLocaleDateString()}
+                      {new Date(item.pubDate).toLocaleDateString(locale === 'ru' ? 'ru-RU' : 'zh-CN')}
                     </span>
                     <span>{item.source}</span>
                   </div>
@@ -4090,10 +4105,18 @@ export interface RssItem {
 
 const RSS_SOURCES = ${JSON.stringify(sources, null, 2)};
 
-export async function fetchAllFeeds(): Promise<RssItem[]> {
+export async function fetchAllFeeds(locale?: string): Promise<RssItem[]> {
   const items: RssItem[] = [];
 
-  for (const source of RSS_SOURCES) {
+  // Filter sources by language if locale provided
+  const filteredSources = locale 
+    ? RSS_SOURCES.filter(s => s.language === locale)
+    : RSS_SOURCES;
+
+  // If no sources match the locale, fall back to all sources
+  const sourcesToFetch = filteredSources.length > 0 ? filteredSources : RSS_SOURCES;
+
+  for (const source of sourcesToFetch) {
     try {
       const feed = await parser.parseURL(source.url);
       
@@ -4126,9 +4149,11 @@ import { fetchAllFeeds } from '@/lib/rss/parser';
 export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const items = await fetchAllFeeds();
+    const { searchParams } = new URL(request.url);
+    const locale = searchParams.get('locale') || undefined;
+    const items = await fetchAllFeeds(locale);
     return NextResponse.json({ items });
   } catch (error) {
     console.error('RSS fetch error:', error);
@@ -4158,8 +4183,7 @@ ${
   ssr: false,
   loading: () => (
     <div className="w-full h-[600px] flex flex-col items-center justify-center bg-slate-800/30 rounded-2xl border border-slate-700">
-      <div className="animate-spin w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full mb-4" />
-      <p className="text-slate-400 text-sm">Loading interactive map...</p>
+      <div className="animate-spin w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full" />
     </div>
   ),
 });`
@@ -4168,11 +4192,28 @@ ${
 
 export default function InvestPage() {
   const t = useTranslations('invest');
+  const tIndustries = useTranslations('industries');
+  const tUnits = useTranslations('units');
   const locale = useLocale();
   const [searchQuery, setSearchQuery] = useState('');
   
   const regions = locale === 'zh' ? RUSSIA_REGIONS : CHINA_REGIONS;
   const targetCountry = locale === 'zh' ? 'Russia' : 'China';
+  
+  const translateIndustry = (industry: string) => {
+    try {
+      return tIndustries(industry as any) || industry;
+    } catch {
+      return industry;
+    }
+  };
+  
+  const formatMoney = (value: string) => {
+    return value
+      .replace(/Billion/gi, tUnits('billion'))
+      .replace(/Trillion/gi, tUnits('trillion'))
+      .replace(/Million/gi, tUnits('million'));
+  };
   
   // Filter regions based on search
   const filteredRegions = useMemo(() => {
@@ -4181,7 +4222,11 @@ export default function InvestPage() {
     return Object.entries(regions).filter(([key, region]) => 
       key.toLowerCase().includes(query) || 
       region.name.toLowerCase().includes(query) ||
-      region.industries.some(i => i.toLowerCase().includes(query))
+      (region.nameRu && region.nameRu.toLowerCase().includes(query)) ||
+      (region.nameZh && region.nameZh.includes(query)) ||
+      region.industries.some(i => i.toLowerCase().includes(query)) ||
+      (region.industriesRu && region.industriesRu.some(i => i.toLowerCase().includes(query))) ||
+      (region.industriesZh && region.industriesZh.some(i => i.includes(query)))
     );
   }, [regions, searchQuery]);
 
@@ -4246,28 +4291,37 @@ export default function InvestPage() {
             <h2 className="text-xl font-semibold text-white">{t('featuredOpportunities')}</h2>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
-            {featuredOpportunities.map(({ region, opp }) => (
-              <Link
-                key={opp.id}
-                href={\`/\${locale}/invest/\${encodeURIComponent(region)}\`}
-                className="group bg-gradient-to-br from-slate-800/80 to-slate-800/40 rounded-xl p-5 border border-slate-700/50 hover:border-amber-500/50 transition-all hover:shadow-lg hover:shadow-amber-500/10"
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <span className="text-xs px-2 py-1 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">{t('priority')}</span>
-                  <span className="text-xs text-slate-500">{region}</span>
-                </div>
-                <h3 className="font-semibold text-white mb-2 group-hover:text-amber-400 transition-colors">
-                  {locale === 'ru' && opp.titleRu ? opp.titleRu : locale === 'zh' && opp.titleZh ? opp.titleZh : opp.title}
-                </h3>
-                <p className="text-sm text-slate-400 line-clamp-2 mb-3">
-                  {locale === 'ru' && opp.descriptionRu ? opp.descriptionRu : locale === 'zh' && opp.descriptionZh ? opp.descriptionZh : opp.description}
-                </p>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-emerald-400">{opp.investmentRange}</span>
-                  <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-amber-400 transition-colors" />
-                </div>
-              </Link>
-            ))}
+            {featuredOpportunities.map(({ region, opp }) => {
+              const regionData = regions[region];
+              const regionLabel = locale === 'ru'
+                ? (regionData?.nameRu || regionData?.name || region)
+                : locale === 'zh'
+                  ? (regionData?.nameZh || regionData?.name || region)
+                  : regionData?.name || region;
+
+              return (
+                <Link
+                  key={opp.id}
+                  href={\`/\${locale}/invest/\${encodeURIComponent(region)}\`}
+                  className="group bg-gradient-to-br from-slate-800/80 to-slate-800/40 rounded-xl p-5 border border-slate-700/50 hover:border-amber-500/50 transition-all hover:shadow-lg hover:shadow-amber-500/10"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <span className="text-xs px-2 py-1 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">{t('priority')}</span>
+                    <span className="text-xs text-slate-500">{regionLabel}</span>
+                  </div>
+                  <h3 className="font-semibold text-white mb-2 group-hover:text-amber-400 transition-colors">
+                    {locale === 'ru' && opp.titleRu ? opp.titleRu : locale === 'zh' && opp.titleZh ? opp.titleZh : opp.title}
+                  </h3>
+                  <p className="text-sm text-slate-400 line-clamp-2 mb-3">
+                    {locale === 'ru' && opp.descriptionRu ? opp.descriptionRu : locale === 'zh' && opp.descriptionZh ? opp.descriptionZh : opp.description}
+                  </p>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-emerald-400">{formatMoney(opp.investmentRange)}</span>
+                    <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-amber-400 transition-colors" />
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </motion.div>
       )}
@@ -4317,11 +4371,11 @@ export default function InvestPage() {
                 </div>
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-2 text-slate-400">
-                    <span className="font-medium text-emerald-400">{region.gdp}</span>
-                    <span className="text-slate-600">GDP</span>
+                    <span className="font-medium text-emerald-400">{formatMoney(region.gdp)}</span>
+                    <span className="text-slate-600">{t('gdp')}</span>
                   </div>
                   <div className="flex flex-wrap gap-1">
-                    {region.industries.slice(0, 3).map((ind, i) => (
+                    {(locale === 'ru' && region.industriesRu ? region.industriesRu : locale === 'zh' && region.industriesZh ? region.industriesZh : region.industries.map(industry => translateIndustry(industry))).slice(0, 3).map((ind, i) => (
                       <span key={i} className="text-xs px-2 py-0.5 rounded bg-slate-700/50 text-slate-400">{ind}</span>
                     ))}
                   </div>
@@ -4456,10 +4510,18 @@ export function RegionDetail({ regionId }: RegionDetailProps) {
   
   function translateSector(sector: string): string {
     try {
-      return tSectors(sector as any) || sector;
+      const translated = tSectors(sector as any);
+      if (translated && translated !== sector && !translated.includes('.')) return translated;
     } catch {
-      return sector;
+      // ignore
     }
+    try {
+      const translatedIndustry = tIndustries(sector as any);
+      if (translatedIndustry && translatedIndustry !== sector && !translatedIndustry.includes('.')) return translatedIndustry;
+    } catch {
+      // ignore
+    }
+    return sector;
   }
   
   function translateIndustry(industry: string): string {
@@ -4485,7 +4547,6 @@ export function RegionDetail({ regionId }: RegionDetailProps) {
   }
   
   function formatMoney(value: string): string {
-    if (locale === 'en') return value;
     return value
       .replace(/Billion/gi, tUnits('billion'))
       .replace(/Trillion/gi, tUnits('trillion'))
@@ -4493,8 +4554,7 @@ export function RegionDetail({ regionId }: RegionDetailProps) {
   }
   
   function formatTimeline(timeline: string): string {
-    if (locale === 'en') return timeline;
-    const yearsWord = locale === 'ru' ? 'лет' : locale === 'zh' ? '年' : 'years';
+    const yearsWord = locale === 'ru' ? 'лет' : '年';
     return timeline.replace(/years?/gi, yearsWord);
   }
   
@@ -4508,22 +4568,28 @@ export function RegionDetail({ regionId }: RegionDetailProps) {
   const targetCountry = ruData ? 'RU' : (cnData ? 'CN' : localeCountry);
   const fallbackData = {
     name: regionId,
-    nameRu: undefined as string | undefined,
-    nameZh: undefined as string | undefined,
+    nameRu: locale === 'ru' ? regionId : undefined,
+    nameZh: locale === 'zh' ? regionId : undefined,
     gdp: '$50 Billion',
     population: '10 Million',
     industries: ['Manufacturing', 'Agriculture', 'Services', 'Trade'],
-    industriesRu: undefined as string[] | undefined,
-    industriesZh: undefined as string[] | undefined,
+    industriesRu: ['Производство', 'Сельское хозяйство', 'Услуги', 'Торговля'],
+    industriesZh: ['制造业', '农业', '服务业', '贸易'],
     sezCount: 1,
     taxBenefits: ['15% reduced corporate tax', 'VAT exemptions', 'Land use discounts'],
-    taxBenefitsRu: undefined as string[] | undefined,
-    taxBenefitsZh: undefined as string[] | undefined,
-    majorCities: [{ id: 'city-1', name: 'Major City 1' }, { id: 'city-2', name: 'Major City 2' }, { id: 'city-3', name: 'Major City 3' }] as MajorCity[],
+    taxBenefitsRu: ['Сниженный налог на прибыль 15%', 'Освобождение от НДС', 'Льготы на использование земли'],
+    taxBenefitsZh: ['企业所得税15%优惠', '增值税减免', '土地使用优惠'],
+    majorCities: [
+      { id: 'city-1', name: 'Major City 1', nameRu: 'Крупный город 1', nameZh: '主要城市1' },
+      { id: 'city-2', name: 'Major City 2', nameRu: 'Крупный город 2', nameZh: '主要城市2' },
+      { id: 'city-3', name: 'Major City 3', nameRu: 'Крупный город 3', nameZh: '主要城市3' },
+    ] as MajorCity[],
     overview: 'A dynamic region with diverse economic opportunities and strong growth potential.',
-    overviewRu: undefined as string | undefined,
-    overviewZh: undefined as string | undefined,
+    overviewRu: 'Динамичный регион с разнообразными возможностями для инвестиций и устойчивым ростом.',
+    overviewZh: '充满活力的地区，拥有多元化投资机会和强劲增长潜力。',
     targetSectors: ['Manufacturing', 'Technology', 'Services'],
+    targetSectorsRu: ['Производство', 'Технологии', 'Услуги'],
+    targetSectorsZh: ['制造业', '科技', '服务业'],
     opportunities: [] as InvestmentOpportunity[],
     keyProjects: [] as KeyProject[],
     advantages: [] as CompetitiveAdvantage[],
@@ -4647,9 +4713,9 @@ export function RegionDetail({ regionId }: RegionDetailProps) {
           <p className="text-slate-400 text-lg mb-4">{locale === 'ru' && data.overviewRu ? data.overviewRu : locale === 'zh' && data.overviewZh ? data.overviewZh : data.overview}</p>
           {data.targetSectors && data.targetSectors.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {data.targetSectors.map((sector) => (
+              {(locale === 'ru' && data.targetSectorsRu ? data.targetSectorsRu : locale === 'zh' && data.targetSectorsZh ? data.targetSectorsZh : data.targetSectors.map(sector => translateSector(sector))).map((sector) => (
                 <span key={sector} className="px-3 py-1 bg-gradient-to-r from-primary/20 to-secondary/20 border border-primary/30 rounded-full text-sm text-primary">
-                  {translateIndustry(sector)}
+                  {sector}
                 </span>
               ))}
             </div>
@@ -4911,9 +4977,7 @@ export function RegionDetail({ regionId }: RegionDetailProps) {
                   <h3 className="font-semibold text-white mb-0.5">
                     {locale === 'zh' && entrepreneur.nameZh ? entrepreneur.nameZh : locale === 'ru' && entrepreneur.nameRu ? entrepreneur.nameRu : entrepreneur.name}
                   </h3>
-                  {locale !== 'en' && (
-                    <p className="text-xs text-slate-500 mb-2">{entrepreneur.name}</p>
-                  )}
+                  <p className="text-xs text-slate-500 mb-2">{entrepreneur.name}</p>
                   <div className="flex items-center gap-1 mb-2">
                     <Building2 className="w-3 h-3 text-slate-500" />
                     <span className="text-sm text-amber-400 font-medium">{entrepreneur.company}</span>
@@ -5049,16 +5113,65 @@ interface CityDetailProps {
 
 export function CityDetail({ regionId, cityId }: CityDetailProps) {
   const t = useTranslations('invest');
+  const tSectors = useTranslations('sectors');
+  const tIndustries = useTranslations('industries');
+  const tUnits = useTranslations('units');
   const params = useParams();
-  const locale = params.locale as string;
+  const locale = params.locale as Locale;
   
-  const targetCountry = getTargetCountry(locale as Locale);
+  const targetCountry = getTargetCountry(locale);
   const regionData = getRegionData(regionId, targetCountry);
+  
+  const translateSector = (sector: string) => {
+    try {
+      const translated = tSectors(sector as any);
+      if (translated && translated !== sector && !translated.includes('.')) return translated;
+    } catch {
+      // ignore
+    }
+    try {
+      const translatedIndustry = tIndustries(sector as any);
+      if (translatedIndustry && translatedIndustry !== sector && !translatedIndustry.includes('.')) return translatedIndustry;
+    } catch {
+      // ignore
+    }
+    return sector;
+  };
+
+  const formatMoney = (value: string) => {
+    return value
+      .replace(/Billion/gi, tUnits('billion'))
+      .replace(/Trillion/gi, tUnits('trillion'))
+      .replace(/Million/gi, tUnits('million'));
+  };
+
+  const formatTimeline = (timeline: string) => {
+    const yearsWord = locale === 'ru' ? 'лет' : '年';
+    return timeline.replace(/years?/gi, yearsWord);
+  };
+  
+  const regionName = locale === 'ru'
+    ? (regionData?.nameRu || regionId)
+    : locale === 'zh'
+      ? (regionData?.nameZh || regionId)
+      : regionId;
   
   // Find the city data
   const cityData = regionData?.majorCities.find(
     (c) => c.id === cityId || c.name.toLowerCase().replace(/\\s+/g, '-') === cityId.toLowerCase()
   );
+  
+  const cityName = locale === 'ru'
+    ? (cityData?.nameRu || cityData?.name || cityId)
+    : locale === 'zh'
+      ? (cityData?.nameZh || cityData?.name || cityId)
+      : cityData?.name || cityId;
+  
+  const cityDescription = locale === 'ru'
+    ? (cityData?.descriptionRu || cityData?.description)
+    : locale === 'zh'
+      ? (cityData?.descriptionZh || cityData?.description)
+      : cityData?.description;
 
   const statusColors = {
     priority: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
@@ -5079,7 +5192,7 @@ export function CityDetail({ regionId, cityId }: CityDetailProps) {
       >
         <Image
           src={cityData?.image || defaultImage}
-          alt={cityData?.name || cityId}
+          alt={cityName}
           fill
           className="object-cover"
           priority
@@ -5107,17 +5220,17 @@ export function CityDetail({ regionId, cityId }: CityDetailProps) {
             >
               <div className="flex items-center gap-2 text-orange-400 mb-2">
                 <MapPin className="w-4 h-4" />
-                <span className="text-sm font-medium">{regionId}</span>
+                <span className="text-sm font-medium">{regionName}</span>
               </div>
-              <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">{cityData?.name || cityId}</h1>
+              <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">{cityName}</h1>
               <div className="flex items-center justify-between flex-wrap gap-4">
                 {cityData?.population && (
                   <div className="flex items-center gap-2 text-slate-300">
                     <Users className="w-5 h-5" />
-                    <span className="text-lg">{t('population')}: {cityData.population}</span>
+                    <span className="text-lg">{t('population')}: {formatMoney(cityData.population)}</span>
                   </div>
                 )}
-                <SocialShare title={cityData?.name || cityId} />
+                <SocialShare title={cityName} />
               </div>
             </motion.div>
           </div>
@@ -5127,14 +5240,14 @@ export function CityDetail({ regionId, cityId }: CityDetailProps) {
       {/* Content Section */}
       <div className="max-w-7xl mx-auto px-4 py-12">
         {/* Description */}
-        {cityData?.description && (
+        {cityDescription && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
             className="mb-10 bg-gradient-to-r from-slate-800/80 to-slate-800/40 rounded-2xl p-8 border border-slate-700/50"
           >
-            <p className="text-slate-300 text-lg leading-relaxed">{cityData.description}</p>
+            <p className="text-slate-300 text-lg leading-relaxed">{cityDescription}</p>
           </motion.div>
         )}
 
@@ -5145,7 +5258,7 @@ export function CityDetail({ regionId, cityId }: CityDetailProps) {
           transition={{ delay: 0.4 }}
           className="mb-10"
         >
-          <CityMap cityName={cityData?.name || cityId} lat={cityData?.lat} lng={cityData?.lng} />
+          <CityMap cityName={cityName} lat={cityData?.lat} lng={cityData?.lng} />
         </motion.div>
 
         {/* City Investment Opportunities */}
@@ -5175,7 +5288,7 @@ export function CityDetail({ regionId, cityId }: CityDetailProps) {
                 <div className="flex flex-wrap items-start justify-between gap-4 mb-3">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs px-2 py-1 rounded-full bg-slate-700 text-slate-300">{opp.sector}</span>
+                      <span className="text-xs px-2 py-1 rounded-full bg-slate-700 text-slate-300">{translateSector(opp.sector)}</span>
                       <span className={\`text-xs px-2 py-1 rounded-full border \${statusColors[opp.status]}\`}>
                         {t(opp.status)}
                       </span>
@@ -5193,11 +5306,11 @@ export function CityDetail({ regionId, cityId }: CityDetailProps) {
                 <div className="flex flex-wrap gap-4 text-sm">
                   <div className="flex items-center gap-2 text-emerald-400">
                     <DollarSign className="w-4 h-4" />
-                    <span>{opp.investmentRange}</span>
+                    <span>{formatMoney(opp.investmentRange)}</span>
                   </div>
                   <div className="flex items-center gap-2 text-blue-400">
                     <Clock className="w-4 h-4" />
-                    <span>{opp.timeline}</span>
+                    <span>{formatTimeline(opp.timeline)}</span>
                   </div>
                 </div>
               </motion.div>
@@ -5235,7 +5348,7 @@ export function CityDetail({ regionId, cityId }: CityDetailProps) {
 function generateEconomicStats(): string {
   return `"use client";
 
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { motion } from 'framer-motion';
 import { TrendingUp, Users, Factory, Gift, Building } from 'lucide-react';
 
@@ -5249,11 +5362,33 @@ const mockStats = {
 
 export function EconomicStats() {
   const t = useTranslations('invest');
+  const tIndustries = useTranslations('industries');
+  const tUnits = useTranslations('units');
+  const locale = useLocale();
+
+  const translateIndustry = (industry: string) => {
+    try {
+      return tIndustries(industry as any) || industry;
+    } catch {
+      return industry;
+    }
+  };
+
+  const formatMoney = (value: string) => {
+    return value
+      .replace(/Billion/gi, tUnits('billion'))
+      .replace(/Trillion/gi, tUnits('trillion'))
+      .replace(/Million/gi, tUnits('million'));
+  };
+
+  const localizedTaxBenefits = locale === 'ru'
+    ? ['Сниженный налог на прибыль 15%', 'Освобождение от НДС', 'Льготы на использование земли']
+    : ['企业所得税15%优惠', '增值税减免', '土地使用优惠'];
 
   const stats = [
-    { key: 'gdp', value: mockStats.gdp, icon: TrendingUp, color: 'from-green-500 to-green-600' },
-    { key: 'population', value: mockStats.population, icon: Users, color: 'from-blue-500 to-blue-600' },
-    { key: 'sez', value: \`\${mockStats.sezCount} zones\`, icon: Building, color: 'from-purple-500 to-purple-600' },
+    { key: 'gdp', value: formatMoney(mockStats.gdp), icon: TrendingUp, color: 'from-green-500 to-green-600' },
+    { key: 'population', value: formatMoney(mockStats.population), icon: Users, color: 'from-blue-500 to-blue-600' },
+    { key: 'sez', value: \`\${mockStats.sezCount} \${t('zones')}\`, icon: Building, color: 'from-purple-500 to-purple-600' },
   ];
 
   return (
@@ -5294,7 +5429,7 @@ export function EconomicStats() {
               key={industry}
               className="px-3 py-1 bg-slate-700 rounded-full text-sm text-slate-300"
             >
-              {industry}
+              {translateIndustry(industry)}
             </span>
           ))}
         </div>
@@ -5312,7 +5447,7 @@ export function EconomicStats() {
           <h3 className="text-lg font-semibold text-white">{t('taxBenefits')}</h3>
         </div>
         <ul className="space-y-2">
-          {mockStats.taxBenefits.map((benefit, index) => (
+          {localizedTaxBenefits.map((benefit, index) => (
             <li key={index} className="flex items-center gap-2 text-slate-300">
               <span className="w-1.5 h-1.5 rounded-full bg-primary" />
               {benefit}
@@ -8135,6 +8270,9 @@ import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { ChevronRight, Home } from 'lucide-react';
+import { CHINA_REGIONS, RUSSIA_REGIONS } from '@/data/regionData';
+import { getTargetCountry } from '@/lib/i18n/config';
+import type { Locale } from '@/lib/i18n/config';
 
 interface BreadcrumbItem {
   label: string;
@@ -8149,7 +8287,33 @@ export function Breadcrumbs({ items }: BreadcrumbsProps) {
   const t = useTranslations('nav');
   const params = useParams();
   const pathname = usePathname();
-  const locale = params.locale as string;
+  const locale = params.locale as Locale;
+  const targetCountry = getTargetCountry(locale);
+  const regions = targetCountry === 'CN' ? CHINA_REGIONS : RUSSIA_REGIONS;
+
+  const getRegionLabel = (regionKey: string): string | undefined => {
+    const region = regions[regionKey];
+    if (!region) return undefined;
+    return locale === 'ru'
+      ? region.nameRu || region.name
+      : locale === 'zh'
+        ? region.nameZh || region.name
+        : region.name;
+  };
+
+  const getCityLabel = (regionKey: string, cityKey: string): string | undefined => {
+    const region = regions[regionKey];
+    if (!region?.majorCities) return undefined;
+    const city = region.majorCities.find(
+      c => c.id === cityKey || c.name.toLowerCase().replace(/\s+/g, '-') === cityKey.toLowerCase()
+    );
+    if (!city) return undefined;
+    return locale === 'ru'
+      ? city.nameRu || city.name
+      : locale === 'zh'
+        ? city.nameZh || city.name
+        : city.name;
+  };
 
   const generateBreadcrumbs = (): BreadcrumbItem[] => {
     if (items) return items;
@@ -8162,13 +8326,25 @@ export function Breadcrumbs({ items }: BreadcrumbsProps) {
       
       const href = '/' + paths.slice(0, index + 1).join('/');
       let label = path.charAt(0).toUpperCase() + path.slice(1);
+      const decodedPath = decodeURIComponent(path);
       
       const navKeys = ['home', 'laws', 'calendar', 'organizations', 'news', 'invest', 'contact'] as const;
       if (navKeys.includes(path as typeof navKeys[number])) {
         const translated = t(path as typeof navKeys[number]);
         if (translated) label = translated;
       } else {
-        label = decodeURIComponent(path).replace(/-/g, ' ').replace(/\\b\\w/g, c => c.toUpperCase());
+        label = decodedPath.replace(/-/g, ' ').replace(/\\b\\w/g, c => c.toUpperCase());
+      }
+
+      if (paths[index - 1] === 'invest') {
+        const regionLabel = getRegionLabel(decodedPath);
+        if (regionLabel) label = regionLabel;
+      }
+
+      if (paths[index - 2] === 'invest' && paths[index - 1]) {
+        const regionKey = decodeURIComponent(paths[index - 1]);
+        const cityLabel = getCityLabel(regionKey, decodedPath);
+        if (cityLabel) label = cityLabel;
       }
 
       breadcrumbs.push({ label, href: index < paths.length - 1 ? href : undefined });
@@ -8337,7 +8513,6 @@ export function RelatedRegions({ currentRegion, allRegions, maxItems = 3 }: Rela
   }
   
   function formatMoney(value: string): string {
-    if (locale === 'en') return value;
     return value
       .replace(/Billion/gi, tUnits('billion'))
       .replace(/Trillion/gi, tUnits('trillion'))
@@ -8452,6 +8627,9 @@ interface SearchResult {
 
 export function SearchDialog() {
   const t = useTranslations('widgets');
+  const tIndustries = useTranslations('industries');
+  const tSectors = useTranslations('sectors');
+  const tUnits = useTranslations('units');
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -8460,6 +8638,37 @@ export function SearchDialog() {
   const params = useParams();
   const locale = params.locale as Locale;
   const targetCountry = getTargetCountry(locale);
+
+  const translateIndustry = (industry: string) => {
+    try {
+      return tIndustries(industry as any) || industry;
+    } catch {
+      return industry;
+    }
+  };
+
+  const translateSector = (sector: string) => {
+    try {
+      const translated = tSectors(sector as any);
+      if (translated && translated !== sector && !translated.includes('.')) return translated;
+    } catch {
+      // ignore
+    }
+    try {
+      const translatedIndustry = tIndustries(sector as any);
+      if (translatedIndustry && translatedIndustry !== sector && !translatedIndustry.includes('.')) return translatedIndustry;
+    } catch {
+      // ignore
+    }
+    return sector;
+  };
+
+  const formatMoney = (value: string) => {
+    return value
+      .replace(/Billion/gi, tUnits('billion'))
+      .replace(/Trillion/gi, tUnits('trillion'))
+      .replace(/Million/gi, tUnits('million'));
+  };
 
   const search = useCallback((searchQuery: string): SearchResult[] => {
     if (!searchQuery.trim()) return [];
@@ -8471,27 +8680,39 @@ export function SearchDialog() {
     Object.entries(regions).forEach(([_, region]) => {
       const regionId = region.name.toLowerCase().replace(/\\s+/g, '-');
       const displayName = locale === 'ru' ? (region.nameRu || region.name) : locale === 'zh' ? (region.nameZh || region.name) : region.name;
+      const localizedIndustries = locale === 'ru' && region.industriesRu
+        ? region.industriesRu
+        : locale === 'zh' && region.industriesZh
+          ? region.industriesZh
+          : (region.industries || []).map(industry => translateIndustry(industry));
 
       if (
         region.name.toLowerCase().includes(q) ||
         (region.nameRu && region.nameRu.toLowerCase().includes(q)) ||
         (region.nameZh && region.nameZh.includes(q)) ||
-        (region.industries || []).some(i => i.toLowerCase().includes(q))
+        (region.industries || []).some(i => i.toLowerCase().includes(q)) ||
+        (region.industriesRu && region.industriesRu.some(i => i.toLowerCase().includes(q))) ||
+        (region.industriesZh && region.industriesZh.some(i => i.includes(q)))
       ) {
         searchResults.push({
           type: 'region',
           title: displayName,
-          subtitle: (region.industries || []).slice(0, 3).join(', '),
+          subtitle: localizedIndustries.slice(0, 3).join(', '),
           href: \`/\${locale}/invest/\${regionId}\`,
           icon: MapPin,
         });
       }
 
       (region.majorCities || []).forEach((city) => {
-        if (city.name.toLowerCase().includes(q)) {
+        const cityName = locale === 'ru' ? (city.nameRu || city.name) : locale === 'zh' ? (city.nameZh || city.name) : city.name;
+        if (
+          city.name.toLowerCase().includes(q) ||
+          (city.nameRu && city.nameRu.toLowerCase().includes(q)) ||
+          (city.nameZh && city.nameZh.includes(q))
+        ) {
           searchResults.push({
             type: 'city',
-            title: city.name,
+            title: cityName,
             subtitle: displayName,
             href: \`/\${locale}/invest/\${regionId}/\${city.id}\`,
             icon: Building2,
@@ -8500,15 +8721,22 @@ export function SearchDialog() {
       });
 
       (region.opportunities || []).forEach((opp) => {
+        const oppTitle = locale === 'ru' && opp.titleRu ? opp.titleRu : locale === 'zh' && opp.titleZh ? opp.titleZh : opp.title;
+        const oppDescription = locale === 'ru' && opp.descriptionRu ? opp.descriptionRu : locale === 'zh' && opp.descriptionZh ? opp.descriptionZh : opp.description;
+        const oppDescriptionText = oppDescription ? oppDescription.toLowerCase() : opp.description.toLowerCase();
         if (
           opp.title.toLowerCase().includes(q) ||
           opp.sector.toLowerCase().includes(q) ||
-          opp.description.toLowerCase().includes(q)
+          oppDescriptionText.includes(q) ||
+          (opp.titleRu && opp.titleRu.toLowerCase().includes(q)) ||
+          (opp.titleZh && opp.titleZh.includes(q)) ||
+          (opp.descriptionRu && opp.descriptionRu.toLowerCase().includes(q)) ||
+          (opp.descriptionZh && opp.descriptionZh.includes(q))
         ) {
           searchResults.push({
             type: 'opportunity',
-            title: opp.title,
-            subtitle: \`\${opp.sector} • \${opp.investmentRange}\`,
+            title: oppTitle,
+            subtitle: \`\${translateSector(opp.sector)} • \${formatMoney(opp.investmentRange)}\`,
             href: \`/\${locale}/invest/\${regionId}\`,
             icon: FileText,
           });

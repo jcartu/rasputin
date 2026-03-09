@@ -19,7 +19,7 @@ function generateMockData() {
   const HOUR = 60 * 60 * 1000;
   
   // Models used
-  const models = ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku', 'gpt-4-turbo', 'gpt-4o'];
+  const models = ['claude-opus-4-6', 'claude-sonnet-4-5', 'claude-haiku-4-5', 'gpt-4o', 'gpt-4o-mini'];
   
   // Tools available
   const tools = [
@@ -135,16 +135,16 @@ router.get('/', (req, res) => {
     
     // Cost estimates (using approximate rates)
     const costRates = {
-      'claude-3-opus': { input: 15, output: 75 },
-      'claude-3-sonnet': { input: 3, output: 15 },
-      'claude-3-haiku': { input: 0.25, output: 1.25 },
-      'gpt-4-turbo': { input: 10, output: 30 },
+      'claude-opus-4-6': { input: 5, output: 25 },
+      'claude-sonnet-4-5': { input: 3, output: 15 },
+      'claude-haiku-4-5': { input: 1, output: 5 },
       'gpt-4o': { input: 5, output: 15 },
+      'gpt-4o-mini': { input: 0.15, output: 0.6 },
     };
     
     let totalCost = 0;
     filteredSessions.forEach(session => {
-      const rates = costRates[session.model] || costRates['claude-3-sonnet'];
+      const rates = costRates[session.model] || costRates['claude-sonnet-4-5'];
       const inputCost = (session.inputTokens / 1000000) * rates.input;
       const outputCost = (session.outputTokens / 1000000) * rates.output;
       totalCost += inputCost + outputCost;

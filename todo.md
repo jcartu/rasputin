@@ -97,9 +97,15 @@ The v3 multi-agent swarm architecture is ~90% implemented but not fully activate
 
 ### Infrastructure (Pending Hardware)
 
-- [ ] Integration test with actual Ollama server
-- [ ] Full deployment to Rasputin hardware
-- [x] Docker/gVisor container isolation for workspaces - VERIFIED: sandbox/index.ts has full Docker isolation with auto gVisor detection
+- [x] Integration test with actual Ollama server - VERIFIED ON RASPUTIN HARDWARE:
+  - Xeon w9-3495X (56c/112t), 251GB RAM, RTX PRO 6000 Blackwell (98GB VRAM)
+  - Ollama 0.13.5 running with dolphin-llama3:70b, qwen2.5:72b, llava:34b, llama3.2-vision:90b
+  - 13/13 localLLM router tests passing
+- [ ] Full deployment to Rasputin hardware (app is running, needs production config)
+- [x] Docker/gVisor container isolation for workspaces - VERIFIED:
+  - Docker sandbox working (Python 3.12, Node 22 execution confirmed)
+  - gVisor not installed (using standard runc runtime)
+  - Auto-detection in place, will use gVisor when available
 
 ### Web App Development - Future Enhancements
 

@@ -1,19 +1,23 @@
 'use client';
 
-import { memo, useState } from 'react';
+import { memo, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, User, ChevronDown, ChevronUp, Wrench, Brain, Eye } from 'lucide-react';
+import { Bot, User, ChevronDown, ChevronUp, Wrench, Brain, Eye, Copy, Check, RefreshCw, ThumbsUp, ThumbsDown, Pencil, X, Link } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { VoiceOutput } from '@/components/voice';
 import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
-import type { Message, ToolCall } from '@/lib/store';
+import { SearchIndicator } from './SearchIndicator';
+import type { Message, ToolCall, ToolResult, ToolCitation } from '@/lib/store';
 
 interface MessageBubbleProps {
   message: Message;
   isStreaming?: boolean;
   isLatestAssistantMessage?: boolean;
+  onRegenerate?: () => void;
+  onEditResubmit?: (content: string) => void;
 }
 
 const phaseIcons = {
@@ -28,14 +32,29 @@ const phaseColors = {
   observe: 'text-cyan-500 bg-cyan-500/10',
 };
 
-export const MessageBubble = memo(function MessageBubble({ message, isStreaming, isLatestAssistantMessage }: MessageBubbleProps) {
+export const MessageBubble = memo(function MessageBubble({ message, isStreaming, isLatestAssistantMessage, onRegenerate, onEditResubmit }: MessageBubbleProps) {
   const [showThinking, setShowThinking] = useState(false);
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
+  const [copied, setCopied] = useState(false);
+  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(message.content);
+  const [sourcesExpanded, setSourcesExpanded] = useState(false);
 
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
   const PhaseIcon = message.phase ? phaseIcons[message.phase] : null;
   const shouldAutoPlayVoice = isLatestAssistantMessage && !isStreaming;
+  const toolCalls = message.toolCalls || [];
+  const searchToolCalls = toolCalls.filter((tool) => tool.name === 'web_search');
+  const otherToolCalls = toolCalls.filter((tool) => tool.name !== 'web_search');
+
+  const sources = searchToolCalls.reduce<ToolCitation[]>((acc, tool) => {
+    if (tool.result && typeof tool.result !== 'string') {
+      return [...acc, ...(tool.result.citations || [])];
+    }
+    return acc;
+  }, []);
 
   const toggleTool = (toolId: string) => {
     const newExpanded = new Set(expandedTools);
@@ -47,6 +66,19 @@ export const MessageBubble = memo(function MessageBubble({ message, isStreaming,
     setExpandedTools(newExpanded);
   };
 
+  const handleCopy = useCallback(async () => {
+    await navigator.clipboard.writeText(message.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [message.content]);
+
+  const handleEditSave = useCallback(() => {
+    if (editContent.trim() && onEditResubmit) {
+      onEditResubmit(editContent.trim());
+      setIsEditing(false);
+    }
+  }, [editContent, onEditResubmit]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -54,7 +86,7 @@ export const MessageBubble = memo(function MessageBubble({ message, isStreaming,
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
       className={cn(
-        'flex gap-3 p-4 rounded-xl',
+        'flex gap-3 p-4 rounded-xl group',
         isUser ? 'flex-row-reverse' : 'flex-row',
         message.phase && `phase-${message.phase}`
       )}
@@ -126,47 +158,185 @@ export const MessageBubble = memo(function MessageBubble({ message, isStreaming,
           </div>
         )}
 
-        <motion.div
-          className={cn(
-            'rounded-2xl p-4 max-w-[85%] shadow-md transition-all duration-200',
-            isUser
-              ? 'bg-gradient-to-br from-primary via-primary/95 to-primary/85 text-primary-foreground ml-auto shadow-primary/20'
-              : 'bg-card/90 border border-border/50 backdrop-blur-sm shadow-[0_4px_20px_hsl(var(--foreground)/0.05)] hover:shadow-[0_4px_25px_hsl(var(--foreground)/0.08)]'
-          )}
-        >
-          <div className="max-w-none">
-            {isUser ? (
-              <p className="whitespace-pre-wrap">{message.content}</p>
-            ) : (
-              <MarkdownRenderer 
-                content={message.content} 
-                className={cn(
-                  isUser && "[&_a]:text-primary-foreground [&_code]:bg-primary-foreground/20 [&_code]:text-primary-foreground"
-                )}
-              />
-            )}
-            {isStreaming && (
-              <motion.span
-                animate={{ opacity: [1, 0] }}
-                transition={{ duration: 0.5, repeat: Infinity }}
-                className="inline-block w-2 h-4 bg-current ml-1"
-              />
-            )}
-          </div>
-          {isAssistant && message.content && !isStreaming && (
-            <div className="mt-3 pt-2 border-t border-border/30">
-              <VoiceOutput
-                text={message.content}
-                messageId={message.id}
-                autoPlay={shouldAutoPlayVoice}
-              />
+        {isEditing && isUser ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="rounded-2xl p-4 max-w-[85%] ml-auto bg-card border border-primary/40 shadow-md"
+          >
+            <Textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              className="min-h-[80px] resize-none border-0 bg-transparent focus-visible:ring-0 text-base"
+              autoFocus
+            />
+            <div className="flex items-center justify-end gap-2 mt-2 pt-2 border-t border-border/30">
+              <Button variant="ghost" size="sm" onClick={() => { setIsEditing(false); setEditContent(message.content); }}>
+                <X className="w-3.5 h-3.5 mr-1" /> Cancel
+              </Button>
+              <Button size="sm" onClick={handleEditSave} disabled={!editContent.trim()}>
+                Send
+              </Button>
             </div>
-          )}
-        </motion.div>
+          </motion.div>
+        ) : (
+          <motion.div
+            className={cn(
+              'rounded-2xl p-4 max-w-[85%] shadow-md transition-all duration-200',
+              isUser
+                ? 'bg-gradient-to-br from-primary via-primary/95 to-primary/85 text-primary-foreground ml-auto shadow-primary/20'
+                : 'bg-card/90 border border-border/50 backdrop-blur-sm shadow-[0_4px_20px_hsl(var(--foreground)/0.05)] hover:shadow-[0_4px_25px_hsl(var(--foreground)/0.08)]'
+            )}
+          >
+            <div className="max-w-none">
+              {isAssistant && searchToolCalls.length > 0 && (
+                <div className="mb-3 space-y-3">
+                  {searchToolCalls.map((tool) => {
+                    const query = typeof tool.input?.query === 'string'
+                      ? tool.input.query
+                      : typeof tool.arguments?.query === 'string'
+                        ? tool.arguments.query
+                        : '';
+                    const result: ToolResult | undefined = typeof tool.result === 'string'
+                      ? { content: tool.result }
+                      : tool.result;
+                    return (
+                      <SearchIndicator
+                        key={tool.id}
+                        query={query}
+                        status={tool.status}
+                        result={result}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+              {isUser ? (
+                <p className="whitespace-pre-wrap">{message.content}</p>
+              ) : (
+                <MarkdownRenderer 
+                  content={message.content} 
+                  className={cn(
+                    isUser && "[&_a]:text-primary-foreground [&_code]:bg-primary-foreground/20 [&_code]:text-primary-foreground"
+                  )}
+                  enableEmailDrafts
+                  isStreaming={isStreaming}
+                />
+              )}
+              {isStreaming && (
+                <motion.span
+                  animate={{ opacity: [1, 0] }}
+                  transition={{ duration: 0.5, repeat: Infinity }}
+                  className="inline-block w-2 h-4 bg-current ml-1"
+                />
+              )}
+            </div>
+            {isAssistant && message.content && !isStreaming && (
+              <div className="mt-3 pt-2 border-t border-border/30">
+                <VoiceOutput
+                  text={message.content}
+                  messageId={message.id}
+                  autoPlay={shouldAutoPlayVoice}
+                />
+              </div>
+            )}
+            {isAssistant && sources.length > 0 && !isStreaming && (
+              <div className="mt-3 pt-3 border-t border-border/30">
+                <button
+                  type="button"
+                  onClick={() => setSourcesExpanded(!sourcesExpanded)}
+                  className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                >
+                  <Link className="h-3.5 w-3.5" />
+                  Sources ({sources.length})
+                  {sourcesExpanded ? (
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  )}
+                </button>
+                <AnimatePresence>
+                  {sourcesExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="mt-2 space-y-2">
+                        {sources.map((source, index) => (
+                          <a
+                            key={`${source.url}-${index}`}
+                            href={source.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block rounded-lg border border-border/40 bg-muted/40 px-3 py-2 text-xs text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+                          >
+                            <div className="font-medium text-foreground/90">
+                              {source.title || source.url}
+                            </div>
+                            {source.snippet && (
+                              <div className="mt-1 text-[11px] text-muted-foreground">
+                                {source.snippet}
+                              </div>
+                            )}
+                          </a>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+          </motion.div>
+        )}
 
-        {message.toolCalls && message.toolCalls.length > 0 && (
+        {!isStreaming && !isEditing && message.content && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={cn(
+              'flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200',
+              isUser ? 'justify-end' : 'justify-start'
+            )}
+          >
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground hover:text-foreground" onClick={handleCopy}>
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+            </Button>
+            {isUser && onEditResubmit && (
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground hover:text-foreground" onClick={() => setIsEditing(true)}>
+                <Pencil className="w-3.5 h-3.5" />
+              </Button>
+            )}
+            {isAssistant && onRegenerate && (
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground hover:text-foreground" onClick={onRegenerate}>
+                <RefreshCw className="w-3.5 h-3.5" />
+              </Button>
+            )}
+            {isAssistant && (
+              <>
+                <Button
+                  variant="ghost" size="sm"
+                  className={cn('h-7 px-2', feedback === 'up' ? 'text-emerald-500' : 'text-muted-foreground hover:text-foreground')}
+                  onClick={() => setFeedback(feedback === 'up' ? null : 'up')}
+                >
+                  <ThumbsUp className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  variant="ghost" size="sm"
+                  className={cn('h-7 px-2', feedback === 'down' ? 'text-red-500' : 'text-muted-foreground hover:text-foreground')}
+                  onClick={() => setFeedback(feedback === 'down' ? null : 'down')}
+                >
+                  <ThumbsDown className="w-3.5 h-3.5" />
+                </Button>
+              </>
+            )}
+          </motion.div>
+        )}
+
+        {otherToolCalls.length > 0 && (
           <div className="space-y-2 mt-3">
-            {message.toolCalls.map((tool) => (
+            {otherToolCalls.map((tool) => (
               <ToolCallDisplay
                 key={tool.id}
                 tool={tool}
@@ -194,6 +364,11 @@ function ToolCallDisplay({ tool, isExpanded, onToggle }: ToolCallDisplayProps) {
     completed: 'bg-emerald-500/20 text-emerald-500',
     error: 'bg-destructive/20 text-destructive',
   };
+
+  const toolInput = tool.input || tool.arguments || {};
+  const resultText = typeof tool.result === 'string'
+    ? tool.result
+    : tool.result?.content || '';
 
   return (
     <motion.div
@@ -231,14 +406,14 @@ function ToolCallDisplay({ tool, isExpanded, onToggle }: ToolCallDisplayProps) {
               <div>
                 <span className="text-xs text-muted-foreground">Arguments:</span>
                 <pre className="mt-1 p-2 rounded bg-muted/50 text-xs overflow-x-auto">
-                  {JSON.stringify(tool.arguments, null, 2)}
+                  {JSON.stringify(toolInput, null, 2)}
                 </pre>
               </div>
-              {tool.result && (
+              {resultText && (
                 <div>
                   <span className="text-xs text-muted-foreground">Result:</span>
                   <pre className="mt-1 p-2 rounded bg-muted/50 text-xs overflow-x-auto max-h-32 overflow-y-auto">
-                    {tool.result}
+                    {resultText}
                   </pre>
                 </div>
               )}

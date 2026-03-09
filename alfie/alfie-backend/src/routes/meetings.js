@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import multer from 'multer';
+import { v4 as uuidv4 } from 'uuid';
 import * as meetingService from '../services/meetingService.js';
+import * as ragService from '../services/ragService.js';
 import { log } from '../services/logger.js';
 import PDFDocument from 'pdfkit';
 
@@ -33,7 +35,7 @@ router.post('/', (req, res) => {
   }
 });
 
-router.get('/stats', (req, res) => {
+router.get('/stats', (_req, res) => {
   try {
     const stats = meetingService.getStats();
     res.json(stats);
@@ -139,6 +141,27 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
     };
     
     const result = await meetingService.transcribeAudio(req.file.buffer, options);
+
+    const documentId = req.body.documentId || req.body.meetingId || `meeting-transcript-${uuidv4()}`;
+    const metadata = {
+      source: req.file.originalname,
+      mimeType: req.file.mimetype,
+      type: 'meeting_transcript',
+      uploadedAt: new Date().toISOString(),
+    };
+
+    ragService
+      .embedDocument(documentId, result.text, metadata)
+      .then(() => {
+        log.info('Meeting transcript embedded', { documentId });
+      })
+      .catch(error => {
+        log.error('Failed to embed meeting transcript', {
+          documentId,
+          error: error.message,
+        });
+      });
+
     res.json(result);
   } catch (error) {
     log.error('Transcription failed', { error: error.message });

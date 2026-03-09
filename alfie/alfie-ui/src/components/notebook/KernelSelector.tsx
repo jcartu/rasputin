@@ -1,6 +1,8 @@
 'use client';
 
 import { memo, useCallback, useEffect, useState } from 'react';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 import { Play, Square, RefreshCw, Power, Circle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
@@ -48,10 +50,10 @@ export const KernelSelector = memo(function KernelSelector({
   const config = statusConfig[kernelStatus];
   const StatusIcon = config.icon;
 
-  useEffect(() => {
-    async function fetchKernels() {
-      try {
-        const response = await fetch('/api/notebooks/kernels');
+   useEffect(() => {
+     async function fetchKernels() {
+       try {
+         const response = await fetch(`${API_BASE}/api/notebooks/kernels`);
         if (response.ok) {
           const data = await response.json();
           setAvailableKernels(data.kernelspecs || []);

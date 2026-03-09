@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { apiFetch } from '@/lib/apiClient';
 import { motion } from 'framer-motion';
 import {
   AreaChart,
@@ -131,8 +132,7 @@ export function AnalyticsDashboard() {
   const fetchAnalytics = useCallback(async () => {
     try {
       setIsRefreshing(true);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-      const response = await fetch(`${apiUrl}/api/analytics?range=${timeRange}`);
+      const response = await apiFetch(`/api/analytics?range=${timeRange}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch analytics');

@@ -1,6 +1,8 @@
 import { WebSocketServer } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 import { authenticateWs } from '../middleware/auth.js';
+import * as chatHistory from './chatHistory.js';
+import * as jwtService from './jwtService.js';
 import config from '../config.js';
 import * as openclawGateway from './openclawGateway.js';
 import * as sessionManager from './sessionManager.js';
@@ -11,6 +13,8 @@ import * as collaboration from './collaboration.js';
 import * as presenceService from './presence.js';
 import * as commentsService from './comments.js';
 import * as permissionsService from './permissions.js';
+import * as llmService from './llmService.js';
+import * as perplexityService from './perplexityService.js';
 
 const clients = new Map();
 
@@ -30,11 +34,15 @@ export function setupWebSocket(server) {
     }
 
     const clientId = uuidv4();
+    const verification = jwtService.verifyAccessToken(token);
+    const userId = verification.valid ? verification.payload.sub : null;
     const client = {
       id: clientId,
       ws,
       sessionId: null,
       isAlive: true,
+      userId: userId || null,
+      threadId: null,
     };
     clients.set(clientId, client);
     recordWsConnection(1);
@@ -106,6 +114,10 @@ async function handleMessage(client, message) {
   switch (type) {
     case 'ping':
       send(ws, { type: 'pong' });
+      break;
+
+    case 'chat':
+      await handleChat(client, payload);
       break;
 
     case 'session:create':
@@ -340,6 +352,182 @@ async function handleStreamMessage(client, payload) {
     });
   } catch (error) {
     send(ws, { type: 'stream:error', payload: { error: error.message } });
+  }
+}
+
+async function handleChat(client, payload) {
+  const { ws } = client;
+  try {
+    const content = payload?.content || payload?.message || '';
+    const threadId = payload?.threadId || client.threadId || null;
+    const fileIds = Array.isArray(payload?.fileIds) ? payload.fileIds : [];
+    if (!content && fileIds.length === 0) {
+      sendError(ws, 'Message content required');
+      return;
+    }
+
+    let activeThreadId = threadId;
+    if (!activeThreadId && client.userId) {
+      activeThreadId = uuidv4();
+      const title = content.slice(0, 100).trim() || 'New Conversation';
+      try {
+        await chatHistory.createConversation(client.userId, activeThreadId, title);
+      } catch (error) {
+        console.error('Failed to create conversation:', error.message);
+      }
+      client.threadId = activeThreadId;
+      send(ws, {
+        type: 'conversation_created',
+        payload: { threadId: activeThreadId, title },
+      });
+    }
+    if (!activeThreadId) {
+      activeThreadId = client.threadId;
+    }
+
+    const history = client.chatHistory || [];
+
+    let userContent;
+    if (fileIds.length > 0) {
+      userContent = await llmService.buildContentBlocks(content, fileIds);
+    } else {
+      userContent = content;
+    }
+    history.push({ role: 'user', content: userContent });
+
+    if (activeThreadId && client.userId) {
+      chatHistory
+        .addMessage(client.userId, activeThreadId, { role: 'user', content, fileIds: fileIds.length > 0 ? fileIds : undefined })
+        .catch(error => console.error('Save user msg failed:', error.message));
+    }
+
+    const messageId = uuidv4();
+    send(ws, {
+      type: 'message_start',
+      payload: { id: messageId, role: 'assistant', threadId: activeThreadId },
+    });
+
+    const result = await llmService.chatCompletionStream(
+      history,
+      (chunk) => {
+        send(ws, { type: 'message_delta', payload: { content: chunk } });
+      },
+      { maxTokens: 32000, returnMeta: true }
+    );
+
+    const { content: assistantText, stopReason, toolUses } = result;
+
+    if (stopReason === 'tool_use' && toolUses && toolUses.length > 0) {
+      const MAX_SEARCHES = 2;
+      const SEARCH_TIMEOUT_MS = 30000;
+      const searchTools = toolUses.filter(t => t.name === 'web_search').slice(0, MAX_SEARCHES);
+      if (searchTools.length > 0) {
+        for (const tool of searchTools) {
+          send(ws, {
+            type: 'tool_start',
+            payload: { id: tool.id, name: 'web_search', arguments: tool.input, status: 'running' },
+          });
+        }
+
+        const toolResults = await Promise.all(searchTools.map(async (tool) => {
+          const query = tool.input?.query || '';
+          try {
+            const searchPromise = perplexityService.search(query);
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Search timed out after 30s')), SEARCH_TIMEOUT_MS)
+            );
+            const searchResult = await Promise.race([searchPromise, timeoutPromise]);
+            const citations = (searchResult.citations || []).map((c) => {
+              if (typeof c === 'string') {
+                return { url: c, title: c.replace(/^https?:\/\//, '').split('/')[0] };
+              }
+              return { url: c.url || '', title: c.title || '' };
+            });
+            send(ws, {
+              type: 'tool_complete',
+              payload: {
+                id: tool.id,
+                name: 'web_search',
+                status: 'completed',
+                result: { content: searchResult.content || '', citations },
+              },
+            });
+            return { id: tool.id, query, content: searchResult.content || '', citations };
+          } catch (searchErr) {
+            send(ws, {
+              type: 'tool_complete',
+              payload: { id: tool.id, name: 'web_search', status: 'error', result: { content: searchErr.message } },
+            });
+            return { id: tool.id, query, content: `Error: ${searchErr.message}`, citations: [] };
+          }
+        }));
+
+        const searchSummary = toolResults
+          .map((r, i) => `[Search ${i + 1}: "${r.query}"]\n${r.content}\n---`)
+          .join('\n');
+
+        const synthesisPrompt = `Based on the user's question and the following web search results, provide a comprehensive, well-formatted response.
+
+Formatting requirements:
+- Use markdown headings, bullet points, and bold text for readability
+- Include specific data, numbers, and facts from the search results
+- Cite sources naturally in the text
+- If the search results contain conflicting information, acknowledge it
+
+${searchSummary}
+
+Now synthesize a response to the user's question: "${content}"`;
+
+        const followupMessages = [
+          ...history,
+          { role: 'assistant', content: assistantText || '' },
+          { role: 'user', content: synthesisPrompt },
+        ];
+
+        let synthesisChunks = 0;
+        let synthesisLength = 0;
+        const synthesisResult = await llmService.chatCompletionStream(
+          followupMessages,
+          (chunk) => {
+            synthesisChunks++;
+            synthesisLength += chunk.length;
+            send(ws, { type: 'message_delta', payload: { content: chunk } });
+          },
+          { maxTokens: 32000, noTools: true }
+        );
+        const synthesisContent = typeof synthesisResult === 'object' ? synthesisResult.content : synthesisResult;
+        console.log(`Web search synthesis: received ${synthesisChunks} chunks, response length=${synthesisLength}, messages=${followupMessages.length}, toolResults=${toolResults.length}`);
+
+        const fullAssistantContent = (assistantText || '') + (synthesisContent || '');
+        history.push({ role: 'assistant', content: fullAssistantContent });
+        if (activeThreadId && client.userId) {
+          chatHistory
+            .addMessage(client.userId, activeThreadId, {
+              role: 'assistant',
+              content: fullAssistantContent,
+            })
+            .catch(error => console.error('Save assistant msg failed:', error.message));
+        }
+      }
+    } else {
+      const fullAssistantContent = assistantText || '';
+      history.push({ role: 'assistant', content: fullAssistantContent });
+      if (activeThreadId && client.userId) {
+        chatHistory
+          .addMessage(client.userId, activeThreadId, {
+            role: 'assistant',
+            content: fullAssistantContent,
+          })
+          .catch(error => console.error('Save assistant msg failed:', error.message));
+      }
+    }
+
+    client.chatHistory = history;
+    send(ws, { type: 'message_complete', payload: {} });
+  } catch (error) {
+    console.error('Chat handler error:', error.message);
+    send(ws, { type: 'error', payload: { message: error.message } });
+    send(ws, { type: 'message_complete', payload: {} });
   }
 }
 

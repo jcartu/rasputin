@@ -1,0 +1,1 @@
+Hello from test file. This is a sample document for ALFIE file upload testing.

@@ -24,11 +24,13 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { initializeWebSocket } from "../services/websocket";
+import { initializeWorkspaceStream } from "../services/workspaceStream";
 import { cronScheduler } from "../services/events/cronScheduler";
 import { taskQueue } from "../services/jarvis/taskQueue";
 import { getDb } from "../db";
 import { agentTasks } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
+import alfieRestApi from "../restApi";
 
 async function cleanupStaleTasks(): Promise<void> {
   try {
@@ -466,6 +468,9 @@ async function startServer() {
     }
   });
 
+  // ALFIE REST API (bypasses auth for internal ALFIE→Rasputin integration)
+  app.use("/api/alfie", alfieRestApi);
+
   // tRPC API
   app.use(
     "/api/trpc",
@@ -474,8 +479,8 @@ async function startServer() {
       createContext,
     })
   );
-  // Initialize WebSocket server for real-time streaming
-  initializeWebSocket(server);
+  const ioServer = initializeWebSocket(server);
+    initializeWorkspaceStream(ioServer);
 
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {

@@ -242,8 +242,12 @@ function ToolExecutionCard({ tool, isActive = false }: ToolExecutionCardProps) {
     return null;
   }, [tool.startTime, tool.endTime, tool.status]);
 
-  const hasInput = tool.arguments && Object.keys(tool.arguments).length > 0;
-  const hasOutput = tool.result && tool.result.length > 0;
+  const toolInput = tool.input || tool.arguments || {};
+  const resultText = typeof tool.result === 'string'
+    ? tool.result
+    : tool.result?.content || '';
+  const hasInput = toolInput && Object.keys(toolInput).length > 0;
+  const hasOutput = resultText.length > 0;
 
   return (
     <motion.div
@@ -305,7 +309,7 @@ function ToolExecutionCard({ tool, isActive = false }: ToolExecutionCardProps) {
             icon={<FileJson className="w-3.5 h-3.5" />}
             isExpanded={inputExpanded}
             onToggle={() => setInputExpanded(!inputExpanded)}
-            content={JSON.stringify(tool.arguments, null, 2)}
+            content={JSON.stringify(toolInput, null, 2)}
             language="json"
           />
         )}
@@ -316,8 +320,8 @@ function ToolExecutionCard({ tool, isActive = false }: ToolExecutionCardProps) {
             icon={<Terminal className="w-3.5 h-3.5" />}
             isExpanded={outputExpanded}
             onToggle={() => setOutputExpanded(!outputExpanded)}
-            content={tool.result || ''}
-            language={detectLanguage(tool.result || '')}
+            content={resultText}
+            language={detectLanguage(resultText)}
             isError={tool.status === 'error'}
           />
         )}

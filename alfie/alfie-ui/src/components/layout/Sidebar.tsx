@@ -19,6 +19,15 @@ import {
   Zap,
   BarChart3,
   Workflow,
+  Search,
+  Loader2,
+  Wand2,
+  FolderOpen,
+  Clock,
+  ListTodo,
+  Puzzle,
+  Pencil,
+  Check,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -31,8 +40,10 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
 import { useChatStore, useUIStore } from '@/lib/store';
 import { useMobileContext } from '@/components/shared/MobileProvider';
+import { apiFetch } from '@/lib/apiClient';
 import { formatDistanceToNow } from 'date-fns';
 import { ExportImportModal } from '@/components/modals/ExportImportModal';
 
@@ -43,17 +54,43 @@ export function Sidebar() {
   const tCommon = useTranslations('common');
   const { isMobile, isTouchDevice } = useMobileContext();
   const { sidebarOpen, mobileMenuOpen, toggleSidebar, setMobileMenuOpen, setSidebarOpen, mainView, setMainView } = useUIStore();
-  const { sessions, activeSessionId, createSession, deleteSession, setActiveSession, clearSession } = useChatStore();
+  const { sessions, activeSessionId, createSession, deleteSession, setActiveSession, clearSession, renameSession } = useChatStore();
   
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportModalTab, setExportModalTab] = useState<'export' | 'import'>('export');
   const [preselectedSessionIds, setPreselectedSessionIds] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{ thread_id: string; title: string; snippet?: string; updated_at?: string }>>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   const openExportModal = useCallback((tab: 'export' | 'import', sessionIds: string[] = []) => {
     setExportModalTab(tab);
     setPreselectedSessionIds(sessionIds);
     setExportModalOpen(true);
   }, []);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+    setIsSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await apiFetch(`/api/conversations/search?q=${encodeURIComponent(searchQuery.trim())}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data.conversations || data.results || []);
+        }
+      } catch (e) {
+        console.error('Search failed:', e);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const isOpen = isMobile ? mobileMenuOpen : sidebarOpen;
   const setOpen = isMobile ? setMobileMenuOpen : setSidebarOpen;
@@ -170,6 +207,68 @@ export function Sidebar() {
             Stats
           </Button>
         </div>
+        <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
+          <Button
+            variant={mainView === 'skills' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => {
+              setMainView('skills');
+              if (isMobile) setMobileMenuOpen(false);
+            }}
+            className={cn(
+              'flex-1 gap-2',
+              mainView === 'skills' && 'bg-primary text-primary-foreground'
+            )}
+          >
+            <Wand2 className="w-4 h-4" />
+            Skills
+          </Button>
+          <Button
+            variant={mainView === 'projects' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => {
+              setMainView('projects');
+              if (isMobile) setMobileMenuOpen(false);
+            }}
+            className={cn(
+              'flex-1 gap-2',
+              mainView === 'projects' && 'bg-primary text-primary-foreground'
+            )}
+          >
+            <FolderOpen className="w-4 h-4" />
+            Projects
+          </Button>
+          <Button
+            variant={mainView === 'schedules' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => {
+              setMainView('schedules');
+              if (isMobile) setMobileMenuOpen(false);
+            }}
+            className={cn(
+              'flex-1 gap-2',
+              mainView === 'schedules' && 'bg-primary text-primary-foreground'
+            )}
+          >
+            <Clock className="w-4 h-4" />
+            Schedules
+          </Button>
+          <Button
+            variant={mainView === 'tasks' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => {
+              setMainView('tasks');
+              if (isMobile) setMobileMenuOpen(false);
+            }}
+            className={cn(
+              'flex-1 gap-2',
+              mainView === 'tasks' && 'bg-primary text-primary-foreground'
+            )}
+          >
+            <ListTodo className="w-4 h-4" />
+            Tasks
+          </Button>
+        </div>
         
         {mainView === 'chat' && (
           <Button
@@ -182,11 +281,62 @@ export function Sidebar() {
             {t('newChat')}
           </Button>
         )}
+        {mainView === 'chat' && (
+          <div className="relative mt-2">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              type="text"
+              placeholder="Search conversations..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-9 text-sm bg-muted/30 border-border/50"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-2 p-0.5 rounded-sm hover:bg-muted text-muted-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {mainView === 'chat' && (
         <ScrollArea className="flex-1 px-3">
           <div className="space-y-1 pb-4">
+            {searchQuery.trim() ? (
+              isSearching ? (
+                <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Searching...
+                </div>
+              ) : searchResults.length > 0 ? (
+                searchResults.map((result) => (
+                  <button
+                    key={result.thread_id}
+                    type="button"
+                    className="group flex items-start gap-2 p-3 rounded-xl cursor-pointer transition-all duration-200 w-full text-left hover:bg-muted/60 border border-transparent hover:border-border/50"
+                    onClick={() => {
+                      handleSessionSelect(result.thread_id);
+                      setSearchQuery('');
+                    }}
+                  >
+                    <Search className="w-4 h-4 flex-shrink-0 mt-0.5 text-muted-foreground" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{result.title || 'Untitled'}</p>
+                      {result.snippet && <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{result.snippet}</p>}
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  No conversations found
+                </div>
+              )
+            ) : (
             <AnimatePresence>
               {sessions.map((session) => (
                 <motion.div
@@ -202,12 +352,14 @@ export function Sidebar() {
                     onSelect={() => handleSessionSelect(session.id)}
                     onDelete={() => deleteSession(session.id)}
                     onClear={() => clearSession(session.id)}
+                    onRename={(name) => renameSession(session.id, name)}
                     onExport={() => openExportModal('export', [session.id])}
                     isMobile={isMobile}
                   />
                 </motion.div>
               ))}
             </AnimatePresence>
+            )}
           </div>
         </ScrollArea>
       )}
@@ -228,6 +380,48 @@ export function Sidebar() {
               <p className="text-xs mt-1">View usage statistics</p>
             </>
           )}
+          {mainView === 'skills' && (
+            <>
+              <Wand2 className="w-12 h-12 mb-4 opacity-30" />
+              <p className="text-sm font-medium">Skills Marketplace</p>
+              <p className="text-xs mt-1">Create and run reusable AI skills</p>
+            </>
+          )}
+          {mainView === 'projects' && (
+            <>
+              <FolderOpen className="w-12 h-12 mb-4 opacity-30" />
+              <p className="text-sm font-medium">Projects</p>
+              <p className="text-xs mt-1">Organize conversations into workspaces</p>
+            </>
+          )}
+          {mainView === 'schedules' && (
+            <>
+              <Clock className="w-12 h-12 mb-4 opacity-30" />
+              <p className="text-sm font-medium">Scheduled Tasks</p>
+              <p className="text-xs mt-1">Automate recurring agent tasks</p>
+            </>
+          )}
+          {mainView === 'tasks' && (
+            <>
+              <ListTodo className="w-12 h-12 mb-4 opacity-30" />
+              <p className="text-sm font-medium">Agent Tasks</p>
+              <p className="text-xs mt-1">Browse task execution history</p>
+            </>
+          )}
+          {mainView === 'integrations' && (
+            <>
+              <Puzzle className="w-12 h-12 mb-4 opacity-30" />
+              <p className="text-sm font-medium">Integrations</p>
+              <p className="text-xs mt-1">Connect your tools and services</p>
+            </>
+          )}
+          {mainView === 'settings' && (
+            <>
+              <Settings className="w-12 h-12 mb-4 opacity-30" />
+              <p className="text-sm font-medium">Settings</p>
+              <p className="text-xs mt-1">Configure your preferences</p>
+            </>
+          )}
         </div>
       )}
 
@@ -241,6 +435,20 @@ export function Sidebar() {
             Workflows
           </Button>
         </Link>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            setMainView('integrations');
+            if (isMobile) setMobileMenuOpen(false);
+          }}
+          className={cn(
+            'w-full justify-start gap-2 min-h-touch',
+            mainView === 'integrations' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <Puzzle className="w-4 h-4" />
+          Integrations
+        </Button>
         <div className="flex gap-1 mb-2">
           <Button
             variant="ghost"
@@ -263,7 +471,14 @@ export function Sidebar() {
         </div>
         <Button
           variant="ghost"
-          className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground min-h-touch"
+          onClick={() => {
+            setMainView('settings');
+            if (isMobile) setMobileMenuOpen(false);
+          }}
+          className={cn(
+            'w-full justify-start gap-2 min-h-touch',
+            mainView === 'settings' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+          )}
         >
           <Settings className="w-4 h-4" />
           {t('settings')}
@@ -358,14 +573,35 @@ interface SessionItemProps {
   onSelect: () => void;
   onDelete: () => void;
   onClear: () => void;
+  onRename: (name: string) => void;
   onExport: () => void;
   isMobile?: boolean;
 }
 
-function SessionItem({ session, isActive, onSelect, onDelete, onClear, onExport, isMobile }: SessionItemProps) {
+function SessionItem({ session, isActive, onSelect, onDelete, onClear, onRename, onExport, isMobile }: SessionItemProps) {
   const t = useTranslations('sidebar');
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(session.name);
   const preview = session.messages[0]?.content?.slice(0, 50) || t('newConversation');
   const timeAgo = formatDistanceToNow(new Date(session.updatedAt), { addSuffix: true });
+
+  const handleRenameSubmit = useCallback(() => {
+    const trimmed = renameValue.trim();
+    if (trimmed && trimmed !== session.name) {
+      onRename(trimmed);
+    }
+    setIsRenaming(false);
+  }, [renameValue, session.name, onRename]);
+
+  const handleRenameKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleRenameSubmit();
+    } else if (e.key === 'Escape') {
+      setRenameValue(session.name);
+      setIsRenaming(false);
+    }
+  }, [handleRenameSubmit, session.name]);
 
   return (
     <button
@@ -385,14 +621,39 @@ function SessionItem({ session, isActive, onSelect, onDelete, onClear, onExport,
       )} />
       
       <div className="flex-1 min-w-0">
-        <p className={cn(
-          'text-sm font-medium truncate',
-          isActive ? 'text-foreground' : 'text-muted-foreground'
-        )}>
-          {session.name}
-        </p>
-        <p className="text-xs text-muted-foreground/60 truncate">{preview}</p>
-        <p className="text-[10px] text-muted-foreground/40 mt-0.5">{timeAgo}</p>
+        {isRenaming ? (
+          <span className="flex items-center gap-1">
+            <input
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={handleRenameKeyDown}
+              onBlur={handleRenameSubmit}
+              onClick={(e) => e.stopPropagation()}
+              className="text-sm font-medium bg-background border border-border rounded px-1.5 py-0.5 w-full focus:outline-none focus:ring-1 focus:ring-primary"
+              ref={(el) => el?.focus()}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-6 h-6 flex-shrink-0"
+              onClick={(e) => { e.stopPropagation(); handleRenameSubmit(); }}
+            >
+              <Check className="w-3 h-3" />
+            </Button>
+          </span>
+        ) : (
+          <>
+            <p className={cn(
+              'text-sm font-medium truncate',
+              isActive ? 'text-foreground' : 'text-muted-foreground'
+            )}>
+              {session.name}
+            </p>
+            <p className="text-xs text-muted-foreground/60 truncate">{preview}</p>
+            <p className="text-[10px] text-muted-foreground/40 mt-0.5">{timeAgo}</p>
+          </>
+        )}
       </div>
 
       <DropdownMenu>
@@ -410,6 +671,17 @@ function SessionItem({ session, isActive, onSelect, onDelete, onClear, onExport,
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              setRenameValue(session.name);
+              setIsRenaming(true);
+            }}
+            className="min-h-touch"
+          >
+            <Pencil className="w-4 h-4 mr-2" />
+            Rename
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={onExport} className="min-h-touch">
             <Download className="w-4 h-4 mr-2" />
             {t('exportSession')}

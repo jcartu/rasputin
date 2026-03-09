@@ -29,24 +29,11 @@ export interface ModelConfig {
 }
 
 export const FRONTIER_MODELS: ModelConfig[] = [
-  // OpenAI
-  {
-    id: "gpt-5",
-    name: "GPT-5",
-    provider: "openai",
-    openRouterId: "openai/gpt-5",
-    contextWindow: 128000,
-    maxOutputTokens: 16384,
-    inputPricePerMillion: 5,
-    outputPricePerMillion: 15,
-    supportsStreaming: true,
-    supportsVision: true,
-    tier: "normal",
-  },
+  // OpenAI - Updated Feb 6, 2026 (ACTUAL OpenRouter models)
   {
     id: "gpt-5.2-pro",
     name: "GPT-5.2 Pro",
-    provider: "openai",
+    provider: "openrouter",
     openRouterId: "openai/gpt-5.2-pro",
     contextWindow: 200000,
     maxOutputTokens: 32768,
@@ -56,11 +43,24 @@ export const FRONTIER_MODELS: ModelConfig[] = [
     supportsVision: true,
     tier: "max",
   },
-  // Anthropic
+  {
+    id: "gpt-5.1",
+    name: "GPT-5.1",
+    provider: "openrouter",
+    openRouterId: "openai/gpt-5.1",
+    contextWindow: 128000,
+    maxOutputTokens: 16384,
+    inputPricePerMillion: 5,
+    outputPricePerMillion: 15,
+    supportsStreaming: true,
+    supportsVision: true,
+    tier: "normal",
+  },
+  // Anthropic - Updated Feb 6, 2026 (Opus 4.6 JUST RELEASED!)
   {
     id: "claude-sonnet-4.5",
     name: "Claude Sonnet 4.5",
-    provider: "anthropic",
+    provider: "openrouter",
     openRouterId: "anthropic/claude-sonnet-4.5",
     contextWindow: 200000,
     maxOutputTokens: 8192,
@@ -71,10 +71,10 @@ export const FRONTIER_MODELS: ModelConfig[] = [
     tier: "normal",
   },
   {
-    id: "claude-opus-4.5",
-    name: "Claude Opus 4.5",
-    provider: "anthropic",
-    openRouterId: "anthropic/claude-opus-4.5",
+    id: "claude-opus-4.6",
+    name: "Claude Opus 4.6",
+    provider: "openrouter",
+    openRouterId: "anthropic/claude-opus-4.6",
     contextWindow: 200000,
     maxOutputTokens: 8192,
     inputPricePerMillion: 15,
@@ -83,12 +83,12 @@ export const FRONTIER_MODELS: ModelConfig[] = [
     supportsVision: true,
     tier: "max",
   },
-  // Google
+  // Google - Updated Feb 6, 2026 (Gemini 3 Preview)
   {
-    id: "gemini-3-flash",
-    name: "Gemini 3 Flash",
-    provider: "google",
-    openRouterId: "google/gemini-3-flash",
+    id: "gemini-3-flash-preview",
+    name: "Gemini 3 Flash Preview",
+    provider: "openrouter",
+    openRouterId: "google/gemini-3-flash-preview",
     contextWindow: 1000000,
     maxOutputTokens: 8192,
     inputPricePerMillion: 0.075,
@@ -98,10 +98,10 @@ export const FRONTIER_MODELS: ModelConfig[] = [
     tier: "fast",
   },
   {
-    id: "gemini-3-pro",
-    name: "Gemini 3 Pro",
-    provider: "google",
-    openRouterId: "google/gemini-3-pro",
+    id: "gemini-3-pro-preview",
+    name: "Gemini 3 Pro Preview",
+    provider: "openrouter",
+    openRouterId: "google/gemini-3-pro-preview",
     contextWindow: 2000000,
     maxOutputTokens: 16384,
     inputPricePerMillion: 1.25,
@@ -110,11 +110,11 @@ export const FRONTIER_MODELS: ModelConfig[] = [
     supportsVision: true,
     tier: "max",
   },
-  // xAI - Grok 4.1 released Nov 17, 2025
+  // xAI - Updated Feb 6, 2026
   {
-    id: "grok-4.1",
-    name: "Grok 4.1",
-    provider: "xai",
+    id: "grok-4.1-fast",
+    name: "Grok 4.1 Fast",
+    provider: "openrouter",
     openRouterId: "x-ai/grok-4.1-fast",
     contextWindow: 131072,
     maxOutputTokens: 16384,
@@ -124,18 +124,33 @@ export const FRONTIER_MODELS: ModelConfig[] = [
     supportsVision: true,
     tier: "normal",
   },
+  // DeepSeek - Added Feb 6, 2026 (V3.2 latest!)
   {
-    id: "grok-4.1-mini",
-    name: "Grok 4.1 Mini",
-    provider: "xai",
-    openRouterId: "x-ai/grok-4-fast",
+    id: "deepseek-v3.2",
+    name: "DeepSeek V3.2",
+    provider: "openrouter",
+    openRouterId: "deepseek/deepseek-v3.2",
+    contextWindow: 65536,
+    maxOutputTokens: 8192,
+    inputPricePerMillion: 0.27,
+    outputPricePerMillion: 1.10,
+    supportsStreaming: true,
+    supportsVision: false,
+    tier: "fast",
+  },
+  // Meta - Added Feb 6, 2026
+  {
+    id: "llama-3.3-70b",
+    name: "Llama 3.3 70B Instruct",
+    provider: "openrouter",
+    openRouterId: "meta-llama/llama-3.3-70b-instruct",
     contextWindow: 131072,
     maxOutputTokens: 32768,
-    inputPricePerMillion: 2,
-    outputPricePerMillion: 10,
+    inputPricePerMillion: 0.40,
+    outputPricePerMillion: 0.40,
     supportsStreaming: true,
-    supportsVision: true,
-    tier: "max",
+    supportsVision: false,
+    tier: "fast",
   },
   // Perplexity
   {
@@ -366,8 +381,9 @@ export function getModelsForTier(tier: SpeedTier): ModelConfig[] {
     case "fast":
       return FRONTIER_MODELS.filter(m =>
         [
-          "gemini-3-flash",
-          "claude-sonnet-4.5",
+          "gemini-3-flash-preview",
+          "deepseek-v3.2",
+          "llama-3.3-70b",
           "cerebras-llama-70b",
           "cerebras-qwen-32b",
         ].includes(m.id)
@@ -375,10 +391,10 @@ export function getModelsForTier(tier: SpeedTier): ModelConfig[] {
     case "normal":
       return FRONTIER_MODELS.filter(m =>
         [
-          "gpt-5",
+          "gpt-5.1",
           "claude-sonnet-4.5",
-          "gemini-3-flash",
-          "grok-4.1",
+          "gemini-3-flash-preview",
+          "grok-4.1-fast",
           "sonar-pro",
         ].includes(m.id)
       );
@@ -386,9 +402,9 @@ export function getModelsForTier(tier: SpeedTier): ModelConfig[] {
       return FRONTIER_MODELS.filter(m =>
         [
           "gpt-5.2-pro",
-          "claude-opus-4.5",
-          "gemini-3-pro",
-          "grok-4.1-mini",
+          "claude-opus-4.6",
+          "gemini-3-pro-preview",
+          "claude-sonnet-4.5",
           "sonar-pro",
         ].includes(m.id)
       );
@@ -397,18 +413,19 @@ export function getModelsForTier(tier: SpeedTier): ModelConfig[] {
 
 export function getSynthesizerModel(tier: SpeedTier): ModelConfig {
   if (tier === "max") {
-    return FRONTIER_MODELS.find(m => m.id === "claude-opus-4.5")!;
+    return FRONTIER_MODELS.find(m => m.id === "claude-opus-4.6")!;
   }
   return FRONTIER_MODELS.find(m => m.id === "claude-sonnet-4.5")!;
 }
 
 export function getCerebrasForIntermediateStages(): ModelConfig {
-  return FRONTIER_MODELS.find(m => m.id === "cerebras-llama-70b")!;
+  // Use Cerebras if available, otherwise fall back to DeepSeek V3 (fast & cheap)
+  return FRONTIER_MODELS.find(m => m.id === "cerebras-llama-70b") || FRONTIER_MODELS.find(m => m.id === "deepseek-v3.2")!;
 }
 
 export function getClaudeForFinalSynthesis(tier: SpeedTier): ModelConfig {
   if (tier === "max") {
-    return FRONTIER_MODELS.find(m => m.id === "claude-opus-4.5")!;
+    return FRONTIER_MODELS.find(m => m.id === "claude-opus-4.6")!;
   }
   return FRONTIER_MODELS.find(m => m.id === "claude-sonnet-4.5")!;
 }
@@ -452,5 +469,5 @@ export function isSimpleQuery(query: string): boolean {
 }
 
 export function getFastModelForSimpleQueries(): ModelConfig {
-  return FRONTIER_MODELS.find(m => m.id === "gemini-3-flash")!;
+  return FRONTIER_MODELS.find(m => m.id === "gemini-3-flash-preview")!;
 }
